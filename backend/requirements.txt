@@ -2,8 +2,8 @@ fastapi==0.109.0
 uvicorn==0.27.0
 python-multipart==0.0.6
 python-dotenv==1.0.0
-pyjwt==2.8.1
+pyjwt==2.8.0
 sqlalchemy==2.0.31
-pyodbc==5.1.1
+pyodbc==5.3.0
 pandas==2.2.3
 numpy==2.2.5
