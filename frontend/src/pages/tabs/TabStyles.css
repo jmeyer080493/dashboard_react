@@ -1,0 +1,113 @@
+.tab-loading,
+.tab-error,
+.tab-empty {
+  padding: 3rem;
+  text-align: center;
+  font-size: 1.1rem;
+  color: #666;
+}
+
+.tab-error {
+  background: #fff3cd;
+  color: #856404;
+  border-radius: 8px;
+}
+
+.tab-header {
+  margin-bottom: 1.5rem;
+}
+
+.tab-header h2 {
+  margin: 0 0 0.5rem 0;
+  color: #333;
+  font-size: 1.8rem;
+}
+
+.sub-title {
+  margin: 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.metadata {
+  display: flex;
+  gap: 2rem;
+  padding: 0.75rem 0;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #eee;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.metadata span {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.chart-placeholder {
+  background: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 1.5rem;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.chart-placeholder h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.chart-placeholder p {
+  margin: 0 0 1rem 0;
+  color: #999;
+}
+
+.chart-placeholder pre {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 0.75rem;
+  overflow-x: auto;
+  font-size: 0.75rem;
+  max-height: 200px;
+  margin: 0;
+}
+
+.debug-info {
+  margin-top: 2rem;
+  padding: 1rem;
+  background: #f0f0f0;
+  border-radius: 8px;
+}
+
+.debug-info summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #666;
+}
+
+.debug-info pre {
+  background: white;
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.75rem;
+  margin-top: 1rem;
+  max-height: 400px;
+}
+
+@media (max-width: 900px) {
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+}

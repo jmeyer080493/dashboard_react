@@ -1,0 +1,7 @@
+{
+  "name": "dashboard-v3",
+  "version": "0.0.1",
+  "description": "Full-stack dashboard with React and FastAPI",
+  "private": true,
+  "workspaces": ["frontend"]
+}

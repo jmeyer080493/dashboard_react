@@ -1,0 +1,46 @@
+.länder-container {
+  width: 100%;
+  background: white;
+}
+
+.länder-tabs {
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-buttons {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f9f9f9;
+  padding: 1rem;
+}
+
+.tab-button {
+  padding: 0.75rem 1.5rem;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+  background: #f5f5f5;
+  border-color: #999;
+}
+
+.tab-button.active {
+  background: white;
+  border-color: #666;
+  border-bottom-color: white;
+  position: relative;
+  top: 1px;
+}
+
+.tab-content {
+  padding: 1.5rem;
+  min-height: 500px;
+}

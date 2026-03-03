@@ -1,0 +1,175 @@
+.sidebar {
+  width: 280px;
+  height: 100vh;
+  background: linear-gradient(135deg, #2a2847 0%, #1a1832 100%);
+  color: #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  overflow-y: auto;
+  position: fixed;
+  left: 0;
+  top: 0;
+}
+
+.sidebar-header {
+  padding: 2rem 1.5rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-header h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 300;
+  letter-spacing: 2px;
+  color: #c9a0dc;
+  text-transform: uppercase;
+}
+
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  margin: 1rem 0;
+}
+
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 0;
+}
+
+.menu-items {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.menu-item {
+  width: 100%;
+  padding: 0.75rem 1.5rem;
+  background: none;
+  border: none;
+  color: #a0a0b0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
+}
+
+.menu-item:hover {
+  background: rgba(201, 160, 220, 0.1);
+  color: #e0e0e0;
+}
+
+.menu-item.active {
+  background: #c9a0dc;
+  color: #2a2847;
+  border-left-color: #c9a0dc;
+  font-weight: 500;
+}
+
+.menu-icon {
+  font-size: 1.2rem;
+  min-width: 1.5rem;
+}
+
+.menu-label {
+  flex: 1;
+  text-align: left;
+}
+
+.sidebar-bottom {
+  padding: 1rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.bottom-buttons {
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.bottom-button {
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: opacity 0.2s ease;
+  font-weight: 500;
+}
+
+.bottom-button:hover {
+  opacity: 0.8;
+}
+
+.button-icon {
+  font-size: 1.1rem;
+}
+
+.button-label {
+  flex: 1;
+  text-align: left;
+  margin-left: 0.5rem;
+}
+
+.footer-items {
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.footer-item {
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  color: #a0a0b0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  justify-content: flex-start;
+}
+
+.footer-item:hover {
+  color: #e0e0e0;
+}
+
+.footer-icon {
+  font-size: 1.1rem;
+}
+
+.footer-label {
+  flex: 1;
+  text-align: left;
+}
+
+/* Scrollbar styling */
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(201, 160, 220, 0.3);
+  border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(201, 160, 220, 0.5);
+}
