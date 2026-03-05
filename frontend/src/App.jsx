@@ -49,11 +49,12 @@ function AppShell() {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
 
   const DEFAULT_GRAPH_SETTINGS = {
-    equity:   { chartsPerRow: 2, chartHeight: 300 },
-    fi:       { chartsPerRow: 2, chartHeight: 300 },
-    macro:    { chartsPerRow: 2, chartHeight: 300 },
-    faktoren: { chartsPerRow: 3, chartHeight: 420 },
-    sektoren: { chartsPerRow: 2, chartHeight: 500 },
+    equity:     { chartsPerRow: 2, chartHeight: 300 },
+    fi:         { chartsPerRow: 2, chartHeight: 300 },
+    macro:      { chartsPerRow: 2, chartHeight: 300 },
+    faktoren:   { chartsPerRow: 3, chartHeight: 420 },
+    sektoren:   { chartsPerRow: 2, chartHeight: 500 },
+    alternativ: { chartsPerRow: 2, chartHeight: 420 },
   }
 
   // User tab alert state – set by NordrheinTab when it loads its data
@@ -162,7 +163,7 @@ function AppShell() {
       case 'DuoPlus':
         return <DuoPlus />
       case 'Alternative':
-        return <Alternative />
+        return <Alternative graphSettings={graphSettings} />
       case 'User':
         return <User onAlertsChange={setUserHasAlerts} />
       default:

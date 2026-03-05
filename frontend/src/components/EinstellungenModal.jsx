@@ -221,6 +221,35 @@ export default function EinstellungenModal({ isOpen, onClose, graphSettings, onS
                   ))}
                 </select>
               </div>
+
+              {/* ── Alternativ section ──────────────────────────────────── */}
+              <h3 className="eins-section-title" style={{ marginTop: '1.5rem' }}>Layout – Alternativ</h3>
+
+              <label className="eins-label">Grafiken pro Zeile:</label>
+              <div className="eins-btn-group">
+                {CHARTS_PER_ROW_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    className={`eins-option-btn ${(draft.alternativ?.chartsPerRow ?? 2) === opt.value ? 'eins-option-btn--active' : ''}`}
+                    onClick={() => setDraft(prev => ({ ...prev, alternativ: { ...prev.alternativ, chartsPerRow: opt.value } }))}
+                  >
+                    {opt.value}
+                  </button>
+                ))}
+              </div>
+
+              <label className="eins-label">Grafik-Höhe:</label>
+              <div className="eins-select-wrap">
+                <select
+                  className="eins-select"
+                  value={draft.alternativ?.chartHeight ?? 420}
+                  onChange={(e) => setDraft(prev => ({ ...prev, alternativ: { ...prev.alternativ, chartHeight: Number(e.target.value) } }))}
+                >
+                  {CHART_HEIGHT_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 

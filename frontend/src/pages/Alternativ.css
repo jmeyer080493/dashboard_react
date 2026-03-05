@@ -1,0 +1,103 @@
+/* Alternativ.css – Styles for the Alternativ (Konsum USA) page */
+
+/* ── Page wrapper ─────────────────────────────────────────────────────────── */
+.alternativ-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  background: var(--bg-card);
+  min-height: 100%;
+}
+
+/* ── Controls bar ─────────────────────────────────────────────────────────── */
+.alternativ-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--bg-controls, var(--bg-surface, #f8f9fa));
+  border-bottom: 1px solid var(--border, #e0e0e0);
+  align-items: flex-start;
+}
+
+.alternativ-control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.alternativ-control-section label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #666);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.alternativ-btn-group {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* Date inputs row */
+.alternativ-date-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.alternativ-date-input {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-input, #ccc);
+  border-radius: 4px;
+  background: var(--bg-input, #fff);
+  color: var(--text-primary, #333);
+  font-size: 0.82rem;
+  width: 108px;
+}
+
+.alternativ-date-input:focus {
+  outline: none;
+  border-color: #c9a0dc;
+}
+
+.alternativ-date-sep {
+  color: var(--text-secondary, #666);
+  font-size: 1rem;
+}
+
+/* ── Status messages ──────────────────────────────────────────────────────── */
+.alternativ-status {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+}
+
+.alternativ-status.loading {
+  color: var(--text-secondary, #666);
+}
+
+.alternativ-status.error {
+  color: #e53e3e;
+  background: rgba(229, 62, 62, 0.06);
+  border-radius: 6px;
+}
+
+/* ── Chart grid ───────────────────────────────────────────────────────────── */
+.alternativ-chart-grid {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+.alternativ-empty {
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-secondary, #999);
+  font-size: 1rem;
+}
