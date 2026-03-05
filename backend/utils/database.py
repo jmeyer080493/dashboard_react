@@ -34,6 +34,8 @@ class DatabaseGateway:
         self.dev_engine: Optional[Engine] = None
         self.ams_engine: Optional[Engine] = None
         self.duoplus_engine: Optional[Engine] = None
+        self.ams_holdings_engine: Optional[Engine] = None
+        self.jm_engine: Optional[Engine] = None
         
         self._initialize_connections()
         self._initialized = True
@@ -83,7 +85,29 @@ class DatabaseGateway:
             logger.info("✓ Connected to Quant (market data) database")
         except Exception as e:
             logger.warning(f"⚠ Quant database connection failed: {e}")
-    
+
+        try:
+            # AMS holdings database (portfolio holdings, prices)
+            ams_holdings_connection_string = os.getenv(
+                "AMS_HOLDINGS_DB_CONNECTION",
+                r"mssql+pyodbc://@apo-sql-ams\AMS/AMS?driver=ODBC+Driver+17+for+SQL+Server&Trusted_Connection=yes"
+            )
+            self.ams_holdings_engine = create_engine(ams_holdings_connection_string)
+            logger.info("✓ Connected to AMS holdings database")
+        except Exception as e:
+            logger.warning(f"⚠ AMS holdings database connection failed: {e}")
+
+        try:
+            # ApoAsset_JM database (STOXX announcements, benchmark dates)
+            jm_connection_string = os.getenv(
+                "JM_DB_CONNECTION",
+                "mssql+pyodbc://@apo-sql-dev/ApoAsset_JM?driver=ODBC+Driver+17+for+SQL+Server&Trusted_Connection=yes"
+            )
+            self.jm_engine = create_engine(jm_connection_string)
+            logger.info("✓ Connected to ApoAsset_JM database")
+        except Exception as e:
+            logger.warning(f"⚠ ApoAsset_JM database connection failed: {e}")
+
     def get_prod_engine(self) -> Engine:
         """Get production database engine"""
         if self.prod_engine is None:
@@ -107,7 +131,19 @@ class DatabaseGateway:
         if self.duoplus_engine is None:
             raise RuntimeError("DuoPlus database not initialized")
         return self.duoplus_engine
-    
+
+    def get_ams_holdings_engine(self) -> Engine:
+        """Get AMS holdings engine (apo-sql-ams/AMS)"""
+        if self.ams_holdings_engine is None:
+            raise RuntimeError("AMS holdings database not initialized")
+        return self.ams_holdings_engine
+
+    def get_jm_engine(self) -> Engine:
+        """Get ApoAsset_JM engine (apo-sql-dev) for STOXX / XESC data"""
+        if self.jm_engine is None:
+            raise RuntimeError("ApoAsset_JM database not initialized")
+        return self.jm_engine
+
     def check_connectivity(self) -> dict:
         """Check connectivity to all configured databases"""
         status = {}

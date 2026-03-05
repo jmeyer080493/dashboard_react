@@ -83,6 +83,35 @@
   font-weight: 500;
 }
 
+/* Alert state – highlights a nav item red when thresholds are breached */
+.menu-item--alert {
+  border-left-color: #d32f2f !important;
+  color: #d32f2f !important;
+}
+
+.menu-item--alert:hover {
+  background: rgba(211, 47, 47, 0.08);
+}
+
+.menu-item--alert.active {
+  background: rgba(211, 47, 47, 0.12);
+  color: #d32f2f;
+  border-left-color: #d32f2f;
+}
+
+.menu-alert-dot {
+  font-size: 0.6rem;
+  color: #d32f2f;
+  margin-left: auto;
+  min-width: 0.6rem;
+  animation: blink-dot 1.8s ease-in-out infinite;
+}
+
+@keyframes blink-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
 .menu-icon {
   font-size: 1rem;
   min-width: 1.2rem;

@@ -19,7 +19,7 @@ const PAGE_PERMISSIONS = {
   'User':        'user',
 }
 
-function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback }) {
+function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback, userHasAlerts }) {
   const { user, permissions } = useAuth()
   const [activeItem, setActiveItem] = useState(null)   // set on first permitted nav
   const {
@@ -61,7 +61,11 @@ function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback }
           {menuItems.map((item) => (
             <button
               key={item.name}
-              className={`menu-item ${effectiveActive === item.name ? 'active' : ''}`}
+              className={[
+                'menu-item',
+                effectiveActive === item.name ? 'active' : '',
+                item.name === 'User' && userHasAlerts ? 'menu-item--alert' : ''
+              ].filter(Boolean).join(' ')}
               onClick={() => {
                 setActiveItem(item.name)
                 if (onPageChange) onPageChange(item.name)
@@ -69,6 +73,9 @@ function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback }
             >
               <span className="menu-icon">{item.icon}</span>
               <span className="menu-label">{item.name}</span>
+              {item.name === 'User' && userHasAlerts && (
+                <span className="menu-alert-dot" title="Aktive Alerts">●</span>
+              )}
             </button>
           ))}
         </div>

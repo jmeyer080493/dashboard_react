@@ -56,6 +56,9 @@ function AppShell() {
     sektoren: { chartsPerRow: 2, chartHeight: 500 },
   }
 
+  // User tab alert state – set by NordrheinTab when it loads its data
+  const [userHasAlerts, setUserHasAlerts] = useState(false)
+
   const [graphSettings, setGraphSettings] = useState(() => {
     try {
       const stored = localStorage.getItem('graphSettings')
@@ -161,7 +164,7 @@ function AppShell() {
       case 'Alternative':
         return <Alternative />
       case 'User':
-        return <User />
+        return <User onAlertsChange={setUserHasAlerts} />
       default:
         return (
           <Länder 
@@ -183,6 +186,7 @@ function AppShell() {
             onLogout={logout}
             onOpenEinstellungen={() => setEinstellungenOpen(true)}
             onOpenFeedback={() => setFeedbackOpen(true)}
+            userHasAlerts={userHasAlerts}
           />
         <main className="main-content">
           <div className="content-wrapper">

@@ -33,6 +33,7 @@ load_dotenv()
 from services.länder_service import LänderDataService
 from services.faktoren_service import FaktorenService
 from services.sektoren_service import SektorenService
+from services.user_service import UserService
 from feedback.feedback_db import create_feedback_table, insert_feedback
 from utils.database import db_gateway
 
@@ -549,6 +550,94 @@ async def submit_feedback(body: FeedbackRequest, user_id: int = Depends(verify_t
     except Exception as e:
         logging.error(f"Feedback submission error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# USER / NORDRHEIN ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/user/data")
+async def get_user_main_data():
+    """
+    Load all Nordrhein tab data: holdings vs benchmark table,
+    STOXX announcements, cards, and alert flags.
+    PUBLIC ENDPOINT
+    """
+    try:
+        result = UserService.get_main_data()
+        result = _clean_nan_values(result)
+        return result
+    except Exception as e:
+        tb = traceback.format_exc()
+        logging.error("User data error:\n%s", tb)
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/api/user/performance")
+async def get_user_performance(
+    period: str = Query("1Y", description="Time period: MtD, YtD, 1Y, All")
+):
+    """
+    Return cumulative-return chart data for portfolio vs STOXX 50 benchmark.
+    PUBLIC ENDPOINT
+    """
+    try:
+        result = UserService.get_performance_data(period=period)
+        result = _clean_nan_values(result)
+        return result
+    except Exception as e:
+        logging.error("User performance error: %s", e)
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/api/user/alerts")
+async def get_user_alerts():
+    """
+    Lightweight endpoint returning only alert flag summary.
+    Used by the sidebar to highlight the User tab.
+    PUBLIC ENDPOINT
+    """
+    try:
+        return UserService.get_alerts()
+    except Exception as e:
+        logging.error("User alerts error: %s", e)
+        return {"status": "error", "error": str(e), "has_alerts": False}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GENERIC TABLE EXPORT ENDPOINT
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TableExportRequest(BaseModel):
+    rows: list              # list of row dicts
+    columns: List[str]      # ordered column names
+    sheet_name: str = "Tabelle"
+    filename: str = "Export"
+
+
+@app.post("/api/export/table")
+async def export_table(payload: TableExportRequest):
+    """
+    Generate a single-sheet Excel file from arbitrary table data.
+    Unlike the chart export, this preserves all column types (strings included).
+    PUBLIC ENDPOINT
+    """
+    try:
+        df = pd.DataFrame(payload.rows, columns=payload.columns)
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+            df.to_excel(writer, sheet_name=payload.sheet_name[:31], index=False)
+        buf.seek(0)
+        fname = f"{payload.filename}_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+        )
+    except Exception as e:
+        tb = traceback.format_exc()
+        logging.error("Table export error:\n%s", tb)
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":
