@@ -43,9 +43,26 @@ function getDateRange(chartData) {
 const LINE_COLORS = ['#8b5cf6', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444']
 const DIFF_COLOR  = '#1a1a1a'
 
-/** Custom tooltip */
-function CustomTooltip({ active, payload, label }) {
+/**
+ * Build a value-formatter function based on the yUnit prop.
+ *   'pct'  → "12.34 %"
+ *   'M'    → "34.1M"
+ *   'B'    → "1.23B"
+ *   'raw'  → "42.00"
+ */
+function buildFmt(yUnit) {
+  switch (yUnit) {
+    case 'M':   return v => (v == null ? '—' : `${(v / 1e6).toFixed(1)}M`)
+    case 'B':   return v => (v == null ? '—' : `${(v / 1e9).toFixed(2)}B`)
+    case 'raw': return v => (v == null ? '—' : typeof v === 'number' ? v.toFixed(2) : String(v))
+    default:    return v => (v == null ? '—' : `${v.toFixed(2)} %`)  // 'pct'
+  }
+}
+
+/** Custom tooltip – receives a `format` prop injected by the parent */
+function CustomTooltip({ active, payload, label, format }) {
   if (!active || !payload || payload.length === 0) return null
+  const fmt = format ?? (v => (typeof v === 'number' ? `${v.toFixed(2)} %` : '—'))
   return (
     <div style={{
       background: 'var(--card-bg, #fff)',
@@ -57,7 +74,7 @@ function CustomTooltip({ active, payload, label }) {
       <p style={{ margin: '0 0 4px', fontWeight: 600 }}>{label}</p>
       {payload.map(p => (
         <p key={p.dataKey} style={{ margin: '2px 0', color: p.color }}>
-          {p.name}: {typeof p.value === 'number' ? p.value.toFixed(2) + ' %' : '—'}
+          {p.name}: {fmt(p.value)}
         </p>
       ))}
     </div>
@@ -99,6 +116,10 @@ export default function FaktorenChart({
   hasDifference = false,
   height = 420,
   tab = 'Faktoren',
+  /** 'pct' (default) | 'M' | 'B' | 'raw' – controls Y-axis tick labels & tooltip values */
+  yUnit = 'pct',
+  /** When true the Y-axis auto-scales to the data range instead of starting at 0 */
+  yDomainAuto = false,
 }) {
   const { addToPptx, addToXlsx } = useExport()
 
@@ -130,6 +151,20 @@ export default function FaktorenChart({
   const mainHeight = hasDifference ? Math.round(height * 0.70) : height
   const diffHeight = hasDifference ? height - mainHeight - 8 : 0
 
+  // Build formatter and axis config from yUnit
+  const fmtValue = buildFmt(yUnit)
+  const yAxisWidth = yUnit === 'B' ? 72 : yUnit === 'M' ? 64 : 52
+  const yAxisTickFmt = (v) => {
+    if (yUnit === 'M') return `${(v / 1e6).toFixed(1)}M`
+    if (yUnit === 'B') return `${(v / 1e9).toFixed(2)}B`
+    if (yUnit === 'raw') return v.toFixed(1)
+    return `${v.toFixed(0)} %`
+  }
+  // Smart domain: 5 % padding on each side so the chart never pins to 0
+  const yDomain = yDomainAuto
+    ? [(min) => min * 0.95, (max) => max * 1.05]
+    : undefined
+
   // Build diff data with positiveVal / negativeVal for the filled areas
   const diffData = hasDifference
     ? data.map(row => ({
@@ -159,14 +194,18 @@ export default function FaktorenChart({
           />
           <YAxis
             tick={{ fontSize: 11 }}
-            tickFormatter={v => `${v.toFixed(0)} %`}
-            width={52}
+            tickFormatter={yAxisTickFmt}
+            width={yAxisWidth}
+            {...(yDomain ? { domain: yDomain } : {})}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip format={fmtValue} />} />
           <Legend
             iconType="plainline"
             wrapperStyle={{ fontSize: 12 }}
-            formatter={name => `${name} (${(data[data.length - 1]?.[name] ?? 0).toFixed(1).replace('.', ',')} %)`}
+            formatter={name => {
+              const lastVal = data[data.length - 1]?.[name]
+              return `${name} (${lastVal != null ? fmtValue(lastVal) : '—'})`
+            }}
           />
           {mainSeries.map((s, idx) => (
             <Line

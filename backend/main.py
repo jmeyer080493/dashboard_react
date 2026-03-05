@@ -33,6 +33,7 @@ load_dotenv()
 from services.länder_service import LänderDataService
 from services.faktoren_service import FaktorenService
 from services.sektoren_service import SektorenService
+from services.alternativ_service import AlternativService
 from feedback.feedback_db import create_feedback_table, insert_feedback
 from utils.database import db_gateway
 
@@ -441,6 +442,29 @@ async def get_sektoren_sectors():
         "sectors": SektorenService.get_all_sectors(),
         "translations": SektorenService.get_sector_translations(),
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ALTERNATIV / CONSUMER ACTIVITY ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/alternativ/data")
+async def get_alternativ_data(
+    lookback: str = Query("1Y", description="Lookback period (MtD, YtD, 1Y, 3Y, 7Y, All)"),
+    start_date: Optional[str] = Query(None, description="Custom start date YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="Custom end date YYYY-MM-DD"),
+):
+    """Get US consumer activity data for all 6 Alternativ charts - PUBLIC ENDPOINT"""
+    try:
+        result = AlternativService.get_graphs_data(
+            lookback=lookback,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        result = _clean_nan_values(result)
+        return result
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 
 # ═══════════════════════════════════════════════════════════════════════════

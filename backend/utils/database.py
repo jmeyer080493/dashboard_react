@@ -34,6 +34,7 @@ class DatabaseGateway:
         self.dev_engine: Optional[Engine] = None
         self.ams_engine: Optional[Engine] = None
         self.duoplus_engine: Optional[Engine] = None
+        self.jm_engine: Optional[Engine] = None
         
         self._initialize_connections()
         self._initialized = True
@@ -83,6 +84,17 @@ class DatabaseGateway:
             logger.info("✓ Connected to Quant (market data) database")
         except Exception as e:
             logger.warning(f"⚠ Quant database connection failed: {e}")
+
+        try:
+            # JM database (alternative/consumer data – apo-sql-dev / ApoAsset_JM)
+            jm_connection_string = os.getenv(
+                "JM_DB_CONNECTION",
+                "mssql+pyodbc://@apo-sql-dev/ApoAsset_JM?driver=ODBC+Driver+17+for+SQL+Server&Trusted_Connection=yes"
+            )
+            self.jm_engine = create_engine(jm_connection_string)
+            logger.info("✓ Connected to JM (alternative consumer data) database")
+        except Exception as e:
+            logger.warning(f"⚠ JM database connection failed: {e}")
     
     def get_prod_engine(self) -> Engine:
         """Get production database engine"""
@@ -107,6 +119,12 @@ class DatabaseGateway:
         if self.duoplus_engine is None:
             raise RuntimeError("DuoPlus database not initialized")
         return self.duoplus_engine
+
+    def get_jm_engine(self) -> Engine:
+        """Get JM (ApoAsset_JM) database engine for alternative/consumer data"""
+        if self.jm_engine is None:
+            raise RuntimeError("JM database not initialized")
+        return self.jm_engine
     
     def check_connectivity(self) -> dict:
         """Check connectivity to all configured databases"""
@@ -117,6 +135,7 @@ class DatabaseGateway:
             ("dev", self.dev_engine),
             ("ams", self.ams_engine),
             ("duoplus", self.duoplus_engine),
+            ("jm", self.jm_engine),
         ]:
             try:
                 with engine.connect() as conn:
