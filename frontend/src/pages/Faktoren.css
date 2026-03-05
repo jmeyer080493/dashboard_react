@@ -1,0 +1,121 @@
+/* Faktoren.css – Styles for the Factor Analysis page */
+
+/* ── Page wrapper ─────────────────────────────────────────────────────────── */
+.faktoren-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  background: var(--bg-card);
+  min-height: 100%;
+}
+
+/* ── Controls bar ─────────────────────────────────────────────────────────── */
+.faktoren-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--bg-controls, var(--bg-surface, #f8f9fa));
+  border-bottom: 1px solid var(--border, #e0e0e0);
+  align-items: flex-start;
+}
+
+.faktoren-control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.faktoren-control-section label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #666);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.faktoren-btn-group {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* Date inputs row */
+.faktoren-date-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.faktoren-date-input {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-input, #ccc);
+  border-radius: 4px;
+  background: var(--bg-input, #fff);
+  color: var(--text-primary, #333);
+  font-size: 0.82rem;
+  width: 108px;
+}
+
+.faktoren-date-input:focus {
+  outline: none;
+  border-color: #c9a0dc;
+}
+
+.faktoren-date-sep {
+  color: var(--text-secondary, #666);
+  font-size: 1rem;
+}
+
+/* ── Status messages ──────────────────────────────────────────────────────── */
+.faktoren-status {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+}
+
+.faktoren-status.loading {
+  color: var(--text-secondary, #666);
+}
+
+.faktoren-status.error {
+  color: #e53e3e;
+  background: rgba(229, 62, 62, 0.06);
+  border-radius: 6px;
+}
+
+/* ── Chart grid ───────────────────────────────────────────────────────────── */
+.faktoren-chart-grid {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+.faktoren-empty {
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-secondary, #999);
+  font-size: 1rem;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .faktoren-controls {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .faktoren-chart-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .faktoren-chart-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

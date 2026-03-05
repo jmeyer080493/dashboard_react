@@ -1,0 +1,18 @@
+/* SektorenChart.css – styles specific to the Sektoren chart component */
+
+.sektoren-chart {
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg, #fff);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: var(--card-shadow, 0 1px 4px rgba(0,0,0,0.08));
+}
+
+.sektoren-chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  color: var(--text-primary, #333);
+  line-height: 1.3;
+}

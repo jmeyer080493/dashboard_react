@@ -1,24 +1,25 @@
 .chart-container {
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--chart-bg);
+  border: 1px solid var(--chart-border);
   border-radius: 8px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
+  transition: background 0.25s ease, border-color 0.25s ease;
 }
 
 .chart-container h3 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--text-heading);
   font-size: 1.1rem;
 }
 
 .chart-empty {
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--chart-bg);
+  border: 1px solid var(--chart-border);
   border-radius: 8px;
   padding: 2rem;
   text-align: center;
-  color: #999;
+  color: var(--text-muted);
   min-height: 300px;
   display: flex;
   align-items: center;
@@ -38,7 +39,65 @@
 .recharts-default-tooltip {
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  background: var(--bg-card) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
 }
+
+.recharts-default-tooltip .recharts-tooltip-label {
+  color: var(--text-heading);
+}
+
+/* Dark mode: axis text */
+[data-theme="dark"] .recharts-cartesian-axis-tick-value {
+  fill: var(--text-secondary);
+}
+
+[data-theme="dark"] .recharts-legend-item-text {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .recharts-cartesian-grid-horizontal line,
+[data-theme="dark"] .recharts-cartesian-grid-vertical line {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Chart Export Buttons ────────────────────────────────────────────────── */
+.chart-export-buttons {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  justify-content: flex-start;
+}
+
+.chart-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.65rem;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+  line-height: 1;
+}
+
+.chart-export-btn:hover   { opacity: 0.85; transform: translateY(-1px); }
+.chart-export-btn:active  { transform: translateY(0); }
+
+.chart-export-btn.pptx {
+  background: var(--export-pptx-bg);
+  color: var(--export-pptx-text);
+}
+.chart-export-btn.pptx:hover { background: var(--export-pptx-bg); filter: brightness(0.92); }
+
+.chart-export-btn.xlsx {
+  background: var(--export-xlsx-bg);
+  color: var(--export-xlsx-text);
+}
+.chart-export-btn.xlsx:hover { background: var(--export-xlsx-bg); filter: brightness(0.92); }
 
 /* Responsive for small screens */
 @media (max-width: 768px) {

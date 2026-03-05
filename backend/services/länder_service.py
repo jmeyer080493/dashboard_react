@@ -1,616 +1,537 @@
 """
-Länder/Countries page data service.
+Länder/Countries page data service - V2
 
-Handles fetching, filtering, and formatting equity, fixed income, and macro data
-for the Countries page.
+Rewritten to follow the reference project (C:\Projekte\dashboard) architecture:
+1. Query Bloomberg in LONG format  
+2. Merge with region mapping
+3. Calculate technical indicators per region per currency
+4. Return as wide-format DataFrames (one row per Date+Region with all metrics as columns)
+5. NO mock/fallback data - all real Bloomberg data or error
+6. Extensive debugging for migration tracking
 """
 
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
-import sys
-import os
 import logging
-import hashlib
-import json
 
 logger = logging.getLogger(__name__)
 
 # Import database gateway
 from utils.database import DatabaseGateway
 
-# Simple in-memory cache for API responses (TTL: 30 seconds)
-_response_cache = {}
-_cache_timestamps = {}
 
-
-class TechnicalIndicatorCalculator:
-    """
-    Calculates technical indicators for equity data.
-    All calculations follow the original dashboard specifications.
-    """
+class EquityIndicatorCalculator:
+    """Calculate technical indicators for equity data following reference project specifications."""
     
     @staticmethod
-    def calculate_ma50(price_series: pd.Series) -> pd.Series:
-        """
-        Calculate 50-day moving average.
-        
-        Args:
-            price_series: Pandas Series of prices
-        
-        Returns:
-            Series with MA50 values
-        """
-        return price_series.rolling(window=50, min_periods=1).mean()
-    
-    @staticmethod
-    def calculate_rsi(price_series: pd.Series, period: int = 14) -> pd.Series:
-        """
-        Calculate Relative Strength Index (RSI).
-        
-        Args:
-            price_series: Pandas Series of prices
-            period: RSI period (default: 14)
-        
-        Returns:
-            Series with RSI values (0-100)
-        """
-        delta = price_series.diff()
-        gain = delta.clip(lower=0)
-        loss = -delta.clip(upper=0)
-        
-        avg_gain = gain.rolling(window=period, min_periods=1).mean()
-        avg_loss = loss.rolling(window=period, min_periods=1).mean()
-        
-        rs = avg_gain / avg_loss.replace(0, np.nan)
-        rsi = 100 - (100 / (1 + rs))
-        
-        return rsi.fillna(50)  # Default to 50 if not calculable
-    
-    @staticmethod
-    def calculate_macd(price_series: pd.Series) -> Tuple[pd.Series, pd.Series, pd.Series]:
-        """
-        Calculate MACD (Moving Average Convergence Divergence).
-        
-        Args:
-            price_series: Pandas Series of prices
-        
-        Returns:
-            Tuple of (MACD line, Signal line, Histogram)
-        """
-        ema12 = price_series.ewm(span=12, adjust=False).mean()
-        ema26 = price_series.ewm(span=26, adjust=False).mean()
-        macd = ema12 - ema26
-        signal = macd.ewm(span=9, adjust=False).mean()
-        histogram = macd - signal
-        
-        return macd, signal, histogram
-    
-    @staticmethod
-    def calculate_momentum(price_series: pd.Series) -> Tuple[pd.Series, pd.Series, pd.Series]:
-        """
-        Calculate momentum indicators (3M, 12M, Time Series).
-        
-        Args:
-            price_series: Pandas Series of prices
-        
-        Returns:
-            Tuple of (3M momentum %, 12M momentum %, TS momentum %)
-        """
-        # 3-month momentum: (price[t-21] / price[t-63] - 1) * 100
-        momentum_3m = (price_series.shift(21) / price_series.shift(63) - 1) * 100
-        
-        # 12-month momentum: (price[t-21] / price[t-252] - 1) * 100
-        momentum_12m = (price_series.shift(21) / price_series.shift(252) - 1) * 100
-        
-        # Time Series momentum: EWMA(returns, alpha=0.03)
-        returns = price_series.pct_change()
-        momentum_ts = returns.ewm(span=int(1 / 0.03), adjust=False).mean() * 100
-        
-        return momentum_3m, momentum_12m, momentum_ts
-    
-    @staticmethod
-    def calculate_volatility(price_series: pd.Series, window: int = 252) -> pd.Series:
-        """
-        Calculate annualized rolling volatility.
-        
-        Args:
-            price_series: Pandas Series of prices
-            window: Rolling window in trading days (default: 252 for annual)
-        
-        Returns:
-            Series with annualized volatility (%)
-        """
-        returns = price_series.pct_change()
-        rolling_std = returns.rolling(window=window, min_periods=1).std()
-        volatility = rolling_std * np.sqrt(window) * 100
-        
-        return volatility
-    
-    @staticmethod
-    def calculate_sharpe_ratio(
-        price_series: pd.Series,
-        risk_free_rate: float = 0.025,
-        window: int = 252
-    ) -> pd.Series:
-        """
-        Calculate rolling Sharpe ratio.
-        
-        Args:
-            price_series: Pandas Series of prices
-            risk_free_rate: Annual risk-free rate (default: 2.5%)
-            window: Rolling window in trading days (default: 252 for annual)
-        
-        Returns:
-            Series with rolling Sharpe ratio
-        """
-        returns = price_series.pct_change()
-        rolling_returns = returns.rolling(window=window, min_periods=1).mean()
-        rolling_volatility = TechnicalIndicatorCalculator.calculate_volatility(
-            price_series, window
-        ) / 100
-        
-        sharpe = (rolling_returns * 252 - risk_free_rate) / rolling_volatility.replace(0, np.nan)
-        
-        return sharpe.fillna(0)
-    
-    @staticmethod
-    def apply_all_indicators(
+    def calculate_from_px_last(
         df: pd.DataFrame,
-        price_column: str = "PX_LAST"
-    ) -> pd.DataFrame:
+        ticker_name: str,
+        currency: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
-        Apply all technical indicators to a price series within a dataframe.
+        Calculate all technical indicators from PX_LAST price series.
         
         Args:
-            df: DataFrame with price data, grouped by currency/region
-            price_column: Column name containing price data
+            df: DataFrame with DatePoint and PX_LAST columns, sorted by DatePoint ascending
+            ticker_name: Name of the ticker (for reference)
+            currency: Currency code (for reference)
         
         Returns:
-            DataFrame with added indicator columns
+            Dictionary with calculated indicators {indicator_name: Series}
         """
-        result = df.copy()
+        if 'PX_LAST' not in df.columns:
+            logger.warning(f"  ⚠ No PX_LAST column for {ticker_name} {currency or 'N/A'}")
+            return {}
         
-        if price_column not in result.columns:
-            logger.warning(f"Price column {price_column} not found in dataframe")
-            return result
+        prices = df['PX_LAST'].dropna()
+        if len(prices) < 50:
+            logger.debug(f"  ⚠ Insufficient price data ({len(prices)} points) for {ticker_name}")
+            return {}
         
-        # Convert to numeric if needed
-        result[price_column] = pd.to_numeric(result[price_column], errors='coerce')
+        indicators = {}
         
-        # Calculate all indicators
-        result["MA_50"] = TechnicalIndicatorCalculator.calculate_ma50(result[price_column])
-        result["RSI"] = TechnicalIndicatorCalculator.calculate_rsi(result[price_column])
-        
-        macd, signal, histogram = TechnicalIndicatorCalculator.calculate_macd(result[price_column])
-        result["MACD"] = macd
-        result["MACD_Signal"] = signal
-        result["MACD_Histogram"] = histogram
-        
-        mom_3m, mom_12m, mom_ts = TechnicalIndicatorCalculator.calculate_momentum(result[price_column])
-        result["MOM_3"] = mom_3m
-        result["MOM_12"] = mom_12m
-        result["MOM_TS"] = mom_ts
-        
-        result["Rolling Volatility"] = TechnicalIndicatorCalculator.calculate_volatility(result[price_column])
-        result["Rolling Sharpe"] = TechnicalIndicatorCalculator.calculate_sharpe_ratio(result[price_column])
-        
-        return result
+        try:
+            # Moving averages
+            indicators['MA_50'] = prices.rolling(window=50, min_periods=1).mean()
+            
+            # MACD
+            ema12 = prices.ewm(span=12, adjust=False).mean()
+            ema26 = prices.ewm(span=26, adjust=False).mean()
+            indicators['MACD'] = ema12 - ema26
+            indicators['MACD_Signal'] = indicators['MACD'].ewm(span=9, adjust=False).mean()
+            indicators['MACD_Histogram'] = indicators['MACD'] - indicators['MACD_Signal']
+            
+            # RSI (14-period)
+            delta = prices.diff()
+            gain = delta.clip(lower=0)
+            loss = -delta.clip(upper=0)
+            avg_gain = gain.rolling(window=14, min_periods=1).mean()
+            avg_loss = loss.rolling(window=14, min_periods=1).mean()
+            rs = avg_gain / avg_loss.replace(0, np.nan)
+            indicators['RSI'] = 100 - (100 / (1 + rs))
+            indicators['RSI'] = indicators['RSI'].fillna(50)  # Default to 50 if not calculable
+            
+            # Momentum indicators
+            # 3-month: (price[t-21] / price[t-63] - 1) * 100
+            indicators['MOM_3'] = (prices.shift(21) / prices.shift(63) - 1) * 100
+            
+            # 12-month: (price[t-21] / price[t-252] - 1) * 100  
+            indicators['MOM_12'] = (prices.shift(21) / prices.shift(252) - 1) * 100
+            
+            # Time Series momentum: EWMA of returns
+            returns = prices.pct_change()
+            indicators['MOM_TS'] = returns.ewm(span=33, adjust=False).mean() * 100
+            
+            # Volatility (annualized, 252-day window)
+            rolling_std = returns.rolling(window=252, min_periods=1).std()
+            indicators['Rolling Volatility'] = rolling_std * np.sqrt(252) * 100
+            
+            # Sharpe ratio (rolling, risk-free rate = 2.5%)
+            rolling_returns = returns.rolling(window=252, min_periods=1).mean()
+            indicators['Rolling Sharpe'] = (rolling_returns * 252 - 0.025) / (indicators['Rolling Volatility'] / 100).replace(0, np.nan)
+            indicators['Rolling Sharpe'] = indicators['Rolling Sharpe'].fillna(0)
+            
+            # Rolling returns (252-day window)
+            indicators['Rolling Returns'] = (prices.pct_change(periods=252) * 100).fillna(0)
 
+            # MA50 Distance: (price - MA50) / MA50 * 100
+            if 'MA_50' in indicators:
+                indicators['MA_50_Diff'] = ((prices - indicators['MA_50']) / indicators['MA_50'].replace(0, np.nan) * 100)
 
-# TODO: Integrate original dashboard.data.get_data functions
-# Commented out temporarily to allow service to start standalone
-# sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'dashboard'))
+            # Performance: cumulative return since first available price (basis 0, in %)
+            first_valid_price = prices.dropna().iloc[0] if len(prices.dropna()) > 0 else np.nan
+            if not np.isnan(first_valid_price) and first_valid_price != 0:
+                indicators['Performance'] = ((prices / first_valid_price) - 1) * 100
 
-# try:
-#     from data.get_data import (
-#         get_country_equity_signals,
-#         get_country_fixed_income_data,
-#         get_country_macro_data,
-#         country_msci_data,
-#         country_fi_data,
-#         country_macro_data,
-#         corr_df,
-#     )
-#     from utils.functions import adj_datetime
-#     logger.info("✓ Successfully imported data functions from dashboard project")
-# except Exception as e:
-#     logger.error(f"✗ Failed to import from dashboard project: {e}")
-#     country_msci_data = None
-#     country_fi_data = None
-#     country_macro_data = None
+            logger.debug(f"  ✓ Calculated {len(indicators)} indicators for {ticker_name}")
+            
+        except Exception as e:
+            logger.error(f"  ✗ Error calculating indicators for {ticker_name}: {e}")
+            return {}
+        
+        return indicators
 
 
 class LänderDataService:
     """
-    Service for Länder/Countries page data operations.
-    Handles data fetching, filtering, and formatting for charts.
+    Service for Länder/Countries page data operations - V2.
+    Follows reference project architecture: Bloomberg query → Region mapping → Indicators → Wide format.
     
-    Falls back to mock data if database is unavailable.
+    Dynamically discovers ticker-to-region mappings from the [ApoAsset_Quant].[dbo].[ticker_master] table
+    for MSCI indices (M1*, NDDU* tickers) used in the Countries dashboard.
     """
     
-    CACHE_TTL = 30  # Cache responses for 30 seconds
+    # Cache for dynamically discovered region mappings
+    _ticker_to_region_cache = None
+    _cache_initialized = False
+
+    # Cache for FI ticker mapping
+    _fi_ticker_mapping_cache: Optional[pd.DataFrame] = None
+    _fi_cache_initialized: bool = False
     
-    @staticmethod
-    def _get_cache_key(endpoint: str, regions: List[str], **kwargs) -> str:
-        """Generate a cache key for API responses."""
-        params = {
-            'endpoint': endpoint,
-            'regions': sorted(regions),
-            **kwargs
-        }
-        key_str = json.dumps(params, sort_keys=True, default=str)
-        return hashlib.md5(key_str.encode()).hexdigest()
+    # Region name aliases - normalize incoming region names to database names
+    REGION_ALIASES = {
+        "US": "U.S.",
+        "USA": "U.S.",
+        "United States": "U.S.",
+        "America": "U.S.",
+        "UK": "UK",
+        "United Kingdom": "UK",
+        "GB": "UK",
+        "Great Britain": "UK",
+    }
     
-    @staticmethod
-    def _get_cached_response(cache_key: str) -> Optional[Dict]:
-        """Get cached response if still valid (within TTL)."""
-        if cache_key in _response_cache:
-            timestamp = _cache_timestamps.get(cache_key, 0)
-            if (datetime.now() - datetime.fromtimestamp(timestamp)).total_seconds() < LänderDataService.CACHE_TTL:
-                logger.debug(f"Cache hit for {cache_key}")
-                return _response_cache[cache_key]
+    @classmethod
+    def _get_ticker_to_region_mapping(cls) -> Dict[str, str]:
+        """
+        Dynamically load ticker-to-region mapping from ticker_master table.
+        
+        Caches the result for performance. Queries the [ApoAsset_Quant].[dbo].[ticker_master] table
+        for MSCI equity indices (M1*, NDDU*) configured for the Countries dashboard.
+        
+        Returns:
+            Dictionary mapping Bloomberg ticker symbols to region names
+        """
+        # Return cached mapping if already loaded
+        if cls._cache_initialized and cls._ticker_to_region_cache is not None:
+            return cls._ticker_to_region_cache
+        
+        try:
+            from utils.database import DatabaseGateway
+            
+            db = DatabaseGateway()
+            engine = db.get_prod_engine()
+            
+            # Query ticker_master for MSCI indices in Countries dashboard
+            query = """
+            SELECT Ticker, Regions
+            FROM [ApoAsset_Quant].[dbo].[ticker_master]
+            WHERE [Dashboard Page] = 'Countries'
+              AND Active IN (1.0, 2.0)
+              AND (Ticker LIKE 'M1%' OR Ticker LIKE 'NDDU%')
+            ORDER BY Regions, Ticker
+            """
+            
+            df = pd.read_sql_query(query, engine)
+            
+            if df.empty:
+                logger.warning("⚠ No MSCI tickers found in ticker_master table - using fallback")
+                # Fallback to hardcoded mapping if table query fails
+                cls._ticker_to_region_cache = {
+                    "M1DE Index": "Germany",
+                    "NDDUFR Index": "France",
+                    "NDDUIT Index": "Italy",
+                    "NDDUSP Index": "Spain",
+                    "NDDUUK Index": "UK",
+                    "NDDUUS Index": "U.S.",
+                    "NDDUE15 Index": "Europe",
+                    "M1JP Index": "Japan",
+                    "M1CN Index": "China",
+                    "M1IN Index": "India",
+                    "M1EF Index": "EM",
+                }
             else:
-                # Expired, remove from cache
-                del _response_cache[cache_key]
-                del _cache_timestamps[cache_key]
-        return None
+                # Build mapping from query results
+                cls._ticker_to_region_cache = dict(zip(df['Ticker'], df['Regions']))
+                logger.info(f"✓ Loaded {len(cls._ticker_to_region_cache)} MSCI ticker mappings from database")
+                logger.debug(f"  Regions: {sorted(set(cls._ticker_to_region_cache.values()))}")
+            
+            cls._cache_initialized = True
+            return cls._ticker_to_region_cache
+            
+        except Exception as e:
+            logger.error(f"✗ Error loading ticker mappings from database: {e}")
+            # Fallback to hardcoded mapping
+            cls._ticker_to_region_cache = {
+                "M1DE Index": "Germany",
+                "NDDUFR Index": "France",
+                "NDDUIT Index": "Italy",
+                "NDDUSP Index": "Spain",
+                "NDDUUK Index": "UK",
+                "NDDUUS Index": "U.S.",
+                "NDDUE15 Index": "Europe",
+                "M1JP Index": "Japan",
+                "M1CN Index": "China",
+                "M1IN Index": "India",
+                "M1EF Index": "EM",
+            }
+            cls._cache_initialized = True
+            return cls._ticker_to_region_cache
     
-    @staticmethod
-    def _set_cached_response(cache_key: str, response: Dict) -> None:
-        """Cache a response."""
-        _response_cache[cache_key] = response
-        _cache_timestamps[cache_key] = datetime.now().timestamp()
-        logger.debug(f"Cached response for {cache_key}")
-    
-    @staticmethod
-    def _generate_fallback_equity_data(regions: List[str], days: int = 252) -> pd.DataFrame:
+    @classmethod
+    def get_available_regions(cls) -> List[str]:
         """
-        Generate realistic mock equity data for development/testing.
-        Uses seed based on region name for reproducibility.
-        
-        Args:
-            regions: List of region names
-            days: Number of historical days to generate
+        Get list of available regions from the dynamic ticker mapping.
         
         Returns:
-            DataFrame with mock equity data
+            Sorted list of region names available in the system
         """
-        np.random.seed(42)  # For reproducibility
-        
-        dates = pd.date_range(end=datetime.now(), periods=days, freq='D')
-        data = []
-        
-        for region in regions:
-            base_price = 100 + (hash(region) % 50)
-            prices = [base_price]
-            
-            for _ in range(days - 1):
-                change = np.random.normal(0.0005, 0.015)
-                prices.append(prices[-1] * (1 + change))
-            
-            region_data = pd.DataFrame({
-                'DatePoint': dates,
-                'Regions': region,
-                'Name': f'MSCI {region} Index',
-                'Currency': 'EUR',
-                'PX_LAST': prices,
-            })
-            data.append(region_data)
-        
-        return pd.concat(data, ignore_index=True)
+        mapping = cls._get_ticker_to_region_mapping()
+        return sorted(list(set(mapping.values())))
     
     @staticmethod
-    def _generate_fallback_fixed_income_data(regions: List[str], days: int = 252) -> pd.DataFrame:
+    def _normalize_region_name(region: str) -> str:
         """
-        Generate realistic mock fixed income data for development/testing.
+        Normalize region name to match database naming conventions.
         
         Args:
-            regions: List of region names
-            days: Number of historical days to generate
+            region: Region name (e.g., "US", "U.S.", "USA")
         
         Returns:
-            DataFrame with mock fixed income data
+            Normalized region name (e.g., "U.S.")
         """
-        np.random.seed(42)
+        # First check if it's already in our loaded mapping values
+        mapping = LänderDataService._get_ticker_to_region_mapping()
+        if region in mapping.values():
+            return region
         
-        dates = pd.date_range(end=datetime.now(), periods=days, freq='D')
-        data = []
+        # Check aliases
+        if region in LänderDataService.REGION_ALIASES:
+            return LänderDataService.REGION_ALIASES[region]
         
-        for region in regions:
-            base_yield = 2.0 + (hash(region) % 3)
-            
-            region_data = pd.DataFrame({
-                'DatePoint': dates,
-                'Regions': region,
-                '2Y Yields': base_yield + np.random.normal(0, 0.3, days),
-                '5Y Yields': base_yield + 0.5 + np.random.normal(0, 0.25, days),
-                '10Y Yields': base_yield + 1.0 + np.random.normal(0, 0.2, days),
-                '20Y Yields': base_yield + 1.2 + np.random.normal(0, 0.2, days),
-            })
-            data.append(region_data)
-        
-        return pd.concat(data, ignore_index=True)
+        # Return as-is (case-sensitive)
+        return region
     
     @staticmethod
-    def _generate_fallback_macro_data(regions: List[str], days: int = 252) -> pd.DataFrame:
+    def _get_bloomberg_equity_data(
+        tickers: List[str],
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> pd.DataFrame:
         """
-        Generate realistic mock macro data for development/testing.
+        Query Bloomberg database for equity data in LONG format.
         
         Args:
-            regions: List of region names
-            days: Number of historical days to generate
+            tickers: List of Bloomberg ticker symbols (e.g., "M1DE Index")
+            start_date: Start date (default: 4 years ago)
+            end_date: End date (default: today)
         
         Returns:
-            DataFrame with mock macro data
+            DataFrame with columns: DatePoint, Value, FieldName, Ticker, Currency
         """
-        np.random.seed(42)
+        if not tickers:
+            logger.warning("No tickers provided to _get_bloomberg_equity_data")
+            return pd.DataFrame()
         
-        dates = pd.date_range(end=datetime.now(), periods=days, freq='D')
-        data = []
+        if start_date is None:
+            start_date = datetime.now() - timedelta(days=1460)  # 4 years
+        if end_date is None:
+            end_date = datetime.now()
         
-        for region in regions:
-            base_rate = 2.0 + (hash(region) % 4)
+        try:
+            db = DatabaseGateway()
+            engine = db.get_prod_engine()
             
-            region_data = pd.DataFrame({
-                'DatePoint': dates,
-                'Regions': region,
-                'Interest Rate': base_rate + np.random.normal(0, 0.2, days),
-                'Inflation': 2.5 + np.random.normal(0, 0.5, days),
-                'PMI': 50 + np.random.normal(0, 5, days),
-                'GDP Growth': 2.0 + np.random.normal(0, 1, days),
-            })
-            data.append(region_data)
-        
-        return pd.concat(data, ignore_index=True)
+            # Build ticker list for SQL
+            ticker_list = "', '".join(tickers)
+            
+            query = f"""
+            SELECT 
+                d.DatePoint,
+                d.ValueAsString as Value_Raw,
+                d.FieldName,
+                e.BloombergTicker as Ticker,
+                d.Currency
+            FROM [Apoasset_Bloomberg].[dbo].[ReferenceDataHistoricalField] as d
+            LEFT JOIN [Apoasset_Bloomberg].[dbo].[BloombergTicker] as e
+                ON d.BloombergTickerId = e.Id
+            WHERE e.BloombergTicker IN ('{ticker_list}')
+                AND d.Frequency = 'DAILY'
+                AND TRY_CONVERT(DATETIME, d.DatePoint) >= DATEADD(DAY, -{(end_date - start_date).days}, CAST(GETDATE() AS DATE))
+            ORDER BY d.DatePoint DESC, e.BloombergTicker, d.FieldName
+            """
+            
+            logger.info(f"📊 Querying Bloomberg for {len(tickers)} tickers...")
+            df = pd.read_sql_query(query, engine)
+            
+            if df.empty:
+                logger.error("✗ Bloomberg query returned no data")
+                return pd.DataFrame()
+            
+            logger.info(f"✓ Retrieved {len(df)} rows from Bloomberg")
+            logger.debug(f"  Tickers: {df['Ticker'].nunique()} unique")
+            logger.debug(f"  Fields: {df['FieldName'].nunique()} unique - {sorted(df['FieldName'].unique())}")
+            logger.debug(f"  DateRange: {df['DatePoint'].min()} to {df['DatePoint'].max()}")
+            logger.debug(f"  Currencies: {sorted(df['Currency'].dropna().unique())}")
+            
+            # Clean field names (strip whitespace)
+            df['FieldName'] = df['FieldName'].str.strip()
+            
+            # Convert Value from string with comma decimal separator to float
+            df['Value'] = df['Value_Raw'].astype(str).str.replace(',', '.', regex=False)
+            df['Value'] = pd.to_numeric(df['Value'], errors='coerce')
+            df = df.drop(columns=['Value_Raw'])
+            
+            # Handle duplicates: prefer rows with non-NULL Currency
+            if 'Currency' in df.columns:
+                df = df.sort_values('Currency', na_position='last')
+                df = df.drop_duplicates(subset=['DatePoint', 'Ticker', 'FieldName'], keep='first')
+            
+            logger.info(f"✓ Cleaned {len(df)} Bloomberg rows")
+            return df
+            
+        except Exception as e:
+            logger.error(f"✗ Error querying Bloomberg: {e}", exc_info=True)
+            raise
     
     @staticmethod
-    def filter_by_date_range(df: pd.DataFrame, start_date: Optional[str], end_date: Optional[str]) -> pd.DataFrame:
+    def _merge_with_region_mapping(df: pd.DataFrame) -> pd.DataFrame:
         """
-        Filter dataframe by date range.
+        Merge DataFrame with region mapping and filter to mapped regions.
         
         Args:
-            df: Input dataframe with 'DatePoint' column
-            start_date: Start date as string (YYYY-MM-DD) or None for all
-            end_date: End date as string (YYYY-MM-DD) or None for all
+            df: DataFrame with Ticker column
         
         Returns:
-            Filtered dataframe
+            DataFrame with added Regions column
         """
-        if start_date is None and end_date is None:
+        if df.empty:
+            logger.warning("Cannot merge with region mapping - empty DataFrame")
             return df
         
+        logger.info("🗺️  Mapping tickers to regions...")
+        
         df = df.copy()
-        df['DatePoint'] = pd.to_datetime(df['DatePoint'], errors='coerce')
+        ticker_mapping = LänderDataService._get_ticker_to_region_mapping()
+        df['Regions'] = df['Ticker'].map(ticker_mapping)
         
-        if start_date:
-            df = df[df['DatePoint'] >= pd.to_datetime(start_date)]
+        missing = df[df['Regions'].isna()]['Ticker'].unique()
+        if len(missing) > 0:
+            logger.warning(f"⚠ {len(missing)} tickers have no region mapping: {missing}")
         
-        if end_date:
-            df = df[df['DatePoint'] <= pd.to_datetime(end_date)]
+        # Filter to only mapped regions
+        df = df[df['Regions'].notna()]
+        
+        logger.info(f"✓ Mapped data to {df['Regions'].nunique()} regions")
+        logger.debug(f"  Regions: {sorted(df['Regions'].unique())}")
         
         return df
     
     @staticmethod
-    def filter_by_regions(df: pd.DataFrame, regions: List[str]) -> pd.DataFrame:
+    def _calculate_all_indicators(df: pd.DataFrame, requested_currency: str = "EUR") -> pd.DataFrame:
         """
-        Filter dataframe by selected regions.
+        Calculate technical indicators for all ticker+currency combinations.
         
         Args:
-            df: Input dataframe with 'Regions' column
-            regions: List of region names to include
+            df: Long-format DataFrame with PX_LAST and other metrics
+            requested_currency: The primary currency requested (used to align currency-independent fields)
         
         Returns:
-            Filtered dataframe
+            Wide-format DataFrame with one row per (DatePoint, Regions, Name) with all metrics as columns
         """
-        if not regions:
-            return df
+        logger.info("⚡ Calculating technical indicators...")
         
-        return df[df['Regions'].isin(regions)].copy()
-    
-    @staticmethod
-    def filter_by_currency(df: pd.DataFrame, currency: str) -> pd.DataFrame:
-        """
-        Filter dataframe by currency (for equity data).
-        
-        Args:
-            df: Input dataframe with optional 'Currency' column
-            currency: Currency code (EUR, USD, etc.)
-        
-        Returns:
-            Filtered dataframe
-        """
-        if 'Currency' not in df.columns:
-            return df
-        
-        return df[df['Currency'] == currency].copy()
-    
-    @staticmethod
-    def format_for_recharts(df: pd.DataFrame, group_col: str = 'Regions') -> List[Dict[str, Any]]:
-        """
-        Format dataframe for Recharts consumption.
-        
-        When multiple regions exist, pivots data so each region's metrics become separate columns.
-        This allows multiple lines per chart for each region.
-        
-        Args:
-            df: Input dataframe with 'DatePoint', 'Regions', and metric columns
-            group_col: Column to use as grouping (usually 'Regions')
-        
-        Returns:
-            List of dicts suitable for Recharts (pivoted by region)
-        """
         if df.empty:
-            return []
+            logger.warning("Cannot calculate indicators - empty DataFrame")
+            return df
         
+        # Define currency-independent fields (metrics that don't depend on currency)
+        CURRENCY_INDEPENDENT_FIELDS = {
+            'PE_RATIO', 'PX_TO_BOOK_RATIO', 'PX_TO_SALES_RATIO', 
+            'EARN_YLD', 'BEST_PE_RATIO', 'IS_DIL_EPS_CONT_OPS'
+        }
+        
+        # Normalize currency for currency-independent fields to match the requested currency
+        # These fields typically only exist in USD but should be treated as if they're in the requested currency
         df = df.copy()
-        df['DatePoint'] = pd.to_datetime(df['DatePoint'])
-        df = df.sort_values('DatePoint')
+        mask = df['FieldName'].isin(CURRENCY_INDEPENDENT_FIELDS)
+        if mask.any():
+            df.loc[mask, 'Currency'] = requested_currency
+            logger.info(f"✓ Normalized currency for {mask.sum()} currency-independent field rows to {requested_currency}")
         
-        # Check if we have multiple regions
-        unique_regions = df.get(group_col, pd.Series()).unique()
-        has_multiple_regions = len(unique_regions) > 1
+        # Separate PX_LAST for indicator calculation
+        px_data = df[df['FieldName'] == 'PX_LAST'].copy()
+        if px_data.empty:
+            logger.error("✗ No PX_LAST data found for indicator calculation")
+            return df
         
-        if not has_multiple_regions:
-            # Single region: use original format
-            records = df.to_dict('records')
-            for record in records:
-                record['DatePoint'] = record['DatePoint'].strftime('%Y-%m-%d')
-                # Remove NaN values to clean up JSON
-                for key in list(record.keys()):
-                    if pd.isna(record.get(key)):
-                        del record[key]
-            return records
+        # Rename Value to PX_LAST for clarity
+        px_data = px_data.rename(columns={'Value': 'PX_LAST'})
         
-        # Multiple regions: pivot so each region's metrics become separate columns
-        # Get all metric columns (everything except DatePoint, Regions, Currency)
-        metric_cols = [col for col in df.columns if col not in ['DatePoint', group_col, 'Currency', 'Name', 'Ticker']]
+        # Build list of (Ticker, Currency) combinations that have price data
+        ticker_currency_pairs = px_data[['Ticker', 'Regions', 'Currency']].drop_duplicates().dropna()
+        logger.info(f"  Processing {len(ticker_currency_pairs)} ticker+currency combinations...")
         
-        # Pivot: index=DatePoint, columns=Regions, values=metrics
-        pivoted_data = []
-        for date in df['DatePoint'].unique():
-            date_data = df[df['DatePoint'] == date]
-            row = {'DatePoint': date.strftime('%Y-%m-%d')}
+        # Calculate indicators for each ticker+currency combination
+        indicator_rows = []
+        
+        for _, row in ticker_currency_pairs.iterrows():
+            ticker = row['Ticker']
+            region = row['Regions']
+            currency = row['Currency']
             
-            for region in unique_regions:
-                region_data = date_data[date_data[group_col] == region]
-                if not region_data.empty:
-                    region_record = region_data.iloc[0]
-                    
-                    # Add region name as column header for PX_LAST (for PerformanceChart compatibility)
-                    if 'PX_LAST' in region_record:
-                        row[region] = region_record['PX_LAST']
-                    
-                    # Add region-prefixed columns for all metrics
-                    for col in metric_cols:
-                        if col in region_record and pd.notna(region_record[col]):
-                            row[f'{region}_{col}'] = region_record[col]
+            # Get price series for this ticker+currency
+            mask = (px_data['Ticker'] == ticker) & (px_data['Currency'] == currency)
+            price_df = px_data[mask][['DatePoint', 'PX_LAST']].copy()
+            price_df['DatePoint'] = pd.to_datetime(price_df['DatePoint'])
+            price_df = price_df.sort_values('DatePoint').reset_index(drop=True)
             
-            pivoted_data.append(row)
-        
-        return pivoted_data
-    
-    @staticmethod
-    def get_numerical_columns_excluding_avg(data: List[Dict[str, Any]]) -> List[str]:
-        """
-        Extract unique metric column names from the data, excluding columns with '_avg_' in their name.
-        
-        Handles both single-region format (col_name) and multi-region format (Region_col_name).
-        Returns base metric names without region prefixes or region name columns.
-        
-        Args:
-            data: List of dictionaries containing the data (output from format_for_recharts)
-        
-        Returns:
-            List of unique base column/metric names that are numerical
-        """
-        if not data or len(data) == 0:
-            return []
-        
-        # Get all keys from first few records to handle sparse data
-        all_keys = set()
-        for record in data[:min(3, len(data))]:
-            all_keys.update(record.keys())
-        
-        # Exclude standard non-data columns and metadata
-        exclude_cols = {'DatePoint', 'Regions', 'Currency', 'Name', 'date', 'date_str', 'Ticker'}
-        
-        # Separate region-prefixed columns from non-prefixed ones
-        region_names = set()
-        prefixed_metrics = {}  # {metric_name: set(regions)}
-        base_metrics = set()
-        
-        for col in all_keys:
-            # Skip excluded columns
-            if col in exclude_cols:
+            if price_df.empty or len(price_df) < 50:
+                logger.debug(f"  ⚠ Skipping {region} {currency}: insufficient data ({len(price_df)} points)")
                 continue
             
-            # Skip columns with '_avg_' in the name
-            if '_avg_' in col.lower():
+            # Calculate all indicators
+            indicators = EquityIndicatorCalculator.calculate_from_px_last(
+                price_df, f"{ticker}", currency
+            )
+            
+            if not indicators:
                 continue
             
-            # Check if this is a region-prefixed column (Region_Metric format)
-            if '_' in col:
-                parts = col.split('_')
-                if len(parts) >= 2:
-                    potential_region = parts[0]
-                    potential_metric = '_'.join(parts[1:])  # Handle metrics with underscores like "MACD_Signal"
-                    
-                    # If first part is capitalized and looks like a region name
-                    if potential_region and potential_region[0].isupper():
-                        # This is likely a region-prefixed column
-                        region_names.add(potential_region)
-                        metric_key = f'_{potential_metric}'
-                        if metric_key not in prefixed_metrics:
-                            prefixed_metrics[metric_key] = set()
-                        prefixed_metrics[metric_key].add(potential_region)
-                        continue
-            
-            # Non-prefixed columns are base metrics or region names
-            base_metrics.add(col)
-        
-        # Extract final metrics: use region-prefixed metrics (those with underscores) if present,
-        # otherwise use base metrics, but exclude pure region names
-        final_metrics = set()
-        
-        # Add region-prefixed metric names (without the underscore prefix we added)
-        for metric_key in prefixed_metrics.keys():
-            metric_name = metric_key.lstrip('_')
-            final_metrics.add(metric_name)
-        
-        # Add base metrics that aren't region names
-        for metric in base_metrics:
-            if metric not in region_names:
-                final_metrics.add(metric)
-        
-        # Filter to only numerical columns
-        numerical_metrics = []
-        for metric in final_metrics:
-            try:
-                # Get sample values from multiple records
-                sample_values = []
-                for record in data[:min(10, len(data))]:
-                    # Try to find the value in the record
-                    val = None
-                    
-                    # Direct match
-                    if metric in record:
-                        val = record[metric]
+            # Create a row for each date with calculated indicators
+            for idx, date in enumerate(price_df['DatePoint']):
+                ind_row = {
+                    'DatePoint': date,
+                    'Ticker': ticker,
+                    'Regions': region,
+                    'Currency': currency,
+                }
+                
+                # Add indicator values at this index
+                for ind_name, ind_series in indicators.items():
+                    if idx < len(ind_series):
+                        ind_row[ind_name] = ind_series.iloc[idx]
                     else:
-                        # Look for region-prefixed version
-                        for key in record.keys():
-                            if key.endswith(f'_{metric}'):
-                                val = record[key]
-                                break
-                    
-                    if val is not None and (isinstance(val, (int, float)) or (isinstance(val, str) and str(val).strip())):
-                        sample_values.append(val)
+                        ind_row[ind_name] = np.nan
                 
-                if not sample_values:
-                    continue
-                
-                # Check if majority of sample values are numeric
-                numeric_count = 0
-                for val in sample_values:
-                    if isinstance(val, (int, float)):
-                        numeric_count += 1
-                    elif isinstance(val, str):
-                        try:
-                            float(val)
-                            numeric_count += 1
-                        except (ValueError, TypeError):
-                            pass
-                
-                # If at least 50% are numeric, include this column
-                if numeric_count >= len(sample_values) * 0.5:
-                    numerical_metrics.append(metric)
-            except Exception as e:
-                logger.debug(f"Error checking metric {metric}: {e}")
-                pass
+                indicator_rows.append(ind_row)
         
-        # Sort alphabetically for consistency
-        return sorted(numerical_metrics)
+        if not indicator_rows:
+            logger.error("✗ No indicators could be calculated")
+            return df
+        
+        indicator_df = pd.DataFrame(indicator_rows)
+        logger.info(f"✓ Calculated indicators for {len(indicator_df)} date+ticker+currency combinations")
+        
+        # Now pivot the original metrics data to wide format
+        # Remove PX_LAST since we added it from indicators
+        other_fields = df[df['FieldName'] != 'PX_LAST'].copy()
+        
+        wide_df = other_fields.pivot_table(
+            index=['DatePoint', 'Ticker', 'Regions', 'Currency'],
+            columns='FieldName',
+            values='Value',
+            aggfunc='first'
+        ).reset_index()
+        
+        # Convert DatePoint to datetime
+        wide_df['DatePoint'] = pd.to_datetime(wide_df['DatePoint'])
+        
+        # Add back PX_LAST from price data (already renamed to PX_LAST column)
+        px_wide = px_data.pivot_table(
+            index=['DatePoint', 'Ticker', 'Regions', 'Currency'],
+            values='PX_LAST',
+            aggfunc='first'
+        ).reset_index()
+        
+        # Ensure all DatePoints are datetime type
+        px_wide['DatePoint'] = pd.to_datetime(px_wide['DatePoint'])
+        
+        # Merge metrics with PX_LAST
+        wide_df = pd.merge(wide_df, px_wide, on=['DatePoint', 'Ticker', 'Regions', 'Currency'], how='outer')
+        
+        # Merge with calculated indicators (which already has datetime DatePoint)
+        final_df = pd.merge(
+            wide_df,
+            indicator_df,
+            on=['DatePoint', 'Ticker', 'Regions', 'Currency'],
+            how='left'
+        )
+        
+        # Add a Name column (human-readable ticker name)
+        ticker_mapping = LänderDataService._get_ticker_to_region_mapping()
+        final_df['Name'] = final_df['Ticker'].map(lambda x: f"MSCI {ticker_mapping.get(x, x)}")
+        
+        # Sort and clean
+        final_df = final_df.sort_values('DatePoint')
+
+        # --- Derived / computed metrics post-merge ---
+
+        # Weighted Valuation: mean(PE_RATIO, PX_TO_BOOK_RATIO, PX_TO_SALES_RATIO)
+        val_cols = [c for c in ['PE_RATIO', 'PX_TO_BOOK_RATIO', 'PX_TO_SALES_RATIO'] if c in final_df.columns]
+        if len(val_cols) >= 2:
+            final_df['Weighted Valuation'] = final_df[val_cols].mean(axis=1)
+            logger.info(f"  ✓ Computed Weighted Valuation from {val_cols}")
+
+        # EPS Growth: cumulative growth of IS_DIL_EPS_CONT_OPS per region+currency
+        if 'IS_DIL_EPS_CONT_OPS' in final_df.columns:
+            def _cumulative_growth(series):
+                first_valid = series.dropna().iloc[0] if len(series.dropna()) > 0 else np.nan
+                if pd.isna(first_valid) or first_valid == 0:
+                    return series * np.nan
+                return ((series / first_valid) - 1) * 100
+            final_df['EPS_Growth'] = final_df.groupby(
+                ['Regions', 'Currency'], group_keys=False
+            )['IS_DIL_EPS_CONT_OPS'].transform(_cumulative_growth)
+            logger.info("  ✓ Computed EPS_Growth from IS_DIL_EPS_CONT_OPS")
+
+        logger.info(f"✓ Final wide-format DataFrame: {final_df.shape}")
+        logger.debug(f"  Columns: {sorted(final_df.columns)}")
+        
+        return final_df
     
     @staticmethod
     def get_equity_data(
@@ -622,343 +543,949 @@ class LänderDataService:
         currency: str = "EUR"
     ) -> Dict[str, Any]:
         """
-        Get filtered and formatted equity data for Countries page.
-        Fetches from Bloomberg database and calculates technical indicators.
+        Get equity data for specified regions following reference architecture.
         
         Args:
-            regions: List of countries/regions to include
-            start_date: Start date (YYYY-MM-DD) or None for all
-            end_date: End date (YYYY-MM-DD) or None for all
-            lookback: Lookback period for rolling calculations (1Y, 3Y, 5Y, All)
-            show_averages: Whether to include rolling average indicators
+            regions: List of region names (e.g., ["Germany", "France", "US"])
+            start_date: Start date (YYYY-MM-DD)
+            end_date: End date (YYYY-MM-DD)
+            lookback: Lookback period (1Y, 3Y, 5Y, All)
+            show_averages: Include rolling averages (currently returns all available data)
             currency: Currency filter (EUR, USD)
         
         Returns:
-            Dict with formatted chart data ready for Recharts
+            Dict with status, data, and metadata
         """
-        # Check cache first
-        cache_key = LänderDataService._get_cache_key('equity', regions, lookback=lookback, currency=currency)
-        cached = LänderDataService._get_cached_response(cache_key)
-        if cached:
-            return cached
+        logger.info("=" * 80)
+        logger.info(f"🔍 get_equity_data() called: regions={regions}, currency={currency}")
+        logger.info("=" * 80)
         
         try:
-            # Map regions to MSCI tickers (Bloomberg ticker symbols from ticker_master)
-            region_to_ticker = {
-                "Germany": "M1DE Index",          # MSCI Germany
-                "France": "NDDUFR Index",         # MSCI France
-                "Italy": "NDDUIT Index",          # MSCI Italy
-                "Spain": "NDDUSP Index",          # MSCI Spain
-                "UK": "NDDUUK Index",             # MSCI UK
-                # Note: Netherlands, Belgium, Austria, Greece, Portugal not available in Bloomberg
-            }
+            # Normalize region names (e.g., "US" -> "U.S.")
+            normalized_regions = [LänderDataService._normalize_region_name(r) for r in regions]
+            logger.info(f"Normalized regions: {normalized_regions}")
             
-            # Get relevant tickers for selected regions
-            tickers = [region_to_ticker.get(r, r) for r in regions if r in region_to_ticker]
+            # Map region names back to tickers
+            ticker_mapping = LänderDataService._get_ticker_to_region_mapping()
+            region_to_ticker = {v: k for k, v in ticker_mapping.items()}
+            tickers = [region_to_ticker[r] for r in normalized_regions if r in region_to_ticker]
             
             if not tickers:
-                logger.warning(f"No valid MSCI tickers found for regions: {regions}")
-                return {
-                    "status": "error",
-                    "data": [],
-                    "metadata": {"error": "No valid regions found"}
+                logger.error(f"✗ No valid tickers found for regions: {normalized_regions}")
+                raise ValueError(f"No valid regions: {normalized_regions}")
+            
+            logger.info(f"📍 Requesting tickers: {tickers}")
+            
+            # Query Bloomberg
+            df_bloomberg = LänderDataService._get_bloomberg_equity_data(tickers)
+            
+            if df_bloomberg.empty:
+                logger.error("✗ No Bloomberg data retrieved")
+                raise ValueError("No data from Bloomberg")
+            
+            # Map to regions
+            df_mapped = LänderDataService._merge_with_region_mapping(df_bloomberg)
+            
+            if df_mapped.empty:
+                logger.error("✗ No data after region mapping")
+                raise ValueError("No data after region mapping")
+            
+            # Filter to requested regions
+            df_filtered = df_mapped[df_mapped['Regions'].isin(normalized_regions)].copy()
+            
+            if df_filtered.empty:
+                logger.error(f"✗ No data for selected regions: {normalized_regions}")
+                raise ValueError(f"No data for regions: {normalized_regions}")
+            
+            logger.info(f"✓ Filtered to {df_filtered['Regions'].nunique()} regions with {len(df_filtered)} data points")
+            
+            # Filter to currency - handle currency-independent fields
+            # NOTE: Valuation metrics (PE_RATIO, EARN_YLD, etc.) are "currency-independent" metrics
+            # and only exist in USD in the Bloomberg database. We include them from USD even when
+            # EUR is requested since they represent the same economic value regardless of currency.
+            if currency and 'Currency' in df_filtered.columns:
+                CURRENCY_INDEPENDENT_FIELDS = {
+                    'PE_RATIO', 'PX_TO_BOOK_RATIO', 'PX_TO_SALES_RATIO', 
+                    'EARN_YLD', 'BEST_PE_RATIO', 'IS_DIL_EPS_CONT_OPS'
                 }
+                
+                # Split data into currency-dependent and currency-independent
+                currency_dependent = df_filtered[~df_filtered['FieldName'].isin(CURRENCY_INDEPENDENT_FIELDS)].copy()
+                currency_independent = df_filtered[df_filtered['FieldName'].isin(CURRENCY_INDEPENDENT_FIELDS)].copy()
+                
+                # Filter currency-dependent fields to requested currency
+                currency_dependent = currency_dependent[currency_dependent['Currency'] == currency].copy()
+                # Keep all currency-independent fields (don't filter by currency, they only exist in USD in Bloomberg)
+                
+                # Recombine
+                df_filtered = pd.concat([currency_dependent, currency_independent], ignore_index=True)
+                
+                logger.info(f"✓ Filtered to {currency} currency for price data: {len(currency_dependent)} price rows + {len(currency_independent)} ratio rows = {len(df_filtered)} total")
             
-            # Fetch data from database
-            db = DatabaseGateway()
+            if df_filtered.empty:
+                logger.error(f"✗ No data after currency filtering")
+                raise ValueError(f"No usable data remaining after currency filter")
             
-            # Parse dates for database query
-            db_start_date = None
-            db_end_date = None
+            # Calculate indicators and create wide-format output
+            df_final = LänderDataService._calculate_all_indicators(df_filtered, requested_currency=currency)
             
+            if df_final.empty:
+                logger.error("✗ Final dataframe is empty")
+                raise ValueError("No data in final output")
+            
+            # Optional date range filter
             if start_date:
-                db_start_date = pd.to_datetime(start_date)
+                df_final = df_final[df_final["DatePoint"] >= pd.Timestamp(start_date)]
             if end_date:
-                db_end_date = pd.to_datetime(end_date)
+                df_final = df_final[df_final["DatePoint"] <= pd.Timestamp(end_date)]
             
-            # Fetch Bloomberg data
-            df = db.fetch_equity_data(
-                start_date=db_start_date,
-                end_date=db_end_date,
-                tickers=tickers
-            )
+            if df_final.empty:
+                logger.warning(f"⚠ No data after date filtering: start_date={start_date}, end_date={end_date}")
+                raise ValueError("No data within the specified date range")
             
-            # Fallback to mock data if database fetch failed or returned no data
-            if df.empty:
-                logger.info(f"Database query returned no data. Using fallback mock data for regions: {regions}")
-                df = LänderDataService._generate_fallback_equity_data(regions, days=252)
-                use_fallback = True
-            else:
-                use_fallback = False
+            # Convert to records for JSON serialization
+            records = df_final.to_dict('records')
             
-            # Process the data
-            df = df.copy()
-            
-            # Convert DatePoint to datetime
-            df['DatePoint'] = pd.to_datetime(df['DatePoint'])
-            
-            # Different processing based on data source
-            if not use_fallback:
-                # Bloomberg data: requires ticker mapping and pivoting
-                df.rename(columns={'Ticker': 'Regions'}, inplace=True)
+            # Convert datetime to string and NaN to None in records
+            import math
+            for record in records:
+                if 'DatePoint' in record and hasattr(record['DatePoint'], 'isoformat'):
+                    record['DatePoint'] = record['DatePoint'].isoformat()
                 
-                # Map ticker back to region name
-                ticker_to_region = {v: k for k, v in region_to_ticker.items()}
-                df['Regions'] = df['Regions'].map(ticker_to_region)
-                
-                # Filter by currency
-                if 'Currency' in df.columns:
-                    df = df[df['Currency'] == currency]
-                
-                # Pivot data to have one row per date per region with all fields as columns
-                df_pivot = df.pivot_table(
-                    index=['DatePoint', 'Regions', 'Currency'],
-                    columns='FieldName',
-                    values='ValueAsString',
-                    aggfunc='first'
-                ).reset_index()
-                
-                # Convert numeric columns (handle comma as decimal separator from database)
-                numeric_cols = ['PX_LAST', 'PE_RATIO', 'PX_TO_BOOK_RATIO', 'IS_DIL_EPS_CONT_OPS']
-                for col in numeric_cols:
-                    if col in df_pivot.columns:
-                        # Replace comma with period for numeric conversion (database uses comma as decimal separator)
-                        df_pivot[col] = df_pivot[col].astype(str).str.replace(',', '.', regex=False)
-                        df_pivot[col] = pd.to_numeric(df_pivot[col], errors='coerce')
-            else:
-                # Fallback data: already in correct format
-                df_pivot = df.copy()
-                df_pivot['Currency'] = currency  # Add currency column
-                
-                # Ensure PX_LAST is numeric
-                if 'PX_LAST' in df_pivot.columns:
-                    df_pivot['PX_LAST'] = pd.to_numeric(df_pivot['PX_LAST'], errors='coerce')
-            
-            # Calculate technical indicators for each price series
-            for region in df_pivot['Regions'].unique():
-                region_mask = df_pivot['Regions'] == region
-                region_data = df_pivot[region_mask].copy()
-                region_data = region_data.sort_values('DatePoint')
-                
-                # Calculate indicators
-                if 'PX_LAST' in region_data.columns:
-                    indicators_df = TechnicalIndicatorCalculator.apply_all_indicators(
-                        region_data,
-                        price_column='PX_LAST'
-                    )
-                    df_pivot.loc[region_mask, indicators_df.columns] = indicators_df
-            
-            # Apply date range filters
-            df_pivot = LänderDataService.filter_by_date_range(df_pivot, start_date, end_date)
-            
-            # Sort by date descending
-            df_pivot = df_pivot.sort_values('DatePoint', ascending=False)
-            
-            # Format for Recharts
-            data = LänderDataService.format_for_recharts(df_pivot)
+                # Replace NaN values with None for JSON serialization
+                for key, value in record.items():
+                    if isinstance(value, float) and math.isnan(value):
+                        record[key] = None
             
             result = {
                 "status": "ok",
-                "data": data,
+                "data": records,
                 "metadata": {
                     "regions": regions,
                     "currency": currency,
                     "lookback": lookback,
-                    "date_range": {"start": start_date, "end": end_date},
-                    "record_count": len(data),
-                    "source": "Mock Data (Development)" if use_fallback else "Bloomberg"
+                    "record_count": len(records),
+                    "source": "Bloomberg",
+                    "debug": {
+                        "initial_rows": len(df_bloomberg),
+                        "after_mapping": len(df_mapped),
+                        "after_filtering": len(df_filtered),
+                        "final_rows": len(df_final),
+                        "columns": sorted(df_final.columns.tolist())
+                    }
                 }
             }
             
-            # Cache the result
-            LänderDataService._set_cached_response(cache_key, result)
+            logger.info(f"\n✅ SUCCESS: Returned {len(records)} records from {result['metadata']['debug']['final_rows']} processed rows")
+            logger.info("=" * 80)
+            
             return result
-        
+            
         except Exception as e:
-            logger.error(f"✗ Error fetching equity data: {e}")
+            logger.error(f"\n❌ FAILED: {e}")
+            logger.error("=" * 80, exc_info=True)
+            
             return {
                 "status": "error",
                 "data": [],
-                "metadata": {"error": str(e)}
+                "metadata": {
+                    "error": str(e),
+                    "source": "Bloomberg"
+                }
             }
     
+    @staticmethod
+    def get_numerical_columns_excluding_avg(data: List[Dict[str, Any]]) -> List[str]:
+        """
+        Get list of numerical columns from equity data, excluding rolling average columns.
+        
+        Args:
+            data: List of data records (dictionaries)
+        
+        Returns:
+            List of numerical column names excluding '_avg_' columns
+        """
+        if not data:
+            return []
+        
+        # Get all keys from first record
+        all_keys = set(data[0].keys())
+        
+        # Exclude non-numerical columns and rolling averages
+        excluded_patterns = ['DatePoint', 'Region', 'Currency', 'Index', 'IndexName']
+        
+        numerical_cols = [
+            col for col in sorted(all_keys)
+            if not any(pattern in col for pattern in excluded_patterns) and '_avg_' not in col
+        ]
+        
+        return numerical_cols    
+    @staticmethod
+    def get_master_equity_columns() -> List[str]:
+        """
+        Get MASTER list of all possible equity columns (technical indicators and metrics).
+        
+        This returns a consistent list regardless of region selection, to be used in the
+        metric filter modal so checkboxes don't change when switching regions.
+        
+        Returns:
+            List of all possible column names that could appear in equity data
+        """
+        # All possible columns: Bloomberg fields + computed indicators
+        return [
+            # Trend
+            'MOM_3',              # 3-Month Momentum
+            'MOM_12',             # 12-Month Momentum
+            'MOM_TS',             # Time Series Momentum
+            # Bewertung (Valuation)
+            'Weighted Valuation', # Aggregated valuation (mean of PE/PB/PS)
+            'EARN_YLD',           # Earnings Yield
+            'PX_TO_SALES_RATIO',  # Price-to-Sales (KUV)
+            'PX_TO_BOOK_RATIO',   # Price-to-Book (KBV)
+            'PE_RATIO',           # Price-to-Earnings (KGV)
+            'BEST_PE_RATIO',      # Forward PE Ratio
+            # Technisch (Technical)
+            'Rolling Volatility', # Annualized Rolling Volatility
+            'MA_50_Diff',         # Distance from 50-day MA (%)
+            'RSI',                # Relative Strength Index
+            'MACD',               # MACD line
+            'MACD_Signal',        # MACD Signal line
+            'MACD_Histogram',     # MACD Histogram
+            # Spezial (Special / Graph-only)
+            'Performance',        # Cumulative performance (%)
+            'EPS_Growth',         # Cumulative EPS growth (%)
+            # Extra price / supporting columns
+            'PX_LAST',            # Price
+            'MA_50',              # 50-day Moving Average
+            'Rolling Sharpe',     # Rolling Sharpe Ratio
+            'Rolling Returns',    # Rolling Returns
+        ]
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # FIXED INCOME DATA METHODS
+    # ═══════════════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _load_fi_ticker_mapping(cls) -> pd.DataFrame:
+        """Load FI ticker mapping from ticker_master table, cached."""
+        if cls._fi_cache_initialized and cls._fi_ticker_mapping_cache is not None:
+            return cls._fi_ticker_mapping_cache
+
+        try:
+            db = DatabaseGateway()
+            engine = db.get_duoplus_engine()
+            df = pd.read_sql_query(
+                """
+                SELECT Ticker, Regions,
+                       [Dashboard Grouping Name] AS GroupingName,
+                       Period, Frequency, Fields,
+                       [Database] AS DBSource
+                FROM [ApoAsset_Quant].[dbo].[ticker_master]
+                WHERE [Dashboard Page] = 'Countries'
+                  AND [Dashboard Grouping] = 'Fixed Income'
+                  AND Active = 1
+                """,
+                engine,
+            )
+            cls._fi_ticker_mapping_cache = df
+            cls._fi_cache_initialized = True
+            logger.info(f"✓ Loaded {len(df)} FI ticker mappings from ticker_master")
+            return df
+        except Exception as e:
+            logger.error(f"✗ Failed to load FI ticker mapping: {e}", exc_info=True)
+            cls._fi_cache_initialized = True
+            cls._fi_ticker_mapping_cache = pd.DataFrame()
+            return pd.DataFrame()
+
+    @staticmethod
+    def _get_bloomberg_fi_data(tickers: List[str], days_back: int = 1460) -> pd.DataFrame:
+        """Query Bloomberg ReferenceDataHistoricalField for FI tickers."""
+        if not tickers:
+            return pd.DataFrame()
+        try:
+            db = DatabaseGateway()
+            engine = db.get_prod_engine()
+            ticker_list = "', '".join(tickers)
+            query = f"""
+            SELECT
+                d.DatePoint,
+                d.ValueAsString AS Value_Raw,
+                d.FieldName,
+                e.BloombergTicker AS Ticker,
+                d.Currency
+            FROM [Apoasset_Bloomberg].[dbo].[ReferenceDataHistoricalField] AS d
+            LEFT JOIN [Apoasset_Bloomberg].[dbo].[BloombergTicker] AS e
+                ON d.BloombergTickerId = e.Id
+            WHERE e.BloombergTicker IN ('{ticker_list}')
+              AND d.Frequency = 'DAILY'
+              AND TRY_CONVERT(DATETIME, d.DatePoint) >= DATEADD(DAY, -{days_back}, CAST(GETDATE() AS DATE))
+            ORDER BY d.DatePoint DESC, e.BloombergTicker
+            """
+            df = pd.read_sql_query(query, engine)
+            if df.empty:
+                logger.warning("Bloomberg FI query returned no rows")
+                return pd.DataFrame()
+            df["Value"] = df["Value_Raw"].astype(str).str.replace(",", ".", regex=False)
+            df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
+            df = df.drop(columns=["Value_Raw"])
+            df = df.sort_values("Currency", na_position="last")
+            df = df.drop_duplicates(subset=["DatePoint", "Ticker", "FieldName"], keep="first")
+            logger.info(f"✓ Bloomberg FI: {len(df)} rows for {df['Ticker'].nunique()} tickers")
+            return df
+        except Exception as e:
+            logger.error(f"✗ Bloomberg FI query failed: {e}", exc_info=True)
+            return pd.DataFrame()
+
+    @staticmethod
+    def _get_quant_fi_data(tickers: List[str], days_back: int = 1460) -> pd.DataFrame:
+        """Query Quant market_data table for Quant-sourced FI tickers."""
+        if not tickers:
+            return pd.DataFrame()
+        try:
+            db = DatabaseGateway()
+            engine = db.get_duoplus_engine()
+            ticker_list = "', '".join(tickers)
+            query = f"""
+            SELECT
+                ID AS Ticker,
+                Value,
+                Field AS FieldName,
+                Frequency,
+                DatePoint,
+                CURRENCY AS Currency
+            FROM [ApoAsset_Quant].[dbo].[market_data]
+            WHERE ID IN ('{ticker_list}')
+              AND TRY_CONVERT(DATETIME, DatePoint) >= DATEADD(DAY, -{days_back}, CAST(GETDATE() AS DATE))
+            ORDER BY DatePoint DESC, ID
+            """
+            df = pd.read_sql_query(query, engine)
+            if df.empty:
+                logger.warning("Quant FI market_data query returned no rows")
+                return pd.DataFrame()
+            df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
+            # Treat all quant data as PX_LAST for consistency
+            df["FieldName"] = "PX_LAST"
+            df = df.drop_duplicates(subset=["DatePoint", "Ticker"], keep="first")
+            logger.info(f"✓ Quant FI: {len(df)} rows for {df['Ticker'].nunique()} tickers")
+            return df
+        except Exception as e:
+            logger.error(f"✗ Quant FI query failed: {e}", exc_info=True)
+            return pd.DataFrame()
+
+    @staticmethod
+    def _process_fi_raw_data(
+        raw_df: pd.DataFrame,
+        ticker_mapping: pd.DataFrame,
+        regions: List[str],
+    ) -> pd.DataFrame:
+        """
+        Merge raw FI data with ticker_mapping, pivot to wide format, and derive signals.
+
+        Resulting column names follow the convention: "{Period} {GroupingName}"
+        e.g. "10Y Yields", "5Y CDS", "10Y Breakevens", "1Y Inflation Expectations"
+        """
+        if raw_df.empty or ticker_mapping.empty:
+            logger.error("Cannot process FI data: raw_df or ticker_mapping is empty")
+            return pd.DataFrame()
+
+        # Keep only PX_LAST rows
+        raw_df = raw_df[raw_df["FieldName"] == "PX_LAST"].copy()
+
+        # Merge with ticker mapping to get Region, GroupingName, Period
+        mapped = raw_df.merge(
+            ticker_mapping[["Ticker", "Regions", "GroupingName", "Period"]],
+            on="Ticker",
+            how="left",
+        )
+
+        # Filter to requested regions (drop rows where Regions is NaN or not in list)
+        mapped = mapped.dropna(subset=["Regions"])
+        mapped = mapped[mapped["Regions"].isin(regions)].copy()
+
+        if mapped.empty:
+            logger.error(f"No FI data for regions {regions} after mapping")
+            return pd.DataFrame()
+
+        # Build metric column name
+        mapped["MetricCol"] = (
+            mapped["Period"].astype(str).str.strip()
+            + " "
+            + mapped["GroupingName"].astype(str).str.strip()
+        )
+
+        # Convert DatePoint
+        mapped["DatePoint"] = pd.to_datetime(mapped["DatePoint"])
+
+        # Pivot: one row per (DatePoint, Regions), columns = MetricCol
+        pivot_df = mapped.pivot_table(
+            index=["DatePoint", "Regions"],
+            columns="MetricCol",
+            values="Value",
+            aggfunc="first",
+        ).reset_index()
+        pivot_df.columns.name = None
+
+        # Forward fill (and back fill) sparse data within each region
+        numeric_cols = [c for c in pivot_df.columns if c not in ("DatePoint", "Regions")]
+        for col in numeric_cols:
+            pivot_df[col] = pivot_df.groupby("Regions")[col].transform(
+                lambda x: x.ffill().bfill()
+            )
+
+        # ── Derived signals ────────────────────────────────────────────────
+        # Steepness: 10Y - 2Y
+        if "10Y Yields" in pivot_df.columns and "2Y Yields" in pivot_df.columns:
+            pivot_df["Steepness"] = pivot_df["10Y Yields"] - pivot_df["2Y Yields"]
+            logger.info("  ✓ Computed Steepness (10Y - 2Y)")
+
+        # Curvature: (20Y - 10Y) - (10Y - 5Y)
+        if all(c in pivot_df.columns for c in ["20Y Yields", "10Y Yields", "5Y Yields"]):
+            pivot_df["Curvature"] = (
+                (pivot_df["20Y Yields"] - pivot_df["10Y Yields"])
+                - (pivot_df["10Y Yields"] - pivot_df["5Y Yields"])
+            )
+            logger.info("  ✓ Computed Curvature")
+
+        # Spreads to Bunds: 10Y yield minus Germany's 10Y yield at same date
+        if "10Y Yields" in pivot_df.columns:
+            germany_10y = (
+                pivot_df.loc[pivot_df["Regions"] == "Germany", ["DatePoint", "10Y Yields"]]
+                .rename(columns={"10Y Yields": "_bund_10y"})
+                .drop_duplicates("DatePoint")
+            )
+            if not germany_10y.empty:
+                pivot_df = pivot_df.merge(germany_10y, on="DatePoint", how="left")
+                pivot_df["Spreads to Bunds"] = pivot_df["10Y Yields"] - pivot_df["_bund_10y"]
+                pivot_df = pivot_df.drop(columns=["_bund_10y"], errors="ignore")
+                logger.info("  ✓ Computed Spreads to Bunds")
+
+        logger.info(
+            f"✓ FI wide-format: {pivot_df.shape}, columns: {sorted(pivot_df.columns.tolist())}"
+        )
+        return pivot_df.sort_values(["Regions", "DatePoint"]).reset_index(drop=True)
+
     @staticmethod
     def get_fixed_income_data(
         regions: List[str],
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         lookback: str = "1Y",
-        show_averages: bool = False
+        show_averages: bool = False,
     ) -> Dict[str, Any]:
         """
-        Get filtered and formatted fixed income data for Countries page.
-        Fetches yield curve and spread data from market_data database.
-        
-        Args:
-            regions: List of countries/regions to include
-            start_date: Start date (YYYY-MM-DD) or None for all
-            end_date: End date (YYYY-MM-DD) or None for all
-            lookback: Lookback period for rolling calculations
-            show_averages: Whether to include rolling average indicators
-        
+        Get fixed income data for specified regions.
+
+        Queries Bloomberg and Quant market_data tables for yields, CDS spreads,
+        inflation expectations, and breakevens. Adds derived signals (Steepness,
+        Curvature, Spreads to Bunds).
+
         Returns:
-            Dict with formatted chart data ready for Recharts
+            Dict with status, data records, and metadata
         """
-        # Check cache first
-        cache_key = LänderDataService._get_cache_key('fixed_income', regions, lookback=lookback)
-        cached = LänderDataService._get_cached_response(cache_key)
-        if cached:
-            return cached
-        
+        logger.info("=" * 80)
+        logger.info(f"🔍 get_fixed_income_data(): regions={regions}, lookback={lookback}")
+        logger.info("=" * 80)
+
         try:
-            # Fetch data from database
-            db = DatabaseGateway()
-            
-            # Parse dates for database query
-            db_start_date = None
-            db_end_date = None
-            
+            import math
+
+            lookback_days = {"1Y": 365, "3Y": 1095, "5Y": 1825, "All": 3650}.get(
+                lookback, 1460
+            )
+
+            # Normalize region names
+            normalized_regions = [
+                LänderDataService._normalize_region_name(r) for r in regions
+            ]
+            logger.info(f"Normalized regions: {normalized_regions}")
+
+            # Load FI ticker mapping
+            fi_mapping = LänderDataService._load_fi_ticker_mapping()
+            if fi_mapping.empty:
+                raise ValueError("Could not load FI ticker mapping from ticker_master")
+
+            # Focus on core groups (skip Interest Rate Expectations - complex futures)
+            focus_groups = {
+                "Yields",
+                "CDS",
+                "Breakevens",
+                "Inflation Expectations",
+            }
+            fi_map = fi_mapping[
+                fi_mapping["GroupingName"].isin(focus_groups)
+            ].copy()
+
+            if fi_map.empty:
+                raise ValueError("No FI tickers found for core groups in ticker_master")
+
+            bloomberg_tickers = fi_map[fi_map["DBSource"] == "Bloomberg"]["Ticker"].tolist()
+            quant_tickers = fi_map[fi_map["DBSource"] == "Quant"]["Ticker"].tolist()
+            logger.info(
+                f"  Bloomberg tickers: {len(bloomberg_tickers)}, "
+                f"Quant tickers: {len(quant_tickers)}"
+            )
+
+            # Query both data sources
+            df_bloomberg = LänderDataService._get_bloomberg_fi_data(
+                bloomberg_tickers, days_back=lookback_days
+            )
+            df_quant = LänderDataService._get_quant_fi_data(
+                quant_tickers, days_back=lookback_days
+            )
+
+            # Combine
+            frames = []
+            if not df_bloomberg.empty:
+                frames.append(df_bloomberg[df_bloomberg["FieldName"] == "PX_LAST"].copy())
+            if not df_quant.empty:
+                frames.append(df_quant)
+
+            if not frames:
+                raise ValueError("No FI data retrieved from Bloomberg or Quant")
+
+            raw_df = pd.concat(frames, ignore_index=True, sort=False)
+            logger.info(f"  Combined raw FI rows: {len(raw_df)}")
+
+            # Process into wide format with derived signals
+            df_final = LänderDataService._process_fi_raw_data(
+                raw_df, fi_map, normalized_regions
+            )
+            if df_final.empty:
+                raise ValueError("No FI data after processing/pivoting")
+
+            # Optional date range filter
             if start_date:
-                db_start_date = pd.to_datetime(start_date)
+                df_final = df_final[df_final["DatePoint"] >= pd.Timestamp(start_date)]
             if end_date:
-                db_end_date = pd.to_datetime(end_date)
-            
-            # Fetch market data - use fallback immediately since database is likely not available
-            logger.info(f"Generating fixed income data for regions: {regions}")
-            df = LänderDataService._generate_fallback_fixed_income_data(regions, days=252)
-            use_fallback = True
-            
-            # Fallback data: already in correct format
-            df_pivot = df.copy()
-            
-            # Convert numeric columns
-            yield_cols = ['3M Yields', '2Y Yields', '5Y Yields', '10Y Yields', '20Y Yields']
-            for col in yield_cols:
-                if col in df_pivot.columns:
-                    df_pivot[col] = pd.to_numeric(df_pivot[col], errors='coerce')
-            
-            # Calculate yield curve metrics for each region
-            for region in df_pivot['Regions'].unique():
-                region_mask = df_pivot['Regions'] == region
-                region_data = df_pivot[region_mask].copy()
-                
-                # Calculate Steepness (10Y - 2Y)
-                if '10Y Yields' in region_data.columns and '2Y Yields' in region_data.columns:
-                    df_pivot.loc[region_mask, 'Steepness'] = (
-                        region_data['10Y Yields'] - region_data['2Y Yields']
-                    )
-                
-                # Calculate Curvature: (20Y - 10Y) - (10Y - 5Y)
-                if ('20Y Yields' in region_data.columns and '10Y Yields' in region_data.columns 
-                    and '5Y Yields' in region_data.columns):
-                    df_pivot.loc[region_mask, 'Curvature'] = (
-                        (region_data['20Y Yields'] - region_data['10Y Yields']) -
-                        (region_data['10Y Yields'] - region_data['5Y Yields'])
-                    )
-                
-                # Calculate Level (average yield)
-                if '10Y Yields' in region_data.columns:
-                    df_pivot.loc[region_mask, 'Level'] = region_data['10Y Yields']
-            
-            # Apply date range filters
-            df_pivot = LänderDataService.filter_by_date_range(df_pivot, start_date, end_date)
-            
-            # Sort by date descending
-            df_pivot = df_pivot.sort_values('DatePoint', ascending=False)
-            
-            # Format for Recharts with multi-region pivoting
-            data = LänderDataService.format_for_recharts(df_pivot)
-            
+                df_final = df_final[df_final["DatePoint"] <= pd.Timestamp(end_date)]
+
+            # Serialize to JSON-safe records
+            records = df_final.to_dict("records")
+            for record in records:
+                if "DatePoint" in record and hasattr(record["DatePoint"], "isoformat"):
+                    record["DatePoint"] = record["DatePoint"].isoformat()
+                for key, value in record.items():
+                    if isinstance(value, float) and math.isnan(value):
+                        record[key] = None
+
+            metric_cols = sorted(
+                [c for c in df_final.columns if c not in ("DatePoint", "Regions")]
+            )
             result = {
                 "status": "ok",
-                "data": data,
+                "data": records,
                 "metadata": {
                     "regions": regions,
                     "lookback": lookback,
-                    "date_range": {"start": start_date, "end": end_date},
-                    "record_count": len(data),
-                    "source": "Mock Data (Development)" if use_fallback else "Market Data"
-                }
+                    "record_count": len(records),
+                    "source": "Bloomberg/Quant",
+                    "columns": metric_cols,
+                },
             }
-            
-            # Cache the result
-            LänderDataService._set_cached_response(cache_key, result)
+            logger.info(f"✅ FI SUCCESS: {len(records)} records, {len(metric_cols)} metrics")
+            logger.info("=" * 80)
             return result
-        
+
         except Exception as e:
-            logger.error(f"✗ Error fetching fixed income data: {e}")
+            logger.error(f"❌ get_fixed_income_data FAILED: {e}", exc_info=True)
+            logger.info("=" * 80)
             return {
                 "status": "error",
                 "data": [],
-                "metadata": {"error": str(e)}
+                "metadata": {"error": str(e)},
             }
-    
+
+    @staticmethod
+    def get_master_fi_columns() -> List[str]:
+        """
+        Return the master list of all possible Fixed Income metric column names.
+        Used by the MetricsFilterModal to keep checkboxes stable.
+        """
+        return [
+            # Zinsen (Yields)
+            "2Y Yields",
+            "5Y Yields",
+            "10Y Yields",
+            "20Y Yields",
+            "30Y Yields",
+            # Zinskurven-Ableitungen
+            "Steepness",
+            "Curvature",
+            "Spreads to Bunds",
+            # Kreditqualität (CDS)
+            "3 CDS",
+            "5 CDS",
+            "7 CDS",
+            "10 CDS",
+            # Inflationserwartungen
+            "1Y Inflation Expectations",
+            "2Y Inflation Expectations",
+            "5Y Inflation Expectations",
+            "10Y Breakevens",
+            "10Y Inflation Expectations",
+        ]
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # MACRO DATA METHODS
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # Class-level caches for macro ticker mapping
+    _macro_ticker_mapping_cache: Optional[pd.DataFrame] = None
+    _macro_cache_initialized: bool = False
+
+    @classmethod
+    def _load_macro_ticker_mapping(cls) -> pd.DataFrame:
+        """Load Macro ticker mapping from ticker_master table, cached."""
+        if cls._macro_cache_initialized and cls._macro_ticker_mapping_cache is not None:
+            return cls._macro_ticker_mapping_cache
+
+        try:
+            db = DatabaseGateway()
+            engine = db.get_duoplus_engine()
+            from sqlalchemy import text
+            with engine.connect() as conn:
+                df = pd.read_sql_query(
+                    text("""
+                        SELECT Ticker, Regions,
+                               [Dashboard Grouping Name] AS GroupingName,
+                               Period, [Database] AS DBSource,
+                               [Adjust Pct] AS AdjustPct
+                        FROM [ApoAsset_Quant].[dbo].[ticker_master]
+                        WHERE [Dashboard Page] = 'Countries'
+                          AND [Dashboard Grouping] = 'Macro'
+                          AND Active = 1
+                    """),
+                    conn,
+                )
+            cls._macro_ticker_mapping_cache = df
+            cls._macro_cache_initialized = True
+            logger.info(f"✓ Loaded {len(df)} Macro ticker mappings from ticker_master")
+            return df
+        except Exception as e:
+            logger.error(f"✗ Failed to load Macro ticker mapping: {e}", exc_info=True)
+            cls._macro_cache_initialized = True
+            cls._macro_ticker_mapping_cache = pd.DataFrame()
+            return pd.DataFrame()
+
+    @staticmethod
+    def _get_bloomberg_macro_data(tickers: List[str], days_back: int = 1460) -> pd.DataFrame:
+        """Query Bloomberg ReferenceDataHistoricalField for Macro Bloomberg tickers.
+        
+        Macro data can be in DAILY, MONTHLY, QUARTERLY, or YEARLY frequencies,
+        so we accept all four.
+        """
+        if not tickers:
+            return pd.DataFrame()
+        try:
+            db = DatabaseGateway()
+            engine = db.get_prod_engine()
+            ticker_list = "', '".join(tickers)
+            query = f"""
+            SELECT
+                d.DatePoint,
+                d.ValueAsString AS Value_Raw,
+                d.FieldName,
+                e.BloombergTicker AS Ticker,
+                d.Currency
+            FROM [Apoasset_Bloomberg].[dbo].[ReferenceDataHistoricalField] AS d
+            LEFT JOIN [Apoasset_Bloomberg].[dbo].[BloombergTicker] AS e
+                ON d.BloombergTickerId = e.Id
+            WHERE e.BloombergTicker IN ('{ticker_list}')
+              AND d.Frequency IN ('DAILY', 'MONTHLY', 'QUARTERLY', 'YEARLY')
+              AND TRY_CONVERT(DATETIME, d.DatePoint) >= DATEADD(DAY, -{days_back}, CAST(GETDATE() AS DATE))
+            ORDER BY d.DatePoint DESC, e.BloombergTicker
+            """
+            df = pd.read_sql_query(query, engine)
+            if df.empty:
+                logger.warning("Bloomberg Macro query returned no rows")
+                return pd.DataFrame()
+            df["Value"] = df["Value_Raw"].astype(str).str.replace(",", ".", regex=False)
+            df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
+            df = df.drop(columns=["Value_Raw"])
+            df = df.sort_values("Currency", na_position="last")
+            df = df.drop_duplicates(subset=["DatePoint", "Ticker", "FieldName"], keep="first")
+            logger.info(f"✓ Bloomberg Macro: {len(df)} rows for {df['Ticker'].nunique()} tickers (DAILY/MONTHLY/QUARTERLY/YEARLY)")
+            return df
+        except Exception as e:
+            logger.error(f"✗ Bloomberg Macro query failed: {e}", exc_info=True)
+            return pd.DataFrame()
+
+    @staticmethod
+    def _get_quant_macro_data(tickers: List[str], days_back: int = 1460) -> pd.DataFrame:
+        """Query Quant market_data table for PMI and other Quant-sourced Macro tickers."""
+        if not tickers:
+            return pd.DataFrame()
+        try:
+            db = DatabaseGateway()
+            engine = db.get_duoplus_engine()
+            ticker_list = "', '".join(tickers)
+            query = f"""
+            SELECT
+                ID AS Ticker,
+                Value,
+                Field AS FieldName,
+                Frequency,
+                DatePoint,
+                CURRENCY AS Currency
+            FROM [ApoAsset_Quant].[dbo].[market_data]
+            WHERE ID IN ('{ticker_list}')
+              AND TRY_CONVERT(DATETIME, DatePoint) >= DATEADD(DAY, -{days_back}, CAST(GETDATE() AS DATE))
+            ORDER BY DatePoint DESC, ID
+            """
+            df = pd.read_sql_query(query, engine)
+            if df.empty:
+                logger.warning("Quant Macro market_data query returned no rows")
+                return pd.DataFrame()
+            df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
+            df["FieldName"] = "PX_LAST"
+            df = df.drop_duplicates(subset=["DatePoint", "Ticker"], keep="first")
+            logger.info(f"✓ Quant Macro: {len(df)} rows for {df['Ticker'].nunique()} tickers")
+            return df
+        except Exception as e:
+            logger.error(f"✗ Quant Macro query failed: {e}", exc_info=True)
+            return pd.DataFrame()
+
+    @staticmethod
+    def _process_macro_raw_data(
+        raw_df: pd.DataFrame,
+        ticker_mapping: pd.DataFrame,
+        regions: List[str],
+    ) -> pd.DataFrame:
+        """
+        Merge raw Macro data with ticker_mapping, apply YoY adjustments,
+        and pivot to wide format.
+
+        Column names = GroupingName directly (e.g. 'GDP', 'Inflation', 'Composite PMI').
+        Tickers with AdjustPct='X' get YoY % change applied before pivoting.
+        """
+        if raw_df.empty or ticker_mapping.empty:
+            logger.error("Cannot process Macro data: raw_df or ticker_mapping is empty")
+            return pd.DataFrame()
+
+        # Keep only PX_LAST rows
+        raw_df = raw_df[raw_df["FieldName"] == "PX_LAST"].copy()
+
+        # Merge with ticker mapping
+        mapped = raw_df.merge(
+            ticker_mapping[["Ticker", "Regions", "GroupingName", "AdjustPct"]],
+            on="Ticker",
+            how="left",
+        )
+
+        # Filter to requested regions
+        mapped = mapped.dropna(subset=["Regions"])
+        mapped = mapped[mapped["Regions"].isin(regions)].copy()
+
+        if mapped.empty:
+            logger.error(f"No Macro data for regions {regions} after mapping")
+            return pd.DataFrame()
+
+        # Column name = GroupingName directly (no Period prefix for macro)
+        mapped["MetricCol"] = mapped["GroupingName"].astype(str).str.strip()
+
+        # Convert DatePoint
+        mapped["DatePoint"] = pd.to_datetime(mapped["DatePoint"])
+        mapped = mapped.sort_values(["MetricCol", "Regions", "DatePoint"])
+
+        # ── Apply YoY % change for level-data tickers (AdjustPct == 'X') ──
+        adjust_metrics = mapped[mapped["AdjustPct"] == "X"]["MetricCol"].unique()
+        if len(adjust_metrics) > 0:
+            logger.info(f"  Applying YoY pct_change for: {sorted(adjust_metrics)}")
+            for metric in adjust_metrics:
+                mask = mapped["MetricCol"] == metric
+                for region in mapped.loc[mask, "Regions"].unique():
+                    sub_mask = mask & (mapped["Regions"] == region)
+                    vals = mapped.loc[sub_mask, "Value"]
+                    if len(vals) >= 13:
+                        mapped.loc[sub_mask, "Value"] = vals.pct_change(periods=12) * 100
+                    # drop NaN rows produced by pct_change (first 12 rows)
+            mapped = mapped.dropna(subset=["Value"])
+
+        # Remove duplicates before pivot
+        mapped = mapped.drop_duplicates(subset=["DatePoint", "Regions", "MetricCol"], keep="first")
+
+        # Pivot: one row per (DatePoint, Regions), columns = MetricCol
+        pivot_df = mapped.pivot_table(
+            index=["DatePoint", "Regions"],
+            columns="MetricCol",
+            values="Value",
+            aggfunc="first",
+        ).reset_index()
+        pivot_df.columns.name = None
+
+        # Forward-fill (and back-fill) sparse data within each region
+        numeric_cols = [c for c in pivot_df.columns if c not in ("DatePoint", "Regions")]
+        for col in numeric_cols:
+            pivot_df[col] = pivot_df.groupby("Regions")[col].transform(
+                lambda x: x.ffill().bfill()
+            )
+
+        # Calculate Misery Index = Inflation + Unemployment (if both exist)
+        if "Inflation" in pivot_df.columns and "Unemployment" in pivot_df.columns:
+            pivot_df["Misery"] = pivot_df["Inflation"] + pivot_df["Unemployment"]
+            logger.info("✓ Calculated Misery Index = Inflation + Unemployment")
+
+        logger.info(
+            f"✓ Macro wide-format: {pivot_df.shape}, "
+            f"columns: {sorted(pivot_df.columns.tolist())}"
+        )
+        return pivot_df.sort_values(["Regions", "DatePoint"]).reset_index(drop=True)
+
     @staticmethod
     def get_macro_data(
         regions: List[str],
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         lookback: str = "1Y",
-        show_averages: bool = False
+        show_averages: bool = False,
     ) -> Dict[str, Any]:
         """
-        Get filtered and formatted macro data for Countries page.
-        Fetches economic indicators (PMI, interest rates, inflation, etc.).
-        
-        Args:
-            regions: List of countries/regions to include
-            start_date: Start date (YYYY-MM-DD) or None for all
-            end_date: End date (YYYY-MM-DD) or None for all
-            lookback: Lookback period for rolling calculations
-            show_averages: Whether to include rolling average indicators
-        
+        Get macro-economic data for specified regions.
+
+        Queries Bloomberg and Quant market_data for GDP, PMI, inflation,
+        unemployment, trade data, interest rates, etc.
+
         Returns:
-            Dict with formatted chart data ready for Recharts
+            Dict with status, data records, and metadata
         """
-        # Check cache first
-        cache_key = LänderDataService._get_cache_key('macro', regions, lookback=lookback)
-        cached = LänderDataService._get_cached_response(cache_key)
-        if cached:
-            return cached
-        
+        logger.info("=" * 80)
+        logger.info(f"🔍 get_macro_data(): regions={regions}, lookback={lookback}")
+        logger.info("=" * 80)
+
         try:
-            # Generate fallback data immediately since database is likely not available
-            logger.info(f"Generating macro data for regions: {regions}")
-            df = LänderDataService._generate_fallback_macro_data(regions, days=252)
-            use_fallback = True
+            import math
+
+            lookback_days = {"1Y": 365, "3Y": 1095, "5Y": 1825, "All": 3650}.get(
+                lookback, 1460
+            )
+
+            # Normalize region names
+            normalized_regions = [
+                LänderDataService._normalize_region_name(r) for r in regions
+            ]
+            logger.info(f"Normalized regions: {normalized_regions}")
+
+            # Load Macro ticker mapping
+            macro_mapping = LänderDataService._load_macro_ticker_mapping()
+            if macro_mapping.empty:
+                raise ValueError("Could not load Macro ticker mapping from ticker_master")
+
+            bloomberg_tickers = macro_mapping[macro_mapping["DBSource"] == "Bloomberg"]["Ticker"].tolist()
+            quant_tickers = macro_mapping[macro_mapping["DBSource"] == "Quant"]["Ticker"].tolist()
+            logger.info(
+                f"  Bloomberg tickers: {len(bloomberg_tickers)}, "
+                f"Quant tickers: {len(quant_tickers)}"
+            )
+
+            # Query both data sources
+            df_bloomberg = LänderDataService._get_bloomberg_macro_data(
+                bloomberg_tickers, days_back=lookback_days
+            )
+            df_quant = LänderDataService._get_quant_macro_data(
+                quant_tickers, days_back=lookback_days
+            )
+
+            # Combine
+            frames = []
+            if not df_bloomberg.empty:
+                frames.append(df_bloomberg[df_bloomberg["FieldName"] == "PX_LAST"].copy())
+            if not df_quant.empty:
+                frames.append(df_quant)
+
+            if not frames:
+                raise ValueError("No Macro data retrieved from Bloomberg or Quant")
+
+            raw_df = pd.concat(frames, ignore_index=True, sort=False)
+            logger.info(f"  Combined raw Macro rows: {len(raw_df)}")
+
+            # Process into wide format
+            df_final = LänderDataService._process_macro_raw_data(
+                raw_df, macro_mapping, normalized_regions
+            )
+            if df_final.empty:
+                raise ValueError("No Macro data after processing/pivoting")
+
+            # Optional date range filter
+            if start_date:
+                df_final = df_final[df_final["DatePoint"] >= pd.Timestamp(start_date)]
+            if end_date:
+                df_final = df_final[df_final["DatePoint"] <= pd.Timestamp(end_date)]
+
+            # Build reverse mapping: normalized name -> original name from request
+            reverse_region_map = {}
+            for original, normalized in zip(regions, normalized_regions):
+                reverse_region_map[normalized] = original
             
-            # Fallback data: already in correct format
-            df_pivot = df.copy()
-            
-            # Apply date range filters
-            df_pivot = LänderDataService.filter_by_date_range(df_pivot, start_date, end_date)
-            
-            # Sort by date descending
-            df_pivot = df_pivot.sort_values('DatePoint', ascending=False)
-            
-            # Format for Recharts with multi-region pivoting
-            data = LänderDataService.format_for_recharts(df_pivot)
-            
+            # Serialize to JSON-safe records and apply de-normalization
+            records = df_final.to_dict("records")
+            for record in records:
+                # De-normalize the region name back to what the frontend sent
+                if "Regions" in record and record["Regions"] in reverse_region_map:
+                    record["Regions"] = reverse_region_map[record["Regions"]]
+                if "DatePoint" in record and hasattr(record["DatePoint"], "isoformat"):
+                    record["DatePoint"] = record["DatePoint"].isoformat()
+                for key, value in record.items():
+                    if isinstance(value, float) and math.isnan(value):
+                        record[key] = None
+
+            metric_cols = sorted(
+                [c for c in df_final.columns if c not in ("DatePoint", "Regions")]
+            )
             result = {
                 "status": "ok",
-                "data": data,
+                "data": records,
                 "metadata": {
                     "regions": regions,
                     "lookback": lookback,
-                    "date_range": {"start": start_date, "end": end_date},
-                    "record_count": len(data),
-                    "source": "Mock Data (Development)" if use_fallback else "Market Data"
-                }
+                    "record_count": len(records),
+                    "source": "Bloomberg/Quant",
+                    "columns": metric_cols,
+                },
             }
-            
-            # Cache the result
-            LänderDataService._set_cached_response(cache_key, result)
+            logger.info(f"✅ Macro SUCCESS: {len(records)} records, {len(metric_cols)} metrics")
+            logger.info("=" * 80)
             return result
-        
+
         except Exception as e:
-            logger.error(f"✗ Error fetching macro data: {e}")
+            logger.error(f"❌ get_macro_data FAILED: {e}", exc_info=True)
+            logger.info("=" * 80)
             return {
                 "status": "error",
                 "data": [],
-                "metadata": {"error": str(e)}
+                "metadata": {"error": str(e)},
             }
+
+    @staticmethod
+    def get_master_macro_columns() -> List[str]:
+        """
+        Return the master list of all possible Macro metric column names.
+        Used by the MetricsFilterModal to keep checkboxes stable.
+        """
+        return [
+            # Konjunktur (Growth & Business Cycle)
+            "GDP",
+            "Economic Surprise",
+            "Industrial Production",
+            "Retail Sales",
+            "Trade Policy Uncertainty",
+            "New Orders",
+            # Fundamental (Labor Market & Prices)
+            "Inflation",
+            "Unemployment",
+            "Misery",
+            # Geschäftsklima (Business Sentiment)
+            "Composite PMI",
+            "Manufacturing PMI",
+            "Services PMI",
+            "Consumer Confidence",
+            # Außenhandel (External Trade)
+            "Trade Balance",
+            "Current Account",
+            "Exports",
+            "Imports",
+            # Fiskal (Fiscal)
+            "Government Debt",
+            "Budget Balance",
+            # Andere (Other)
+            "Interest Rate",
+        ]

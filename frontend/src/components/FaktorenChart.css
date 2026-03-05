@@ -1,0 +1,14 @@
+/* FaktorenChart.css – styles specific to the Faktoren chart */
+
+.faktoren-chart {
+  display: flex;
+  flex-direction: column;
+}
+
+.faktoren-chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 0.75rem 0;
+  color: var(--text-primary, #333);
+  line-height: 1.3;
+}

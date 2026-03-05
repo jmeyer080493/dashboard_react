@@ -13,6 +13,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 #root {
@@ -20,9 +21,225 @@ body {
   height: 100%;
 }
 
+/* ── Light Mode (default) ──────────────────────────────────────────────── */
 :root {
-  color: #213547;
-  background-color: #ffffff;
+  color-scheme: light;
+
+  /* Backgrounds */
+  --bg-main:       #f5f5f5;
+  --bg-page:       linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  --bg-card:       #ffffff;
+  --bg-surface:    #f8f9fa;
+  --bg-controls:   linear-gradient(135deg, #f5f5f5 0%, #ececec 100%);
+  --bg-tabbar:     #f9f9f9;
+  --bg-input:      #ffffff;
+  --bg-hover:      #f0f0f0;
+  --bg-hover-alt:  #e8e8e8;
+  --bg-row-even:   #fafbfc;
+  --bg-tag:        #e3d9f0;
+
+  /* Text */
+  --text-primary:   #333333;
+  --text-secondary: #666666;
+  --text-muted:     #999999;
+  --text-heading:   #2c3e50;
+  --text-value:     #555555;
+  --text-tag:       #333333;
+  --text-tag-remove:#666666;
+
+  /* Borders */
+  --border:        #e0e0e0;
+  --border-light:  #dddddd;
+  --border-input:  #bbbbbb;
+  --border-table:  #e0e0e0;
+
+  /* Accent */
+  --accent:             #c9a0dc;
+  --accent-gradient:    linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --accent-gradient-bg: rgba(201, 160, 220, 0.1);
+
+  /* API Status */
+  --api-ok-bg:      #d4edda;
+  --api-ok-text:    #155724;
+  --api-ok-border:  #c3e6cb;
+  --api-err-bg:     #f8d7da;
+  --api-err-text:   #721c24;
+  --api-err-border: #f5c6cb;
+  --api-chk-bg:     #fff3cd;
+  --api-chk-text:   #856404;
+  --api-chk-border: #ffeeba;
+
+  /* Chart area */
+  --chart-bg:     #ffffff;
+  --chart-border: #dddddd;
+
+  /* Chart export buttons */
+  --export-pptx-bg:   #fde8e6;
+  --export-pptx-text: #c0392b;
+  --export-xlsx-bg:   #d4edda;
+  --export-xlsx-text: #198754;
+
+  /* Tab error state */
+  --tab-error-bg:   #fff3cd;
+  --tab-error-text: #856404;
+
+  /* Modals (all modals stay dark-purple in light mode too — they float above) */
+  --modal-bg:               #1e1b3a;
+  --modal-border:           rgba(255, 255, 255, 0.12);
+  --modal-header-border:    rgba(255, 255, 255, 0.08);
+  --modal-title:            #c9a0dc;
+  --modal-close:            rgba(255, 255, 255, 0.4);
+  --modal-close-hover-bg:   rgba(255, 255, 255, 0.08);
+  --modal-section-title:    rgba(255, 255, 255, 0.85);
+  --modal-hint:             rgba(255, 255, 255, 0.4);
+  --modal-label:            rgba(255, 255, 255, 0.5);
+  --modal-hint-inline:      rgba(255, 255, 255, 0.3);
+  --modal-tab:              rgba(255, 255, 255, 0.45);
+  --modal-tab-hover:        rgba(255, 255, 255, 0.75);
+  --modal-tab-active:       #c9a0dc;
+  --modal-tab-border:       rgba(255, 255, 255, 0.08);
+  --modal-input-bg:         rgba(255, 255, 255, 0.06);
+  --modal-input-border:     rgba(255, 255, 255, 0.12);
+  --modal-input-text:       #e8e8e8;
+  --modal-input-placeholder:rgba(255, 255, 255, 0.2);
+  --modal-select-opt-bg:    #1e1b3a;
+  --modal-footer-border:    rgba(255, 255, 255, 0.08);
+  --modal-btn-sec-bg:       rgba(255, 255, 255, 0.08);
+  --modal-btn-sec-text:     rgba(255, 255, 255, 0.7);
+  --modal-btn-sec-border:   rgba(255, 255, 255, 0.15);
+  --modal-msg-ok-bg:        rgba(16, 185, 129, 0.15);
+  --modal-msg-ok-text:      #6ee7b7;
+  --modal-msg-ok-border:    rgba(16, 185, 129, 0.25);
+  --modal-msg-err-bg:       rgba(239, 68, 68, 0.12);
+  --modal-msg-err-text:     #fca5a5;
+  --modal-msg-err-border:   rgba(239, 68, 68, 0.25);
+  --modal-theme-btn-bg:     rgba(255, 255, 255, 0.05);
+  --modal-theme-btn-border: rgba(255, 255, 255, 0.18);
+  --modal-theme-btn-text:   rgba(255, 255, 255, 0.5);
+  --modal-theme-active-bg:  rgba(201, 160, 220, 0.15);
+
+  /* Metrics Filter Modal (dark purple panel) */
+  --mfm-bg:          #1e1e30;
+  --mfm-border:      #3a3a5c;
+  --mfm-text:        #e0e0f0;
+  --mfm-header-border:#3a3a5c;
+  --mfm-title:       #d0d0f0;
+  --mfm-close:       #888888;
+  --mfm-inner-border:#2e2e50;
+
+  /* Feedback Modal */
+  --feedback-bg:      #1e1b3a;
+  --feedback-border:  rgba(255, 255, 255, 0.12);
+
+  /* Export Modal (white modal) */
+  --export-modal-bg:        #ffffff;
+  --export-modal-text:      #1a1a2e;
+  --export-modal-close:     #666666;
+  --export-modal-close-hover-bg: #f0f0f0;
+  --export-modal-close-hover-text: #333333;
+
+  /* Sidebar (Light Mode) */
+  --sidebar-bg:             linear-gradient(135deg, #f5f5f5 0%, #ececec 100%);
+  --sidebar-text:           #333333;
+  --sidebar-text-muted:     #666666;
+  --sidebar-border:         #e0e0e0;
+  --sidebar-header-title:   #7a4d9e;
+  --sidebar-hover-bg:       #f0f0f0;
+  --sidebar-active-bg:      #c9a0dc;
+  --sidebar-active-text:    #ffffff;
+  --sidebar-accent:         #c9a0dc;
+  --sidebar-scrollbar:      rgba(201, 160, 220, 0.2);
+  --sidebar-scrollbar-hover:rgba(201, 160, 220, 0.4);
+}
+
+/* ── Dark Mode ─────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Backgrounds */
+  --bg-main:       #0f0e1a;
+  --bg-page:       linear-gradient(135deg, #0f0e1a 0%, #1a1832 100%);
+  --bg-card:       #1e1b3a;
+  --bg-surface:    #161430;
+  --bg-controls:   linear-gradient(135deg, #1a1832 0%, #161430 100%);
+  --bg-tabbar:     #161430;
+  --bg-input:      rgba(255, 255, 255, 0.06);
+  --bg-hover:      rgba(255, 255, 255, 0.05);
+  --bg-hover-alt:  rgba(255, 255, 255, 0.08);
+  --bg-row-even:   rgba(255, 255, 255, 0.02);
+  --bg-tag:        rgba(201, 160, 220, 0.15);
+
+  /* Text */
+  --text-primary:   #e0e0e0;
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-muted:     rgba(255, 255, 255, 0.35);
+  --text-heading:   #c9a0dc;
+  --text-value:     rgba(255, 255, 255, 0.7);
+  --text-tag:       #c9a0dc;
+  --text-tag-remove:rgba(255, 255, 255, 0.5);
+
+  /* Borders */
+  --border:        rgba(255, 255, 255, 0.1);
+  --border-light:  rgba(255, 255, 255, 0.08);
+  --border-input:  rgba(255, 255, 255, 0.2);
+  --border-table:  rgba(255, 255, 255, 0.08);
+
+  /* Accent */
+  --accent-gradient-bg: rgba(201, 160, 220, 0.08);
+
+  /* API Status */
+  --api-ok-bg:      rgba(21, 87, 36, 0.25);
+  --api-ok-text:    #6ee7b7;
+  --api-ok-border:  rgba(21, 87, 36, 0.4);
+  --api-err-bg:     rgba(114, 28, 36, 0.25);
+  --api-err-text:   #fca5a5;
+  --api-err-border: rgba(114, 28, 36, 0.4);
+  --api-chk-bg:     rgba(133, 100, 4, 0.25);
+  --api-chk-text:   #fcd34d;
+  --api-chk-border: rgba(133, 100, 4, 0.4);
+
+  /* Chart area */
+  --chart-bg:     #1e1b3a;
+  --chart-border: rgba(255, 255, 255, 0.1);
+
+  /* Chart export buttons */
+  --export-pptx-bg:   rgba(192, 57, 43, 0.15);
+  --export-pptx-text: #fca5a5;
+  --export-xlsx-bg:   rgba(25, 135, 84, 0.15);
+  --export-xlsx-text: #6ee7b7;
+
+  /* Tab error state */
+  --tab-error-bg:   rgba(133, 100, 4, 0.2);
+  --tab-error-text: #fcd34d;
+
+  /* Metrics Filter Modal */
+  --mfm-bg:          #1a1a2e;
+  --mfm-border:      #2e2e50;
+  --mfm-text:        #d0d0f0;
+  --mfm-header-border:#2e2e50;
+  --mfm-title:       #c9a0dc;
+  --mfm-close:       rgba(255, 255, 255, 0.4);
+  --mfm-inner-border:#252540;
+
+  /* Export Modal (becomes dark in dark mode) */
+  --export-modal-bg:        #1e1b3a;
+  --export-modal-text:      #e0e0e0;
+  --export-modal-close:     rgba(255, 255, 255, 0.5);
+  --export-modal-close-hover-bg: rgba(255, 255, 255, 0.1);
+  --export-modal-close-hover-text: #e0e0e0;
+
+  /* Sidebar (Dark Mode) */
+  --sidebar-bg:             linear-gradient(135deg, #2a2847 0%, #1a1832 100%);
+  --sidebar-text:           #e0e0e0;
+  --sidebar-text-muted:     #a0a0b0;
+  --sidebar-border:         rgba(255, 255, 255, 0.1);
+  --sidebar-header-title:   #c9a0dc;
+  --sidebar-hover-bg:       rgba(201, 160, 220, 0.1);
+  --sidebar-active-bg:      #c9a0dc;
+  --sidebar-active-text:    #2a2847;
+  --sidebar-accent:         #c9a0dc;
+  --sidebar-scrollbar:      rgba(201, 160, 220, 0.3);
+  --sidebar-scrollbar-hover:rgba(201, 160, 220, 0.5);
 }
 
 a {
@@ -54,17 +271,4 @@ h1 {
 
 h2 {
   font-size: 2em;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
 }

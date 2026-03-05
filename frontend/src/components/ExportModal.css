@@ -1,0 +1,291 @@
+/* ── Export Modal Overlay ─────────────────────────────────────────────────── */
+.export-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.export-modal {
+  background: var(--export-modal-bg);
+  border-radius: 10px;
+  width: 540px;
+  max-width: 95vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  transition: background 0.25s ease;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.export-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 3px solid transparent;
+}
+
+.pptx-header  { border-bottom-color: #c0392b; }
+.xlsx-header  { border-bottom-color: #198754; }
+
+.export-modal-header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--export-modal-text);
+}
+
+.export-modal-icon { font-size: 1.3rem; }
+
+.export-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: var(--export-modal-close);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.export-modal-close:hover { background: var(--export-modal-close-hover-bg); color: var(--export-modal-close-hover-text); }
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+.export-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+
+.export-modal-count-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.export-modal-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--export-modal-text);
+}
+
+.export-modal-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 12px;
+  color: #fff;
+}
+
+.pptx-badge { background: #c0392b; }
+.xlsx-badge { background: #198754; }
+
+/* ── Queue list ──────────────────────────────────────────────────────────── */
+.export-queue-list {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-height: 80px;
+  max-height: 380px;
+  overflow-y: auto;
+  background: var(--bg-surface);
+}
+
+.export-queue-empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.export-queue-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  gap: 0.5rem;
+}
+
+.export-queue-item:last-child { border-bottom: none; }
+
+.export-queue-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.export-queue-item-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.export-queue-item-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.export-queue-item-remove {
+  background: none;
+  border: none;
+  color: #bbb;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.export-queue-item-remove:hover { background: #fee2e2; color: #c0392b; }
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.export-modal-footer {
+  border-top: 1px solid var(--border);
+  padding: 0.875rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.export-modal-footer-buttons {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.export-modal-status {
+  font-size: 0.875rem;
+  text-align: right;
+}
+
+.export-btn-secondary {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.export-btn-secondary:hover { background: var(--bg-hover); }
+
+.export-btn-primary {
+  padding: 0.45rem 1rem;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.export-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pptx-btn { background: #c0392b; }
+.pptx-btn:hover:not(:disabled) { background: #a93226; }
+
+.xlsx-btn { background: #198754; }
+.xlsx-btn:hover:not(:disabled) { background: #146c43; }
+
+/* ── Quick-group section ─────────────────────────────────────────────────── */
+.export-quick-section {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-surface);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.export-quick-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.export-quick-buttons {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.export-quick-btn {
+  padding: 0.3rem 0.65rem;
+  border-radius: 5px;
+  border: 1px solid;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  font-weight: 500;
+}
+
+.export-quick-btn.pptx {
+  border-color: #c0392b;
+  color: #c0392b;
+  background: var(--bg-card);
+}
+.export-quick-btn.pptx:hover { background: #c0392b; color: #fff; }
+
+.export-quick-btn.xlsx {
+  border-color: #198754;
+  color: #198754;
+  background: var(--bg-card);
+}
+.export-quick-btn.xlsx:hover { background: #198754; color: #fff; }
+
+/* ── Per-item group input ────────────────────────────────────────────────── */
+.export-queue-item-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.export-queue-item-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.export-queue-group-label {
+  font-size: 0.72rem;
+  color: #888;
+  white-space: nowrap;
+}
+
+.export-queue-group-input {
+  width: 46px;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--text-primary);
+  background: var(--bg-input);
+}
+
+.export-queue-group-input:focus {
+  outline: none;
+  border-color: var(--text-secondary);
+}

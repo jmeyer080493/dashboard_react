@@ -1,0 +1,349 @@
+/* ── Overlay ─────────────────────────────────────────────────────────────── */
+.eins-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  animation: einsfadeIn 0.15s ease;
+}
+
+@keyframes einsfadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Modal box ───────────────────────────────────────────────────────────── */
+.eins-modal {
+  background: var(--modal-bg);
+  border: 1px solid var(--modal-border);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  animation: einsSlideUp 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+@keyframes einsSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.eins-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--modal-header-border);
+}
+
+.eins-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--modal-title);
+}
+
+.eins-close {
+  background: none;
+  border: none;
+  color: var(--modal-close);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+  line-height: 1;
+}
+.eins-close:hover {
+  color: #fff;
+  background: var(--modal-close-hover-bg);
+}
+
+/* ── Tab bar ─────────────────────────────────────────────────────────────── */
+.eins-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--modal-tab-border);
+  padding: 0 1.5rem;
+}
+
+.eins-tab {
+  background: none;
+  border: none;
+  color: var(--modal-tab);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+.eins-tab:hover {
+  color: var(--modal-tab-hover);
+}
+.eins-tab--active {
+  color: var(--modal-tab-active);
+  border-bottom-color: var(--modal-tab-active);
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+.eins-body {
+  padding: 1.5rem;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 260px;
+}
+
+.eins-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.eins-section-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--modal-section-title);
+}
+
+.eins-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--modal-hint);
+}
+
+/* ── Labels ──────────────────────────────────────────────────────────────── */
+.eins-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--modal-label);
+  margin-top: 0.5rem;
+}
+
+.eins-hint-inline {
+  font-weight: 400;
+  text-transform: none;
+  font-size: 0.74rem;
+  color: var(--modal-hint-inline);
+  display: inline;
+}
+
+/* ── Button groups ───────────────────────────────────────────────────────── */
+.eins-btn-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.eins-btn-group--tabs {
+  gap: 0.4rem;
+}
+
+/* Theme toggle buttons */
+.eins-theme-btn {
+  padding: 0.55rem 1.2rem;
+  border: 1px solid var(--modal-theme-btn-border);
+  background: var(--modal-theme-btn-bg);
+  border-radius: 8px;
+  color: var(--modal-theme-btn-text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.eins-theme-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+}
+.eins-theme-btn--active {
+  background: var(--modal-theme-active-bg);
+  border-color: #c9a0dc;
+  color: #c9a0dc;
+}
+
+/* Tab selector buttons */
+.eins-tab-sel-btn {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.eins-tab-sel-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+}
+.eins-tab-sel-btn--active {
+  background: rgba(201, 160, 220, 0.18);
+  border-color: #c9a0dc;
+  color: #c9a0dc;
+}
+
+/* Option buttons (graphs per row) */
+.eins-option-btn {
+  width: 3rem;
+  height: 2.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.eins-option-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+}
+.eins-option-btn--active {
+  background: rgba(201, 160, 220, 0.2);
+  border-color: #c9a0dc;
+  color: #c9a0dc;
+}
+
+/* ── Select ──────────────────────────────────────────────────────────────── */
+.eins-select-wrap {
+  width: 100%;
+}
+
+.eins-select {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  background: var(--modal-input-bg);
+  border: 1px solid var(--modal-input-border);
+  border-radius: 7px;
+  color: var(--modal-input-text);
+  font-size: 0.9rem;
+  outline: none;
+  cursor: pointer;
+  appearance: auto;
+  transition: border-color 0.2s;
+}
+.eins-select:focus {
+  border-color: #c9a0dc;
+}
+.eins-select option {
+  background: var(--modal-select-opt-bg);
+  color: var(--modal-input-text);
+}
+
+/* ── Password form ───────────────────────────────────────────────────────── */
+.eins-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.eins-input {
+  padding: 0.65rem 0.9rem;
+  background: var(--modal-input-bg);
+  border: 1px solid var(--modal-input-border);
+  border-radius: 7px;
+  color: var(--modal-input-text);
+  font-size: 0.93rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  margin-top: 0.25rem;
+}
+.eins-input:focus {
+  border-color: #c9a0dc;
+  box-shadow: 0 0 0 3px rgba(201, 160, 220, 0.15);
+}
+.eins-input::placeholder {
+  color: var(--modal-input-placeholder);
+}
+.eins-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.eins-message {
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: 7px;
+  font-size: 0.85rem;
+}
+.eins-message--success {
+  background: var(--modal-msg-ok-bg);
+  color: var(--modal-msg-ok-text);
+  border: 1px solid var(--modal-msg-ok-border);
+}
+.eins-message--error {
+  background: var(--modal-msg-err-bg);
+  color: var(--modal-msg-err-text);
+  border: 1px solid var(--modal-msg-err-border);
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+.eins-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: einsSpin 0.7s linear infinite;
+}
+@keyframes einsSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.eins-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--modal-footer-border);
+}
+
+/* ── Shared buttons ──────────────────────────────────────────────────────── */
+.eins-btn {
+  padding: 0.6rem 1.4rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s, background 0.2s;
+}
+.eins-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.eins-btn--primary {
+  background: #7c3aed;
+  color: #fff;
+}
+.eins-btn--primary:hover:not(:disabled) {
+  background: #6d28d9;
+}
+.eins-btn--secondary {
+  background: var(--modal-btn-sec-bg);
+  color: var(--modal-btn-sec-text);
+  border: 1px solid var(--modal-btn-sec-border);
+}
+.eins-btn--secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.13);
+}
+.eins-btn--full {
+  width: 100%;
+}

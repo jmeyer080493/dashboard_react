@@ -7,3 +7,5 @@ sqlalchemy==2.0.31
 pyodbc==5.3.0
 pandas==2.2.3
 numpy==2.2.5
+xlsxwriter>=3.1.9
+python-pptx>=0.6.23

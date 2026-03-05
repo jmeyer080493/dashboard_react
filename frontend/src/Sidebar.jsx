@@ -1,31 +1,53 @@
 import { useState } from 'react'
+import { useExport } from './context/ExportContext'
+import { useAuth } from './context/AuthContext'
 import './Sidebar.css'
 
-function Sidebar({ onPageChange }) {
-  const [activeItem, setActiveItem] = useState('Länder')
+/**
+ * Maps sidebar page names to the permission string stored in role_permissions.
+ * Pages with no entry are always visible (e.g. pages the whole org uses).
+ */
+const PAGE_PERMISSIONS = {
+  'Länder':      'countries',
+  'Faktoren':    'factors',
+  'Sektoren':    'sectors',
+  'Portfolios':  'portfolios',
+  'Data':        'data',
+  'Anleihen':    'anleihen',
+  'DuoPlus':     'duoplus',
+  'Alternative': 'extras',
+  'User':        'user',
+}
 
-  const menuItems = [
-    { name: 'Länder', icon: '🌍' },
-    { name: 'Faktoren', icon: '📊' },
-    { name: 'Sektoren', icon: '🏢' },
-    { name: 'Portfolios', icon: '💼' },
-    { name: 'Data', icon: '📈' },
-    { name: 'Anleihen', icon: '📝' },
-    { name: 'DuoPlus', icon: '⚡' },
+function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback }) {
+  const { user, permissions } = useAuth()
+  const [activeItem, setActiveItem] = useState(null)   // set on first permitted nav
+  const {
+    pptxItems, xlsxItems,
+    setPptxModalOpen, setXlsxModalOpen,
+    clearPptx, clearXlsx,
+  } = useExport()
+
+  const allMenuItems = [
+    { name: 'Länder',      icon: '🌍' },
+    { name: 'Faktoren',    icon: '📊' },
+    { name: 'Sektoren',    icon: '🏢' },
+    { name: 'Portfolios',  icon: '💼' },
+    { name: 'Data',        icon: '📈' },
+    { name: 'Anleihen',    icon: '📝' },
+    { name: 'DuoPlus',     icon: '⚡' },
     { name: 'Alternative', icon: '🔄' },
-    { name: 'User', icon: '👤' },
+    { name: 'User',        icon: '👤' },
   ]
 
-  const bottomItems = [
-    { name: 'PPTX (0)', icon: '📊', color: '#ff6b6b' },
-    { name: 'Excel (0)', icon: '📗', color: '#51cf66' },
-  ]
+  // Only show items the user has permission for (or items with no permission requirement)
+  const menuItems = allMenuItems.filter((item) => {
+    const required = PAGE_PERMISSIONS[item.name]
+    return !required || permissions.includes(required)
+  })
 
-  const footerItems = [
-    { name: 'Einstellungen', icon: '⚙️' },
-    { name: 'Feedback', icon: '💬' },
-    { name: 'Abmelden', icon: '🚪' },
-  ]
+  // Default to first permitted page if none active yet
+  const effectiveActive = activeItem ?? menuItems[0]?.name
 
   return (
     <div className="sidebar">
@@ -39,7 +61,7 @@ function Sidebar({ onPageChange }) {
           {menuItems.map((item) => (
             <button
               key={item.name}
-              className={`menu-item ${activeItem === item.name ? 'active' : ''}`}
+              className={`menu-item ${effectiveActive === item.name ? 'active' : ''}`}
               onClick={() => {
                 setActiveItem(item.name)
                 if (onPageChange) onPageChange(item.name)
@@ -53,23 +75,60 @@ function Sidebar({ onPageChange }) {
 
         <div className="sidebar-bottom">
           <div className="bottom-buttons">
-            {bottomItems.map((item) => (
-              <button key={item.name} className="bottom-button" style={{ backgroundColor: item.color }}>
-                <span className="button-icon">{item.icon}</span>
-                <span className="button-label">{item.name}</span>
+            <div className="bottom-button-row">
+              <button
+                className="bottom-button"
+                style={{ backgroundColor: '#c0392b', flex: 1 }}
+                onClick={() => setPptxModalOpen(true)}
+              >
+                <span className="button-icon">📊</span>
+                <span className="button-label">PPTX ({pptxItems.length})</span>
               </button>
-            ))}
+              {pptxItems.length > 0 && (
+                <button className="bottom-button-clear" onClick={clearPptx} title="Liste leeren">✕</button>
+              )}
+            </div>
+            <div className="bottom-button-row">
+              <button
+                className="bottom-button"
+                style={{ backgroundColor: '#198754', flex: 1 }}
+                onClick={() => setXlsxModalOpen(true)}
+              >
+                <span className="button-icon">📗</span>
+                <span className="button-label">Excel ({xlsxItems.length})</span>
+              </button>
+              {xlsxItems.length > 0 && (
+                <button className="bottom-button-clear" onClick={clearXlsx} title="Liste leeren">✕</button>
+              )}
+            </div>
           </div>
 
           <div className="divider"></div>
 
+          {/* User info */}
+          {user && (
+            <div className="sidebar-user">
+              <span className="sidebar-user-icon">👤</span>
+              <div className="sidebar-user-info">
+                <span className="sidebar-user-name">{user.username}</span>
+                <span className="sidebar-user-role">{user.role_name}</span>
+              </div>
+            </div>
+          )}
+
           <div className="footer-items">
-            {footerItems.map((item) => (
-              <button key={item.name} className="footer-item">
-                <span className="footer-icon">{item.icon}</span>
-                <span className="footer-label">{item.name}</span>
-              </button>
-            ))}
+            <button className="footer-item" onClick={onOpenEinstellungen}>
+              <span className="footer-icon">⚙️</span>
+              <span className="footer-label">Einstellungen</span>
+            </button>
+            <button className="footer-item" onClick={onOpenFeedback}>
+              <span className="footer-icon">💬</span>
+              <span className="footer-label">Feedback</span>
+            </button>
+            <button className="footer-item footer-item--logout" onClick={onLogout}>
+              <span className="footer-icon">🚪</span>
+              <span className="footer-label">Abmelden</span>
+            </button>
           </div>
         </div>
       </nav>

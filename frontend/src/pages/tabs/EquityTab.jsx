@@ -1,30 +1,29 @@
 import { PerformanceChart, MetricChart } from '../../components/Charts'
+import { MetricsTable } from '../../components/MetricsTable'
+import { getMetricLabel } from '../../config/metricsConfig'
 import './TabStyles.css'
 
 /**
- * Convert column name to friendly title
- * Converts database column names to readable titles
+ * Convert column name to friendly title using the central metricsConfig.
+ * Falls back to a few extra mappings for non-equity-specific columns.
  */
 function getColumnTitle(columnName) {
-  const titleMap = {
-    'PX_LAST': 'Price (PX_LAST)',
-    'MA_50': 'Moving Average 50-Day',
-    'RSI': 'Relative Strength Index (RSI)',
-    'MACD': 'MACD',
-    'MACD_Signal': 'MACD Signal',
-    'MACD_Histogram': 'MACD Histogram',
-    'MOM_3': '3-Month Momentum',
-    'MOM_12': '12-Month Momentum',
-    'MOM_TS': 'Time Series Momentum',
-    'Rolling Volatility': 'Rolling Volatility',
+  // First try the central config (covers all equity metrics)
+  const label = getMetricLabel(columnName)
+  if (label !== columnName) return label
+
+  // Extra fallbacks for columns outside EQUITY_METRICS_CATEGORIES
+  const extras = {
+    'PX_LAST': 'Kurs (PX_LAST)',
+    'MA_50': '50-Tage Ø',
     'Rolling Sharpe': 'Rolling Sharpe Ratio',
-    '2Y Yields': '2-Year Yields',
-    '5Y Yields': '5-Year Yields',
-    '10Y Yields': '10-Year Yields',
-    '20Y Yields': '20-Year Yields',
+    'Rolling Returns': 'Rolling Returns',
+    '2Y Yields': '2J Rendite',
+    '5Y Yields': '5J Rendite',
+    '10Y Yields': '10J Rendite',
+    '20Y Yields': '20J Rendite',
   }
-  
-  return titleMap[columnName] || columnName
+  return extras[columnName] || columnName
 }
 
 /**
@@ -48,7 +47,18 @@ function getYAxisLabel(columnName) {
  * Dynamically generates a line graph for each numerical column
  * Data is fetched by parent component (Länder) for instant switching
  */
-function EquityTab({ filters, data, loading, error, columns, columnsLoading }) {
+function EquityTab({ 
+  filters, 
+  data, 
+  loading, 
+  error, 
+  columns, 
+  columnsLoading,
+  selectedMetricsTable = [],
+  selectedMetricsGraph = [],
+  chartsPerRow = 2,
+  chartHeight = 300,
+}) {
 
   if (loading || columnsLoading) {
     return <div className="tab-loading">📊 Laden...</div>
@@ -79,21 +89,35 @@ function EquityTab({ filters, data, loading, error, columns, columnsLoading }) {
         <span>Aktualisiert: {new Date().toLocaleDateString('de-DE')}</span>
       </div>
 
-      <div className="chart-grid">
+      {/* Latest Values Table */}
+      <MetricsTable 
+        data={data.data}
+        regions={filters.regions}
+        columns={selectedMetricsTable.length > 0 ? selectedMetricsTable : columns}
+      />
+
+      <div
+        className="chart-grid"
+        style={{ gridTemplateColumns: `repeat(${chartsPerRow}, 1fr)` }}
+      >
         <PerformanceChart 
           data={data.data}
           title="Equity Market Performance"
+          height={chartHeight}
         />
         
-        {/* Dynamically render one chart per available numerical column */}
+        {/* Dynamically render one chart per selected numerical column */}
         {columns.length > 0 ? (
-          columns.map((column) => (
+          columns
+            .filter(col => selectedMetricsGraph.length === 0 || selectedMetricsGraph.includes(col))
+            .map((column) => (
             <MetricChart 
               key={column}
               data={data.data}
               dataKey={column}
               title={getColumnTitle(column)}
               yAxisLabel={getYAxisLabel(column)}
+              height={chartHeight}
             />
           ))
         ) : (

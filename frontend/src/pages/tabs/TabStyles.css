@@ -4,12 +4,12 @@
   padding: 3rem;
   text-align: center;
   font-size: 1.1rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .tab-error {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--tab-error-bg);
+  color: var(--tab-error-text);
   border-radius: 8px;
 }
 
@@ -19,13 +19,13 @@
 
 .tab-header h2 {
   margin: 0 0 0.5rem 0;
-  color: #333;
+  color: var(--text-heading);
   font-size: 1.8rem;
 }
 
 .sub-title {
   margin: 0;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -34,8 +34,8 @@
   gap: 2rem;
   padding: 0.75rem 0;
   margin-bottom: 1.5rem;
-  border-bottom: 1px solid #eee;
-  color: #666;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
   font-size: 0.85rem;
 }
 
@@ -52,8 +52,8 @@
 }
 
 .chart-placeholder {
-  background: #f9f9f9;
-  border: 1px solid #ddd;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 1.5rem;
   min-height: 300px;
@@ -64,12 +64,12 @@
 
 .chart-placeholder h3 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--text-heading);
 }
 
 .chart-placeholder p {
   margin: 0 0 1rem 0;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .chart-placeholder pre {

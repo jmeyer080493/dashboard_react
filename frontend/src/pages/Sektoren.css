@@ -1,0 +1,162 @@
+/* Sektoren.css – layout and controls for the Sektoren page */
+
+.sektoren-page {
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ── Controls bar ────────────────────────────────────────────────────────── */
+
+.sektoren-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem 2rem;
+  padding: 0.75rem 1rem;
+  background: var(--card-bg, #fff);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow, 0 1px 4px rgba(0,0,0,0.08));
+  align-items: flex-start;
+}
+
+.sektoren-control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.sektoren-control-section > label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sektoren-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.sektoren-date-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.sektoren-date-input {
+  width: 104px;
+  padding: 0.3rem 0.5rem;
+  font-size: 12px;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 4px;
+  background: var(--input-bg, #fff);
+  color: var(--text-primary, #333);
+  font-family: monospace;
+}
+
+.sektoren-date-input:focus {
+  outline: none;
+  border-color: var(--accent-color, #6366f1);
+}
+
+.sektoren-date-sep {
+  color: var(--text-secondary, #888);
+  font-size: 14px;
+}
+
+/* ── Sector section ─────────────────────────────────────────────────────── */
+
+.sektoren-sector-section {
+  flex: 1 1 auto;
+}
+
+.sektoren-sector-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  max-width: 700px;
+}
+
+.sektoren-sector-btn {
+  font-size: 11px;
+  padding: 0.2rem 0.55rem;
+}
+
+.sektoren-all-btn {
+  font-size: 11px;
+  padding: 0.15rem 0.4rem;
+  background: var(--btn-bg, #f3f4f6);
+  color: var(--text-primary, #333);
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.sektoren-all-btn:hover {
+  background: var(--btn-hover-bg, #e5e7eb);
+}
+
+/* "Alle" button shows as active/highlighted when all sectors are selected */
+.sektoren-all-btn.active {
+  background: var(--accent-color, #6366f1);
+  color: #fff;
+  border-color: var(--accent-color, #6366f1);
+}
+
+/* ── Status messages ────────────────────────────────────────────────────── */
+
+.sektoren-status {
+  font-size: 13px;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+}
+
+.sektoren-status.loading {
+  color: var(--text-secondary, #666);
+  background: var(--card-bg, #f9fafb);
+}
+
+.sektoren-status.error {
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+/* ── Chart grid ─────────────────────────────────────────────────────────── */
+
+.sektoren-chart-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.sektoren-empty {
+  font-size: 13px;
+  color: var(--text-secondary, #888);
+  text-align: center;
+  padding: 2rem;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 1100px) {
+  .sektoren-chart-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .sektoren-chart-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .sektoren-sector-btns {
+    max-width: 100%;
+  }
+}

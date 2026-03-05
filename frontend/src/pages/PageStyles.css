@@ -1,28 +1,30 @@
 .page-container {
   width: 100%;
   padding: 20px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: var(--bg-page);
   min-height: 100vh;
+  transition: background 0.25s ease;
 }
 
 .page-header {
   margin-bottom: 30px;
   padding: 20px;
-  background: white;
+  background: var(--bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border);
 }
 
 .page-header h1 {
   margin: 0;
-  color: #2c3e50;
+  color: var(--text-heading);
   font-size: 32px;
   font-weight: 600;
 }
 
 .page-header p {
   margin: 10px 0 0 0;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 16px;
 }
 
@@ -34,10 +36,11 @@
 }
 
 .card {
-  background: white;
+  background: var(--bg-card);
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -48,14 +51,14 @@
 
 .card h3 {
   margin: 0 0 10px 0;
-  color: #2c3e50;
+  color: var(--text-heading);
   font-size: 18px;
   font-weight: 600;
 }
 
 .card p {
   margin: 0 0 15px 0;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -63,8 +66,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f9f9f9;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
@@ -76,9 +79,9 @@
 
 .dummy-list li {
   padding: 8px 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 14px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border);
 }
 
 .dummy-list li:last-child {
