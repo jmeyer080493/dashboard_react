@@ -664,6 +664,122 @@ async def export_table(payload: TableExportRequest):
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# DATA TAB ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/data/freshness")
+async def get_data_freshness():
+    """
+    Run all data freshness checks and return structured results.
+    Sections: performance, benchmark_weights, market_data_jm, bloomberg,
+              data_pipe, sector_pe_ratios, port.
+    """
+    try:
+        from services.data_service import get_all_freshness
+        result = get_all_freshness()
+        result = _clean_nan_values(result)
+        return result
+    except Exception as e:
+        logging.error("Data freshness error: %s", e)
+        return {"status": "error", "error": str(e), "has_any_alerts": False}
+
+
+@app.get("/api/data/job-checks")
+async def get_data_job_checks():
+    """
+    Return status of daily job checks (Morning Mail, Masterpräsentationen,
+    Top Bottom Daily, Top Bottom Monthly).
+    """
+    try:
+        from utils.job_checks import get_daily_job_checks
+        checks = get_daily_job_checks()
+        return {"checks": checks}
+    except Exception as e:
+        logging.error("Job checks error: %s", e)
+        return {"checks": [], "error": str(e)}
+
+
+@app.get("/api/data/alerts")
+async def get_data_alerts():
+    """
+    Lightweight endpoint: returns only whether the Data tab has active alerts.
+    Used by the sidebar to highlight the Data tab red.
+    """
+    try:
+        from services.data_service import get_all_freshness
+        from utils.job_checks import get_daily_job_checks, has_failed_checks
+        freshness = get_all_freshness()
+        job_checks = get_daily_job_checks()
+        has_alerts = freshness.get("has_any_alerts", False) or has_failed_checks(job_checks)
+        return {"has_alerts": has_alerts}
+    except Exception as e:
+        logging.error("Data alerts error: %s", e)
+        return {"has_alerts": False, "error": str(e)}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ANLEIHEN / BONDS ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+from services.anleihen_service import get_issuance_table, get_checks_table, get_chart_data as get_bond_chart_data
+
+
+@app.get("/api/anleihen/issuance-table")
+async def get_anleihen_issuance_table():
+    """
+    Return the full bond issuance table from new_issuance_bonds.xlsx.
+    Includes merged ratings/amounts, ranking by CDS-ASW spread difference.
+    PUBLIC ENDPOINT
+    """
+    try:
+        result = get_issuance_table()
+        result = _clean_nan_values(result)
+        return result
+    except Exception as e:
+        tb = traceback.format_exc()
+        logging.error("Anleihen issuance table error:\n%s", tb)
+        return {"status": "error", "error": str(e), "columns": [], "rows": []}
+
+
+@app.get("/api/anleihen/checks-table")
+async def get_anleihen_checks_table():
+    """
+    Return the renten_checks table combined with live cash percentages.
+    Filtered for Renten funds only (excludes Kini).
+    PUBLIC ENDPOINT
+    """
+    try:
+        result = get_checks_table()
+        result = _clean_nan_values(result)
+        return result
+    except Exception as e:
+        tb = traceback.format_exc()
+        logging.error("Anleihen checks table error:\n%s", tb)
+        return {"status": "error", "error": str(e), "columns": [], "rows": []}
+
+
+class BondChartRequest(BaseModel):
+    bond: dict   # the full bond row from the issuance table
+
+
+@app.post("/api/anleihen/chart-data")
+async def get_anleihen_chart_data(body: BondChartRequest):
+    """
+    Given a selected bond row, return CDS curve + ASW spread curves + bond point.
+    Used to render the chart below the issuance table.
+    PUBLIC ENDPOINT
+    """
+    try:
+        result = get_bond_chart_data(body.bond)
+        result = _clean_nan_values(result)
+        return result
+    except Exception as e:
+        tb = traceback.format_exc()
+        logging.error("Anleihen chart data error:\n%s", tb)
+        return {"status": "error", "error": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

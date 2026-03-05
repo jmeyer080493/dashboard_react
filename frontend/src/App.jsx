@@ -60,6 +60,11 @@ function AppShell() {
   // User tab alert state – set by NordrheinTab when it loads its data
   const [userHasAlerts, setUserHasAlerts] = useState(false)
 
+  // Data tab state – lifted here for persistence across page switches
+  const [dataFreshnessData, setDataFreshnessData] = useState(null)
+  const [dataJobChecksData, setDataJobChecksData] = useState(null)
+  const [dataHasAlerts, setDataHasAlerts] = useState(false)
+
   const [graphSettings, setGraphSettings] = useState(() => {
     try {
       const stored = localStorage.getItem('graphSettings')
@@ -157,7 +162,15 @@ function AppShell() {
       case 'Portfolios':
         return <Portfolios />
       case 'Data':
-        return <Data />
+        return (
+          <Data
+            freshnessData={dataFreshnessData}
+            jobChecksData={dataJobChecksData}
+            onFreshnessDataChange={setDataFreshnessData}
+            onJobChecksDataChange={setDataJobChecksData}
+            onAlertsChange={setDataHasAlerts}
+          />
+        )
       case 'Anleihen':
         return <Anleihen />
       case 'DuoPlus':
@@ -188,6 +201,7 @@ function AppShell() {
             onOpenEinstellungen={() => setEinstellungenOpen(true)}
             onOpenFeedback={() => setFeedbackOpen(true)}
             userHasAlerts={userHasAlerts}
+            dataHasAlerts={dataHasAlerts}
           />
         <main className="main-content">
           <div className="content-wrapper">

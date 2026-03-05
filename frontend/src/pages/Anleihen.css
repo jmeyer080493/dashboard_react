@@ -1,0 +1,371 @@
+/* Anleihen.css – Styles for the Bonds / Anleihen page */
+
+/* ── Page wrapper ─────────────────────────────────────────────────────────── */
+.anleihen-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--bg-card);
+  min-height: 100%;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.anleihen-header {
+  padding: 1.25rem 1.5rem 0.75rem;
+  border-bottom: 1px solid var(--border, #e0e0e0);
+}
+
+.anleihen-header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary, #333);
+}
+
+.anleihen-header p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #666);
+}
+
+/* ── Sections ─────────────────────────────────────────────────────────────── */
+.anleihen-section {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border, #e0e0e0);
+}
+
+.anleihen-section-title {
+  margin: 0 0 0.9rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Status / loading ─────────────────────────────────────────────────────── */
+.anleihen-loading {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-secondary, #888);
+  font-size: 0.95rem;
+}
+
+.anleihen-chart-error {
+  padding: 1rem;
+  color: var(--color-danger, #e53e3e);
+  background: rgba(229, 62, 62, 0.05);
+  border: 1px solid rgba(229, 62, 62, 0.3);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+/* ── Bond Checks / Fondseigenschaften table ───────────────────────────────── */
+.anleihen-checks-wrapper {
+  overflow-x: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border, #e0e0e0);
+}
+
+.anleihen-checks-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  background: var(--bg-surface, #fff);
+}
+
+.anleihen-checks-table th {
+  background: var(--bg-table-header, #f4f4f4);
+  color: var(--text-primary, #333);
+  font-weight: 600;
+  padding: 8px 12px;
+  text-align: left;
+  border: 1px solid var(--border, #e0e0e0);
+  white-space: nowrap;
+}
+
+.anleihen-checks-table td {
+  padding: 7px 12px;
+  border: 1px solid var(--border, #e0e0e0);
+  color: var(--text-primary, #333);
+}
+
+/* ── Table controls (filter / page size) ─────────────────────────────────── */
+.anleihen-table-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.anleihen-filter-input {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border-input, #ccc);
+  border-radius: 4px;
+  background: var(--bg-input, #fff);
+  color: var(--text-primary, #333);
+  font-size: 0.85rem;
+  min-width: 220px;
+}
+
+.anleihen-filter-input:focus {
+  outline: none;
+  border-color: var(--accent, #6366f1);
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+}
+
+.anleihen-result-count {
+  font-size: 0.82rem;
+  color: var(--text-secondary, #666);
+}
+
+.anleihen-page-size {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+  margin-left: auto;
+}
+
+.anleihen-page-size select {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border-input, #ccc);
+  border-radius: 4px;
+  background: var(--bg-input, #fff);
+  color: var(--text-primary, #333);
+  font-size: 0.85rem;
+}
+
+/* ── Bond Issuance Table ──────────────────────────────────────────────────── */
+.anleihen-table-scroll {
+  overflow-x: auto;
+  max-height: 520px;
+  overflow-y: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border, #e0e0e0);
+}
+
+.anleihen-issuance-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  background: var(--bg-surface, #fff);
+}
+
+.anleihen-th-sortable {
+  background: var(--bg-table-header, #f4f4f4);
+  color: var(--text-primary, #333);
+  font-weight: 600;
+  padding: 8px 10px;
+  text-align: left;
+  border: 1px solid var(--border, #e0e0e0);
+  white-space: nowrap;
+  cursor: pointer;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  user-select: none;
+}
+
+.anleihen-th-sortable:hover {
+  background: var(--bg-table-header-hover, #e8e8e8);
+}
+
+.anleihen-th-active {
+  background: var(--bg-table-header-active, #ddd);
+}
+
+.anleihen-sort-icon {
+  display: inline-block;
+  opacity: 0.4;
+  font-size: 10px;
+}
+
+.anleihen-sort-icon.active {
+  opacity: 1;
+  color: var(--accent, #6366f1);
+}
+
+.anleihen-issuance-row {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.anleihen-issuance-row td {
+  padding: 7px 10px;
+  border: 1px solid var(--border, #e0e0e0);
+  color: var(--text-primary, #333);
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.anleihen-issuance-row:hover td {
+  background: var(--bg-hover, rgba(99,102,241,0.05));
+}
+
+.anleihen-row-alt td {
+  background: var(--bg-row-alt, rgba(0,0,0,0.02));
+}
+
+.anleihen-row-selected td {
+  background: var(--bg-selected, rgba(99,102,241,0.12)) !important;
+  outline: 1px solid var(--accent, #6366f1);
+}
+
+.anleihen-td-rank {
+  text-align: center !important;
+  font-weight: 700;
+  color: var(--color-success, #00D084) !important;
+  min-width: 48px;
+}
+
+.anleihen-td-right {
+  text-align: right !important;
+}
+
+.anleihen-td-mono {
+  font-family: 'Courier New', Courier, monospace;
+}
+
+/* ── Pagination ───────────────────────────────────────────────────────────── */
+.anleihen-pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  justify-content: center;
+}
+
+.anleihen-page-btn {
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--border-input, #ccc);
+  border-radius: 4px;
+  background: var(--bg-input, #fff);
+  color: var(--text-primary, #333);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.15s;
+}
+
+.anleihen-page-btn:hover:not(:disabled) {
+  background: var(--bg-hover, #f0f0f0);
+}
+
+.anleihen-page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.anleihen-page-info {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+  padding: 0 0.5rem;
+}
+
+/* ── Selected bond info bar ───────────────────────────────────────────────── */
+.anleihen-selected-info {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-surface, #f8f9fa);
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text-primary, #333);
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.anleihen-clear-btn {
+  margin-left: auto;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--border-input, #ccc);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-secondary, #888);
+  font-size: 0.8rem;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.anleihen-clear-btn:hover {
+  color: var(--color-danger, #e53e3e);
+  border-color: var(--color-danger, #e53e3e);
+}
+
+/* ── CDS Chart ────────────────────────────────────────────────────────────── */
+.anleihen-chart-placeholder {
+  padding: 2.5rem;
+  text-align: center;
+  color: var(--text-secondary, #888);
+  font-size: 0.95rem;
+  background: var(--bg-surface, #f8f9fa);
+  border: 1px dashed var(--border, #ccc);
+  border-radius: 8px;
+}
+
+.anleihen-chart-container {
+  background: var(--bg-chart, rgba(20, 33, 61, 0.04));
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  padding: 1rem 0.5rem;
+}
+
+.anleihen-chart-title {
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  margin-bottom: 0.5rem;
+  padding: 0 1rem;
+}
+
+/* ── Custom recharts tooltip ──────────────────────────────────────────────── */
+.anleihen-tooltip {
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border, #ccc);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  max-width: 260px;
+}
+
+.anleihen-tooltip-label {
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--text-primary, #333);
+}
+
+/* ── Dark-mode overrides ──────────────────────────────────────────────────── */
+[data-theme='dark'] .anleihen-checks-table,
+[data-theme='dark'] .anleihen-issuance-table {
+  background: var(--bg-surface, #1a1a2e);
+}
+
+[data-theme='dark'] .anleihen-checks-table th,
+[data-theme='dark'] .anleihen-th-sortable {
+  background: var(--bg-table-header, #16213e);
+  color: var(--text-primary, #e0e0e0);
+}
+
+[data-theme='dark'] .anleihen-checks-table td,
+[data-theme='dark'] .anleihen-issuance-row td {
+  color: var(--text-primary, #e0e0e0);
+  border-color: var(--border, #333);
+}
+
+[data-theme='dark'] .anleihen-chart-container {
+  background: rgba(20, 33, 61, 0.8);
+}
+
+[data-theme='dark'] .anleihen-tooltip {
+  background: #1a1a2e;
+  color: #e0e0e0;
+}
