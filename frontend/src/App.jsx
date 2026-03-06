@@ -52,9 +52,9 @@ function AppShell() {
     equity:     { chartsPerRow: 2, chartHeight: 300 },
     fi:         { chartsPerRow: 2, chartHeight: 300 },
     macro:      { chartsPerRow: 2, chartHeight: 300 },
-    faktoren:   { chartsPerRow: 3, chartHeight: 420 },
-    sektoren:   { chartsPerRow: 2, chartHeight: 500 },
-    alternativ: { chartsPerRow: 2, chartHeight: 420 },
+    faktoren:   { chartsPerRow: 3, chartHeight: 450 },
+    sektoren:   { chartsPerRow: 2, chartHeight: 450 },
+    alternativ: { chartsPerRow: 2, chartHeight: 450 },
   }
 
   // User tab alert state – set by NordrheinTab when it loads its data
@@ -104,13 +104,17 @@ function AppShell() {
   
   // Länder page state - persists across page navigation
   const [länderActiveTab, setLänderActiveTab] = useState('equity')
-  const [länderFilters, setLänderFilters] = useState({
-    regions: ALL_REGIONS.length > 0 ? [ALL_REGIONS[0]] : ['Germany'],
-    startDate: null,
-    endDate: null,
-    lookback: '1Y',
-    showAverages: false,
-    currency: 'EUR'
+  const [länderFilters, setLänderFilters] = useState(() => {
+    const today = new Date()
+    const oneYearAgo = new Date()
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+    return {
+      regions: ALL_REGIONS.length > 0 ? [ALL_REGIONS[0]] : ['Germany'],
+      startDate: oneYearAgo.toISOString().split('T')[0],
+      endDate: today.toISOString().split('T')[0],
+      lookback: '1Y',
+      currency: 'EUR'
+    }
   })
 
   const handleLänderFiltersChange = (newFilters) => {
@@ -226,6 +230,7 @@ function AppShell() {
         <EinstellungenModal
           isOpen={einstellungenOpen}
           onClose={() => setEinstellungenOpen(false)}
+          activePage={activePage}
           graphSettings={graphSettings}
           onSaveSettings={handleSaveGraphSettings}
         />

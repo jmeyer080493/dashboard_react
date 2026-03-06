@@ -63,7 +63,7 @@
   line-height: 1;
 }
 .eins-close:hover {
-  color: #fff;
+  color: var(--modal-close-hover-text);
   background: var(--modal-close-hover-bg);
 }
 
@@ -166,57 +166,84 @@
   transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
 .eins-theme-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.85);
+  background: var(--modal-btn-hover-bg);
+  color: var(--modal-btn-hover-text);
 }
 .eins-theme-btn--active {
   background: var(--modal-theme-active-bg);
-  border-color: #c9a0dc;
-  color: #c9a0dc;
+  border-color: var(--modal-btn-active-border);
+  color: var(--modal-btn-active-text);
 }
 
 /* Tab selector buttons */
 .eins-tab-sel-btn {
   padding: 0.4rem 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--modal-btn-border);
+  background: var(--modal-btn-bg);
   border-radius: 6px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--modal-btn-text);
   font-size: 0.82rem;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .eins-tab-sel-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.8);
+  background: var(--modal-btn-hover-bg);
+  color: var(--modal-btn-hover-text);
 }
 .eins-tab-sel-btn--active {
-  background: rgba(201, 160, 220, 0.18);
-  border-color: #c9a0dc;
-  color: #c9a0dc;
+  background: var(--modal-btn-active-bg);
+  border-color: var(--modal-btn-active-border);
+  color: var(--modal-btn-active-text);
+}
+
+/* Page selector buttons */
+.eins-btn-group--pages {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.eins-page-btn {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--modal-btn-border);
+  background: var(--modal-btn-bg);
+  border-radius: 7px;
+  color: var(--modal-btn-text);
+  font-size: 0.83rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.eins-page-btn:hover {
+  background: var(--modal-btn-hover-bg);
+  color: var(--modal-btn-hover-text);
+}
+.eins-page-btn--active {
+  background: var(--modal-btn-active-bg);
+  border-color: var(--modal-btn-active-border);
+  color: var(--modal-btn-active-text);
 }
 
 /* Option buttons (graphs per row) */
 .eins-option-btn {
   width: 3rem;
   height: 2.2rem;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--modal-btn-border);
+  background: var(--modal-btn-bg);
   border-radius: 6px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--modal-btn-text);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .eins-option-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.8);
+  background: var(--modal-btn-hover-bg);
+  color: var(--modal-btn-hover-text);
 }
 .eins-option-btn--active {
-  background: rgba(201, 160, 220, 0.2);
-  border-color: #c9a0dc;
-  color: #c9a0dc;
+  background: var(--modal-btn-active-bg);
+  border-color: var(--modal-btn-active-border);
+  color: var(--modal-btn-active-text);
 }
 
 /* ── Select ──────────────────────────────────────────────────────────────── */
@@ -297,8 +324,8 @@
   display: inline-block;
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
+  border: 2px solid var(--modal-spinner-border);
+  border-top-color: var(--modal-spinner-top);
   border-radius: 50%;
   animation: einsSpin 0.7s linear infinite;
 }
@@ -342,7 +369,7 @@
   border: 1px solid var(--modal-btn-sec-border);
 }
 .eins-btn--secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.13);
+  background: var(--modal-btn-hover-bg);
 }
 .eins-btn--full {
   width: 100%;

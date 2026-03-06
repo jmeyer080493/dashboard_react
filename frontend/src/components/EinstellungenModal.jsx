@@ -5,11 +5,26 @@ import './EinstellungenModal.css'
 
 const API_BASE = 'http://localhost:8000'
 
-const LÄNDER_TABS = [
-  { value: 'all',    label: 'Alle' },
-  { value: 'equity', label: 'Aktien' },
-  { value: 'fi',     label: 'Anleihen' },
-  { value: 'macro',  label: 'Makro' },
+// Map App's page names to internal setting keys
+const PAGE_NAME_TO_KEY = {
+  'Länder':      'laender',
+  'Faktoren':    'faktoren',
+  'Sektoren':    'sektoren',
+  'Alternative': 'alternativ',
+}
+
+const PAGE_OPTIONS = [
+  { value: 'laender',    label: '🌍 Länder'     },
+  { value: 'faktoren',   label: '📊 Faktoren'   },
+  { value: 'sektoren',   label: '🏭 Sektoren'   },
+  { value: 'alternativ', label: '📈 Alternative' },
+]
+
+const LAENDER_TABS = [
+  { value: 'all',    label: 'Alle Tabs' },
+  { value: 'equity', label: 'Aktien'    },
+  { value: 'fi',     label: 'Anleihen'  },
+  { value: 'macro',  label: 'Makro'     },
 ]
 
 const CHARTS_PER_ROW_OPTIONS = [
@@ -23,11 +38,16 @@ const CHART_HEIGHT_OPTIONS = [
   { value: 300, label: 'Klein (300px)' },
   { value: 450, label: 'Mittel (450px)' },
   { value: 650, label: 'Groß (650px)' },
+  { value: 800, label: 'Sehr groß (800px)' },
 ]
 
-export default function EinstellungenModal({ isOpen, onClose, graphSettings, onSaveSettings }) {
+export default function EinstellungenModal({ isOpen, onClose, activePage, graphSettings, onSaveSettings }) {
   const { theme, setTheme } = useTheme()
   const [activeTab, setActiveTab] = useState('grafiken')
+
+  // Page selector in Grafiken tab
+  const [selectedPage, setSelectedPage] = useState('laender')
+  // Tab selector – only used when selectedPage === 'laender'
   const [activeLänderTab, setActiveLänderTab] = useState('all')
 
   // Draft state for graph settings (edited before save)
@@ -40,12 +60,14 @@ export default function EinstellungenModal({ isOpen, onClose, graphSettings, onS
   const [pwdMessage, setPwdMessage] = useState(null)
   const [pwdLoading, setPwdLoading] = useState(false)
 
-  // Sync draft when modal opens or graphSettings changes
+  // Sync draft + pre-select current page when modal opens
   useEffect(() => {
     if (isOpen) {
       setDraft(graphSettings)
+      setSelectedPage(PAGE_NAME_TO_KEY[activePage] ?? 'laender')
+      setActiveLänderTab('all')
     }
-  }, [isOpen, graphSettings])
+  }, [isOpen, graphSettings, activePage])
 
   if (!isOpen) return null
 
@@ -58,24 +80,32 @@ export default function EinstellungenModal({ isOpen, onClose, graphSettings, onS
   // ── Graph settings helpers ───────────────────────────────────────────────
 
   const getEffectiveValue = (field) => {
-    if (activeLänderTab === 'all') {
-      // Show equity value as representative (all are the same when set via "Alle")
-      return draft.equity[field]
+    if (selectedPage === 'laender') {
+      const tab = activeLänderTab === 'all' ? 'equity' : activeLänderTab
+      return draft[tab]?.[field]
     }
-    return draft[activeLänderTab][field]
+    return draft[selectedPage]?.[field]
   }
 
   const setFieldValue = (field, value) => {
-    if (activeLänderTab === 'all') {
-      setDraft(prev => ({
-        equity: { ...prev.equity, [field]: value },
-        fi:     { ...prev.fi,     [field]: value },
-        macro:  { ...prev.macro,  [field]: value },
-      }))
+    if (selectedPage === 'laender') {
+      if (activeLänderTab === 'all') {
+        setDraft(prev => ({
+          ...prev,
+          equity: { ...prev.equity, [field]: value },
+          fi:     { ...prev.fi,     [field]: value },
+          macro:  { ...prev.macro,  [field]: value },
+        }))
+      } else {
+        setDraft(prev => ({
+          ...prev,
+          [activeLänderTab]: { ...prev[activeLänderTab], [field]: value },
+        }))
+      }
     } else {
       setDraft(prev => ({
         ...prev,
-        [activeLänderTab]: { ...prev[activeLänderTab], [field]: value },
+        [selectedPage]: { ...prev[selectedPage], [field]: value },
       }))
     }
   }
@@ -178,21 +208,39 @@ export default function EinstellungenModal({ isOpen, onClose, graphSettings, onS
           {/* ── Grafiken ────────────────────────────────────────────────── */}
           {activeTab === 'grafiken' && (
             <div className="eins-section">
-              <h3 className="eins-section-title">Layout – Länder</h3>
+              <h3 className="eins-section-title">Layout-Einstellungen</h3>
 
-              {/* Tab selector */}
-              <label className="eins-label">Anwenden auf:</label>
-              <div className="eins-btn-group eins-btn-group--tabs">
-                {LÄNDER_TABS.map(t => (
+              {/* Page selector */}
+              <label className="eins-label">Seite auswählen:</label>
+              <div className="eins-btn-group eins-btn-group--pages">
+                {PAGE_OPTIONS.map(p => (
                   <button
-                    key={t.value}
-                    className={`eins-tab-sel-btn ${activeLänderTab === t.value ? 'eins-tab-sel-btn--active' : ''}`}
-                    onClick={() => setActiveLänderTab(t.value)}
+                    key={p.value}
+                    className={`eins-page-btn ${selectedPage === p.value ? 'eins-page-btn--active' : ''}`}
+                    onClick={() => { setSelectedPage(p.value); setActiveLänderTab('all') }}
                   >
-                    {t.label}
+                    {p.label}
                   </button>
                 ))}
               </div>
+
+              {/* Tab selector – only for Länder */}
+              {selectedPage === 'laender' && (
+                <>
+                  <label className="eins-label">Anwenden auf:</label>
+                  <div className="eins-btn-group eins-btn-group--tabs">
+                    {LAENDER_TABS.map(t => (
+                      <button
+                        key={t.value}
+                        className={`eins-tab-sel-btn ${activeLänderTab === t.value ? 'eins-tab-sel-btn--active' : ''}`}
+                        onClick={() => setActiveLänderTab(t.value)}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
 
               {/* Graphs per row */}
               <label className="eins-label">Grafiken pro Zeile:</label>
@@ -215,35 +263,6 @@ export default function EinstellungenModal({ isOpen, onClose, graphSettings, onS
                   className="eins-select"
                   value={getEffectiveValue('chartHeight')}
                   onChange={(e) => setFieldValue('chartHeight', Number(e.target.value))}
-                >
-                  {CHART_HEIGHT_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* ── Alternativ section ──────────────────────────────────── */}
-              <h3 className="eins-section-title" style={{ marginTop: '1.5rem' }}>Layout – Alternativ</h3>
-
-              <label className="eins-label">Grafiken pro Zeile:</label>
-              <div className="eins-btn-group">
-                {CHARTS_PER_ROW_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    className={`eins-option-btn ${(draft.alternativ?.chartsPerRow ?? 2) === opt.value ? 'eins-option-btn--active' : ''}`}
-                    onClick={() => setDraft(prev => ({ ...prev, alternativ: { ...prev.alternativ, chartsPerRow: opt.value } }))}
-                  >
-                    {opt.value}
-                  </button>
-                ))}
-              </div>
-
-              <label className="eins-label">Grafik-Höhe:</label>
-              <div className="eins-select-wrap">
-                <select
-                  className="eins-select"
-                  value={draft.alternativ?.chartHeight ?? 420}
-                  onChange={(e) => setDraft(prev => ({ ...prev, alternativ: { ...prev.alternativ, chartHeight: Number(e.target.value) } }))}
                 >
                   {CHART_HEIGHT_OPTIONS.map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>

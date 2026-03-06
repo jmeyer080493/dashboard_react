@@ -15,9 +15,11 @@
   gap: 1.25rem 2rem;
   padding: 0.75rem 1rem;
   background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
   border-radius: 8px;
   box-shadow: var(--card-shadow, 0 1px 4px rgba(0,0,0,0.08));
   align-items: flex-start;
+  transition: background 0.25s ease, border-color 0.25s ease;
 }
 
 .sektoren-control-section {
@@ -159,4 +161,43 @@
   .sektoren-sector-btns {
     max-width: 100%;
   }
+}
+
+/* ── Dark mode overrides ─────────────────────────────────────────────────── */
+
+[data-theme="dark"] .sektoren-controls {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="dark"] .sektoren-date-input {
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .sektoren-date-input::placeholder {
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .sektoren-status.loading {
+  background: var(--card-bg);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .sektoren-status.error {
+  color: #fca5a5;
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+[data-theme="dark"] .sektoren-all-btn {
+  background: var(--btn-bg);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .sektoren-all-btn:hover {
+  background: var(--btn-hover-bg);
 }

@@ -5,8 +5,8 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  background: var(--bg-card);
+  gap: 1.25rem;
+  padding: 1rem 1.25rem;
   min-height: 100%;
 }
 
@@ -14,30 +14,33 @@
 .faktoren-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 2rem;
-  padding: 1.25rem 1.5rem;
-  background: var(--bg-controls, var(--bg-surface, #f8f9fa));
-  border-bottom: 1px solid var(--border, #e0e0e0);
+  gap: 1.25rem 2rem;
+  padding: 0.75rem 1rem;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow, 0 1px 4px rgba(0,0,0,0.08));
   align-items: flex-start;
+  transition: background 0.25s ease, border-color 0.25s ease;
 }
 
 .faktoren-control-section {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.4rem;
 }
 
 .faktoren-control-section label {
+  font-size: 12px;
   font-weight: 600;
-  font-size: 0.9rem;
   color: var(--text-secondary, #666);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
 }
 
 .faktoren-btn-group {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.3rem;
   flex-wrap: wrap;
 }
 
@@ -50,65 +53,62 @@
 }
 
 .faktoren-date-input {
-  padding: 0.4rem 0.6rem;
-  border: 1px solid var(--border-input, #ccc);
+  width: 104px;
+  padding: 0.3rem 0.5rem;
+  font-size: 12px;
+  border: 1px solid var(--border-color, #d1d5db);
   border-radius: 4px;
-  background: var(--bg-input, #fff);
+  background: var(--input-bg, #fff);
   color: var(--text-primary, #333);
-  font-size: 0.82rem;
-  width: 108px;
+  font-family: monospace;
 }
 
 .faktoren-date-input:focus {
   outline: none;
-  border-color: #c9a0dc;
+  border-color: var(--accent-color, #6366f1);
 }
 
 .faktoren-date-sep {
-  color: var(--text-secondary, #666);
-  font-size: 1rem;
+  color: var(--text-secondary, #888);
+  font-size: 14px;
 }
 
 /* ── Status messages ──────────────────────────────────────────────────────── */
 .faktoren-status {
-  padding: 0.75rem 1.5rem;
-  font-size: 0.95rem;
+  font-size: 13px;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
 }
 
 .faktoren-status.loading {
   color: var(--text-secondary, #666);
+  background: var(--card-bg, #f9fafb);
 }
 
 .faktoren-status.error {
-  color: #e53e3e;
-  background: rgba(229, 62, 62, 0.06);
-  border-radius: 6px;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
 }
 
 /* ── Chart grid ───────────────────────────────────────────────────────────── */
 .faktoren-chart-grid {
   display: grid;
-  gap: 1.25rem;
-  padding: 1.25rem 1.5rem;
+  gap: 1rem;
   width: 100%;
   box-sizing: border-box;
 }
 
 /* ── Empty state ──────────────────────────────────────────────────────────── */
 .faktoren-empty {
-  padding: 3rem;
+  font-size: 13px;
+  color: var(--text-secondary, #888);
   text-align: center;
-  color: var(--text-secondary, #999);
-  font-size: 1rem;
+  padding: 2rem;
 }
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 1200px) {
-  .faktoren-controls {
-    flex-direction: column;
-    gap: 1rem;
-  }
-
   .faktoren-chart-grid {
     grid-template-columns: repeat(2, 1fr) !important;
   }
@@ -118,4 +118,33 @@
   .faktoren-chart-grid {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* ── Dark mode overrides ─────────────────────────────────────────────────── */
+
+[data-theme="dark"] .faktoren-controls {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="dark"] .faktoren-date-input {
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .faktoren-date-input::placeholder {
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .faktoren-status.loading {
+  background: var(--card-bg);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .faktoren-status.error {
+  color: #fca5a5;
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.3);
 }

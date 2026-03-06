@@ -28,7 +28,6 @@ export function useLänderData(endpoint, filters) {
         if (filters.endDate) params.append('end_date', filters.endDate)
         
         params.append('lookback', filters.lookback)
-        params.append('show_averages', filters.showAverages)
         
         // Add currency for equity endpoint only
         if (endpoint.includes('equity')) {

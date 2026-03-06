@@ -164,11 +164,35 @@ export function MetricsTable({
   // ── Determine which metrics to show ─────────────────────────────────────
   const metricsToDisplay = useMemo(() => {
     if (!data || data.length === 0) return []
-    if (columns && columns.length > 0) return columns
-    const sample = data[0]
-    const excluded = new Set(['DatePoint', 'Regions', 'Ticker', 'Currency', 'Name'])
-    return Object.keys(sample).filter(k => !excluded.has(k)).sort()
-  }, [data, columns])
+    let cols = (columns && columns.length > 0)
+      ? columns
+      : (() => {
+          const sample = data[0]
+          const excluded = new Set(['DatePoint', 'Regions', 'Ticker', 'Currency', 'Name'])
+          return Object.keys(sample).filter(k => !excluded.has(k)).sort()
+        })()
+
+    // Re-sort by category order so that fields from the same category are always
+    // adjacent → avoids duplicate group header cells in the two-row thead.
+    if (categories && categories.length > 0) {
+      const orderMap = {}
+      let ci = 0
+      for (const cat of categories) {
+        let fi = 0
+        for (const field of cat.fields) {
+          orderMap[field.key] = ci * 1000 + fi
+          fi++
+        }
+        ci++
+      }
+      cols = [...cols].sort((a, b) => {
+        const oa = orderMap[a] ?? 999999
+        const ob = orderMap[b] ?? 999999
+        return oa - ob
+      })
+    }
+    return cols
+  }, [data, columns, categories])
 
   // ── Build meta lookup: metricKey → {label, higherBetter, unit, categoryLabel} ─
   const metricMeta = useMemo(() => {

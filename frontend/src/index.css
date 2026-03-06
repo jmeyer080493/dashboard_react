@@ -83,40 +83,52 @@ body {
   --tab-error-bg:   #fff3cd;
   --tab-error-text: #856404;
 
-  /* Modals (all modals stay dark-purple in light mode too — they float above) */
-  --modal-bg:               #1e1b3a;
-  --modal-border:           rgba(255, 255, 255, 0.12);
-  --modal-header-border:    rgba(255, 255, 255, 0.08);
-  --modal-title:            #c9a0dc;
-  --modal-close:            rgba(255, 255, 255, 0.4);
-  --modal-close-hover-bg:   rgba(255, 255, 255, 0.08);
-  --modal-section-title:    rgba(255, 255, 255, 0.85);
-  --modal-hint:             rgba(255, 255, 255, 0.4);
-  --modal-label:            rgba(255, 255, 255, 0.5);
-  --modal-hint-inline:      rgba(255, 255, 255, 0.3);
-  --modal-tab:              rgba(255, 255, 255, 0.45);
-  --modal-tab-hover:        rgba(255, 255, 255, 0.75);
-  --modal-tab-active:       #c9a0dc;
-  --modal-tab-border:       rgba(255, 255, 255, 0.08);
-  --modal-input-bg:         rgba(255, 255, 255, 0.06);
-  --modal-input-border:     rgba(255, 255, 255, 0.12);
-  --modal-input-text:       #e8e8e8;
-  --modal-input-placeholder:rgba(255, 255, 255, 0.2);
-  --modal-select-opt-bg:    #1e1b3a;
-  --modal-footer-border:    rgba(255, 255, 255, 0.08);
-  --modal-btn-sec-bg:       rgba(255, 255, 255, 0.08);
-  --modal-btn-sec-text:     rgba(255, 255, 255, 0.7);
-  --modal-btn-sec-border:   rgba(255, 255, 255, 0.15);
-  --modal-msg-ok-bg:        rgba(16, 185, 129, 0.15);
-  --modal-msg-ok-text:      #6ee7b7;
-  --modal-msg-ok-border:    rgba(16, 185, 129, 0.25);
-  --modal-msg-err-bg:       rgba(239, 68, 68, 0.12);
-  --modal-msg-err-text:     #fca5a5;
-  --modal-msg-err-border:   rgba(239, 68, 68, 0.25);
-  --modal-theme-btn-bg:     rgba(255, 255, 255, 0.05);
-  --modal-theme-btn-border: rgba(255, 255, 255, 0.18);
-  --modal-theme-btn-text:   rgba(255, 255, 255, 0.5);
-  --modal-theme-active-bg:  rgba(201, 160, 220, 0.15);
+  /* Modals – Light Mode */
+  --modal-bg:               #ffffff;
+  --modal-border:           #e5e7eb;
+  --modal-header-border:    #e5e7eb;
+  --modal-title:            #6d28d9;
+  --modal-close:            #9ca3af;
+  --modal-close-hover-bg:   #f3f4f6;
+  --modal-close-hover-text: #374151;
+  --modal-section-title:    #111827;
+  --modal-hint:             #6b7280;
+  --modal-label:            #6b7280;
+  --modal-hint-inline:      #9ca3af;
+  --modal-tab:              #6b7280;
+  --modal-tab-hover:        #374151;
+  --modal-tab-active:       #6d28d9;
+  --modal-tab-border:       #e5e7eb;
+  --modal-input-bg:         #f9fafb;
+  --modal-input-border:     #d1d5db;
+  --modal-input-text:       #111827;
+  --modal-input-placeholder:#9ca3af;
+  --modal-select-opt-bg:    #ffffff;
+  --modal-footer-border:    #e5e7eb;
+  --modal-btn-sec-bg:       #f3f4f6;
+  --modal-btn-sec-text:     #374151;
+  --modal-btn-sec-border:   #d1d5db;
+  --modal-msg-ok-bg:        #d1fae5;
+  --modal-msg-ok-text:      #065f46;
+  --modal-msg-ok-border:    #a7f3d0;
+  --modal-msg-err-bg:       #fee2e2;
+  --modal-msg-err-text:     #991b1b;
+  --modal-msg-err-border:   #fca5a5;
+  --modal-theme-btn-bg:     #f3f4f6;
+  --modal-theme-btn-border: #d1d5db;
+  --modal-theme-btn-text:   #374151;
+  --modal-theme-active-bg:  rgba(109, 40, 217, 0.1);
+  /* Modal inner-button variants */
+  --modal-btn-bg:           rgba(0, 0, 0, 0.04);
+  --modal-btn-border:       rgba(0, 0, 0, 0.12);
+  --modal-btn-text:         rgba(0, 0, 0, 0.5);
+  --modal-btn-hover-bg:     rgba(0, 0, 0, 0.08);
+  --modal-btn-hover-text:   rgba(0, 0, 0, 0.8);
+  --modal-btn-active-bg:    rgba(109, 40, 217, 0.12);
+  --modal-btn-active-border:#6d28d9;
+  --modal-btn-active-text:  #6d28d9;
+  --modal-spinner-border:   rgba(0, 0, 0, 0.2);
+  --modal-spinner-top:      #6d28d9;
 
   /* Metrics Filter Modal (dark purple panel) */
   --mfm-bg:          #1e1e30;
@@ -127,9 +139,32 @@ body {
   --mfm-close:       #888888;
   --mfm-inner-border:#2e2e50;
 
-  /* Feedback Modal */
-  --feedback-bg:      #1e1b3a;
-  --feedback-border:  rgba(255, 255, 255, 0.12);
+  /* Feedback Modal – Light Mode */
+  --feedback-bg:             #ffffff;
+  --feedback-border:         #e5e7eb;
+  --feedback-header-border:  #6d28d9;
+  --feedback-title-color:    #6d28d9;
+  --feedback-close-color:    #9ca3af;
+  --feedback-close-hover-bg: #f3f4f6;
+  --feedback-close-hover-text:#374151;
+  --feedback-label-color:    #374151;
+  --feedback-hint-bg:        rgba(109, 40, 217, 0.06);
+  --feedback-hint-border:    rgba(109, 40, 217, 0.2);
+  --feedback-hint-color:     #6b7280;
+  --feedback-input-bg:       #f9fafb;
+  --feedback-input-border:   #d1d5db;
+  --feedback-input-text:     #111827;
+  --feedback-placeholder:    #9ca3af;
+  --feedback-charcount:      #9ca3af;
+  --feedback-error-color:    #dc2626;
+  --feedback-footer-border:  #e5e7eb;
+  --feedback-cancel-bg:      #f3f4f6;
+  --feedback-cancel-text:    #374151;
+  --feedback-cancel-hover:   #e5e7eb;
+  --feedback-success-color:  #374151;
+  --feedback-select-opt-bg:  #ffffff;
+  --feedback-submit-bg:      #6d28d9;
+  --feedback-submit-text:    #ffffff;
 
   /* Export Modal (white modal) */
   --export-modal-bg:        #ffffff;
@@ -150,6 +185,19 @@ body {
   --sidebar-accent:         #c9a0dc;
   --sidebar-scrollbar:      rgba(201, 160, 220, 0.2);
   --sidebar-scrollbar-hover:rgba(201, 160, 220, 0.4);
+
+  /* Missing alias variables – used by Portfolios, Sektoren, DuoPlus */
+  --card-bg:               #ffffff;
+  --card-shadow:           0 1px 4px rgba(0, 0, 0, 0.08);
+  --input-bg:              #ffffff;
+  --border-color:          #e5e7eb;
+  --btn-bg:                #f3f4f6;
+  --btn-hover-bg:          #e5e7eb;
+  --accent-color:          #6366f1;
+  --primary-color:         #3b82f6;
+  --table-header-bg:       #f9fafb;
+  --bg-table-header:       #f4f4f4;
+  --bg-table-header-hover: #ebebeb;
 }
 
 /* ── Dark Mode ─────────────────────────────────────────────────────────── */
@@ -240,6 +288,92 @@ body {
   --sidebar-accent:         #c9a0dc;
   --sidebar-scrollbar:      rgba(201, 160, 220, 0.3);
   --sidebar-scrollbar-hover:rgba(201, 160, 220, 0.5);
+
+  /* Modals – Dark Mode overrides (dark purple) */
+  --modal-bg:               #1e1b3a;
+  --modal-border:           rgba(255, 255, 255, 0.12);
+  --modal-header-border:    rgba(255, 255, 255, 0.08);
+  --modal-title:            #c9a0dc;
+  --modal-close:            rgba(255, 255, 255, 0.4);
+  --modal-close-hover-bg:   rgba(255, 255, 255, 0.08);
+  --modal-close-hover-text: #ffffff;
+  --modal-section-title:    rgba(255, 255, 255, 0.85);
+  --modal-hint:             rgba(255, 255, 255, 0.4);
+  --modal-label:            rgba(255, 255, 255, 0.5);
+  --modal-hint-inline:      rgba(255, 255, 255, 0.3);
+  --modal-tab:              rgba(255, 255, 255, 0.45);
+  --modal-tab-hover:        rgba(255, 255, 255, 0.75);
+  --modal-tab-active:       #c9a0dc;
+  --modal-tab-border:       rgba(255, 255, 255, 0.08);
+  --modal-input-bg:         rgba(255, 255, 255, 0.06);
+  --modal-input-border:     rgba(255, 255, 255, 0.12);
+  --modal-input-text:       #e8e8e8;
+  --modal-input-placeholder:rgba(255, 255, 255, 0.2);
+  --modal-select-opt-bg:    #1e1b3a;
+  --modal-footer-border:    rgba(255, 255, 255, 0.08);
+  --modal-btn-sec-bg:       rgba(255, 255, 255, 0.08);
+  --modal-btn-sec-text:     rgba(255, 255, 255, 0.7);
+  --modal-btn-sec-border:   rgba(255, 255, 255, 0.15);
+  --modal-msg-ok-bg:        rgba(16, 185, 129, 0.15);
+  --modal-msg-ok-text:      #6ee7b7;
+  --modal-msg-ok-border:    rgba(16, 185, 129, 0.25);
+  --modal-msg-err-bg:       rgba(239, 68, 68, 0.12);
+  --modal-msg-err-text:     #fca5a5;
+  --modal-msg-err-border:   rgba(239, 68, 68, 0.25);
+  --modal-theme-btn-bg:     rgba(255, 255, 255, 0.05);
+  --modal-theme-btn-border: rgba(255, 255, 255, 0.18);
+  --modal-theme-btn-text:   rgba(255, 255, 255, 0.5);
+  --modal-theme-active-bg:  rgba(201, 160, 220, 0.15);
+  --modal-btn-bg:           rgba(255, 255, 255, 0.04);
+  --modal-btn-border:       rgba(255, 255, 255, 0.15);
+  --modal-btn-text:         rgba(255, 255, 255, 0.5);
+  --modal-btn-hover-bg:     rgba(255, 255, 255, 0.08);
+  --modal-btn-hover-text:   rgba(255, 255, 255, 0.8);
+  --modal-btn-active-bg:    rgba(201, 160, 220, 0.18);
+  --modal-btn-active-border:#c9a0dc;
+  --modal-btn-active-text:  #c9a0dc;
+  --modal-spinner-border:   rgba(255, 255, 255, 0.3);
+  --modal-spinner-top:      #ffffff;
+
+  /* Feedback Modal – Dark Mode */
+  --feedback-bg:             #1e1b3a;
+  --feedback-border:         rgba(255, 255, 255, 0.12);
+  --feedback-header-border:  #0dcaf0;
+  --feedback-title-color:    #0dcaf0;
+  --feedback-close-color:    rgba(255, 255, 255, 0.4);
+  --feedback-close-hover-bg: rgba(255, 255, 255, 0.08);
+  --feedback-close-hover-text:#ffffff;
+  --feedback-label-color:    rgba(255, 255, 255, 0.8);
+  --feedback-hint-bg:        rgba(13, 202, 240, 0.08);
+  --feedback-hint-border:    rgba(13, 202, 240, 0.2);
+  --feedback-hint-color:     rgba(255, 255, 255, 0.55);
+  --feedback-input-bg:       rgba(255, 255, 255, 0.06);
+  --feedback-input-border:   rgba(255, 255, 255, 0.15);
+  --feedback-input-text:     #ffffff;
+  --feedback-placeholder:    rgba(255, 255, 255, 0.3);
+  --feedback-charcount:      rgba(255, 255, 255, 0.35);
+  --feedback-error-color:    #f87171;
+  --feedback-footer-border:  rgba(255, 255, 255, 0.08);
+  --feedback-cancel-bg:      rgba(255, 255, 255, 0.08);
+  --feedback-cancel-text:    rgba(255, 255, 255, 0.7);
+  --feedback-cancel-hover:   rgba(255, 255, 255, 0.14);
+  --feedback-success-color:  rgba(255, 255, 255, 0.8);
+  --feedback-select-opt-bg:  #1e1b3a;
+  --feedback-submit-bg:      #0dcaf0;
+  --feedback-submit-text:    #000000;
+
+  /* Missing alias variables – Dark Mode */
+  --card-bg:               #1e1b3a;
+  --card-shadow:           0 1px 8px rgba(0, 0, 0, 0.4);
+  --input-bg:              rgba(255, 255, 255, 0.06);
+  --border-color:          rgba(255, 255, 255, 0.1);
+  --btn-bg:                rgba(255, 255, 255, 0.08);
+  --btn-hover-bg:          rgba(255, 255, 255, 0.12);
+  --accent-color:          #c9a0dc;
+  --primary-color:         #4a90e2;
+  --table-header-bg:       #161430;
+  --bg-table-header:       rgba(255, 255, 255, 0.05);
+  --bg-table-header-hover: rgba(255, 255, 255, 0.08);
 }
 
 a {

@@ -83,7 +83,6 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
     if (filters.startDate) params.append('start_date', filters.startDate)
     if (filters.endDate) params.append('end_date', filters.endDate)
     params.append('lookback', filters.lookback)
-    params.append('show_averages', filters.showAverages)
     return params
   }
 

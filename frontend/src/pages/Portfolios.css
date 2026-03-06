@@ -394,6 +394,19 @@
 
 [data-theme="dark"] .portfolio-data-table th {
   background: var(--table-header-bg);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .portfolio-selector,
+[data-theme="dark"] .portfolio-search {
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .portfolio-selector option {
+  background: #1e1b3a;
+  color: var(--text-primary);
 }
 
 [data-theme="dark"] .liquidity-currency-row td {

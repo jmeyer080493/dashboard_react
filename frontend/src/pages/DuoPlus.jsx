@@ -32,6 +32,19 @@ function savePersisted(obj) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Number formatting helper – abbreviates large financial values
+// ─────────────────────────────────────────────────────────────────────────────
+function fmtDataVal(v) {
+  if (typeof v !== 'number' || isNaN(v)) return String(v)
+  const abs = Math.abs(v)
+  if (abs >= 1e12) return `${(v / 1e12).toFixed(2)}T`
+  if (abs >= 1e9)  return `${(v / 1e9).toFixed(2)}B`
+  if (abs >= 1e6)  return `${(v / 1e6).toFixed(2)}M`
+  if (abs >= 1e3)  return `${(v / 1e3).toFixed(2)}K`
+  return v.toFixed(2)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Shared table component
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -448,7 +461,7 @@ function DataMgmtTab() {
                           <td className="duo-td">{o.ticker}</td>
                           <td className="duo-td">{o.metrics.join(', ')}</td>
                           <td className="duo-td duo-mono">
-                            {Object.entries(o.values).map(([k, v]) => `${k}: ${typeof v === 'number' ? v.toFixed(4) : v}`).join(' | ')}
+                            {Object.entries(o.values).map(([k, v]) => `${k}: ${fmtDataVal(v)}`).join(' | ')}
                           </td>
                         </tr>
                       ))}

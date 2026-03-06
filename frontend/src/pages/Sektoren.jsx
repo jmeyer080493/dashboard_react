@@ -122,7 +122,7 @@ const isValidDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s)
 export default function Sektoren({ graphSettings }) {
   const gs = graphSettings ?? {}
   const chartsPerRow = gs.sektoren?.chartsPerRow ?? 2
-  const chartHeight  = gs.sektoren?.chartHeight  ?? 500
+  const chartHeight  = gs.sektoren?.chartHeight  ?? 450
 
   // Seed state from localStorage once at mount
   const _initRef = useRef(null)

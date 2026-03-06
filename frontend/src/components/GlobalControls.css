@@ -1,46 +1,62 @@
+/* ── Controls ribbon ──────────────────────────────────────────────── */
 .global-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 2rem;
-  padding: 1.5rem;
+  align-items: center;
+  gap: 0;
+  padding: 0.6rem 1.25rem;
   background: var(--bg-controls);
   border-bottom: 1px solid var(--border);
-  align-items: flex-start;
   transition: background 0.25s ease;
 }
 
+/* Each logical group */
 .control-section {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  min-width: 200px;
+  gap: 0.3rem;
+  padding: 0.45rem 1.1rem;
 }
 
-.control-section label {
+/* Thin vertical divider between sections */
+.control-section + .control-section {
+  border-left: 1px solid var(--border);
+}
+
+/* Section heading */
+.control-section > .ctrl-label {
+  font-size: 0.7rem;
   font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--text-primary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
+/* Row of buttons / inputs inside a section */
 .control-group {
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 0.35rem;
+  flex-wrap: nowrap;
+  align-items: center;
 }
 
+/* ── Compact pill buttons (lookback, preset, currency) ── */
 .quick-btn,
 .preset-btn,
 .lookback-btn,
 .currency-btn {
-  padding: 0.5rem 0.75rem;
+  padding: 0.3rem 0.65rem;
   border: 1px solid var(--border-input);
   background: var(--bg-card);
   color: var(--text-primary);
-  border-radius: 6px;
+  border-radius: 20px;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  transition: all 0.2s ease;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  line-height: 1.4;
 }
 
 .quick-btn:hover,
@@ -56,7 +72,7 @@
 .lookback-btn.active,
 .currency-btn.active {
   background: #c9a0dc;
-  color: white;
+  color: #fff;
   border-color: #c9a0dc;
 }
 
@@ -69,59 +85,69 @@
   pointer-events: none;
 }
 
-.toggle-dates-btn {
-  padding: 0.4rem 0.8rem;
-  font-size: 0.8rem;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-input);
-  border-radius: 4px;
-  cursor: pointer;
-  color: var(--text-primary);
-  align-self: flex-start;
-}
-
-.toggle-dates-btn:hover {
-  background: var(--bg-hover);
-}
-
+/* ── Date inputs ── */
 .date-inputs {
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
 }
 
-.date-inputs input {
-  padding: 0.5rem;
+.date-inputs .date-sep {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  padding: 0 0.1rem;
+}
+
+.date-inputs input[type="date"] {
+  padding: 0.28rem 0.5rem;
   border: 1px solid var(--border-input);
   background: var(--bg-input);
   color: var(--text-primary);
-  border-radius: 4px;
-  font-size: 0.85rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  width: 120px;
+  line-height: 1.4;
+  transition: border-color 0.15s ease;
 }
 
-.region-selector {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.date-inputs input[type="date"]:focus {
+  outline: none;
+  border-color: #c9a0dc;
 }
 
+/* ── Region tags + add dropdown ── */
 .region-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  min-height: 28px;
+  gap: 0.3rem;
+  align-items: center;
+  max-width: 340px;
 }
 
 .region-tag {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.4rem 0.8rem;
+  gap: 0.2rem;
+  padding: 0.18rem 0.55rem 0.18rem 0.65rem;
   background: var(--bg-tag);
   color: var(--text-tag);
   border-radius: 20px;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 500;
+  white-space: nowrap;
+}
+
+.region-tag--preset {
+  background: color-mix(in srgb, #c9a0dc 25%, var(--bg-tag));
+  border: 1px solid color-mix(in srgb, #c9a0dc 50%, transparent);
+  font-style: italic;
+}
+
+.region-tag--overflow {
+  background: var(--bg-card);
+  border: 1px dashed var(--border-input);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
 }
 
 .tag-remove {
@@ -129,56 +155,78 @@
   border: none;
   color: var(--text-tag-remove);
   cursor: pointer;
-  font-size: 1.2rem;
+  font-size: 1rem;
   line-height: 1;
   padding: 0;
-  margin-left: 0.3rem;
+  opacity: 0.6;
+  transition: opacity 0.15s;
 }
 
 .tag-remove:hover {
+  opacity: 1;
   color: var(--text-primary);
 }
 
-.regions-select {
-  padding: 0.5rem;
-  border: 1px solid var(--border-input);
+.region-add-select {
+  padding: 0.28rem 0.5rem;
+  border: 1px dashed var(--border-input);
   background: var(--bg-input);
-  color: var(--text-primary);
-  border-radius: 4px;
-  font-size: 0.85rem;
-  max-height: 150px;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
 }
 
+.region-add-select:focus {
+  outline: none;
+  border-color: #c9a0dc;
+  color: var(--text-primary);
+}
+
+/* ── Responsive ── */
 .filter-metrics-btn {
-  padding: 0.75rem 1.25rem;
+  padding: 0.32rem 0.9rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  color: #fff;
   border: none;
-  border-radius: 6px;
-  font-size: 0.95rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-  align-self: flex-start;
   white-space: nowrap;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+  line-height: 1.4;
 }
 
 .filter-metrics-btn:hover {
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-  transform: translateY(-2px);
+  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.45);
+  transform: translateY(-1px);
 }
 
 .filter-metrics-btn:active {
   transform: translateY(0);
 }
 
-@media (max-width: 1200px) {
+/* ── Spacer that pushes metrics button to the right ── */
+.controls-spacer {
+  flex: 1;
+}
+
+/* ── Responsive ── */
+@media (max-width: 1100px) {
   .global-controls {
-    flex-direction: column;
-    gap: 1rem;
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+    padding: 0.75rem 1rem;
   }
 
   .control-section {
-    width: 100%;
+    border-left: none !important;
+    padding: 0.3rem 0.6rem;
+  }
+
+  .region-tags {
+    max-width: 100%;
   }
 }

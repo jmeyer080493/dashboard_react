@@ -233,21 +233,6 @@ function MacroTab({
 
   return (
     <div className="macro-tab">
-      {/* Tab header */}
-      <div className="tab-header">
-        <h2>Makro – Macroeconomics</h2>
-        <p className="sub-title">
-          Regionen: {regions.join(', ')} | Zeitraum: {filters.lookback}
-        </p>
-      </div>
-
-      {/* Metadata row */}
-      <div className="metadata">
-        <span>Datensätze: {data.metadata?.record_count ?? 0}</span>
-        <span>Metriken: {availableMetrics.length}</span>
-        <span>Aktualisiert: {new Date().toLocaleDateString('de-DE')}</span>
-      </div>
-
       {/* Latest Values Table */}
       <MetricsTable
         data={allRecords}

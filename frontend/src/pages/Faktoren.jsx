@@ -87,7 +87,7 @@ const isValidDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s)
 export default function Faktoren({ graphSettings }) {
   const gs = graphSettings ?? {}
   const chartsPerRow = gs.faktoren?.chartsPerRow ?? 3
-  const chartHeight  = gs.faktoren?.chartHeight  ?? 420
+  const chartHeight  = gs.faktoren?.chartHeight  ?? 450
 
   // ── Filter state (seeded from localStorage once at mount) ──────────────────
   // useRef ensures loadSavedFilters() is called only once, not on every render

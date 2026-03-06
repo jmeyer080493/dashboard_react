@@ -24,10 +24,10 @@ export const EQUITY_METRICS_CATEGORIES = [
     fields: [
       { key: 'Weighted Valuation', label: 'Bewertung Agg.',    tableEnabled: true, graphEnabled: true, higherBetter: null,  unit: '' },
       { key: 'EARN_YLD',           label: 'Ertragsrendite',    tableEnabled: true, graphEnabled: true, higherBetter: true,  unit: '%' },
-      { key: 'PX_TO_SALES_RATIO',  label: 'KUV',              tableEnabled: true, graphEnabled: true, higherBetter: false, unit: 'x' },
-      { key: 'PX_TO_BOOK_RATIO',   label: 'KBV',              tableEnabled: true, graphEnabled: true, higherBetter: false, unit: 'x' },
-      { key: 'PE_RATIO',           label: 'KGV',              tableEnabled: true, graphEnabled: true, higherBetter: false, unit: 'x' },
-      { key: 'BEST_PE_RATIO',      label: 'KGV (Fwd.)',       tableEnabled: true, graphEnabled: true, higherBetter: false, unit: 'x' },
+      { key: 'PX_TO_SALES_RATIO',  label: 'KUV',              tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '' },
+      { key: 'PX_TO_BOOK_RATIO',   label: 'KBV',              tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '' },
+      { key: 'PE_RATIO',           label: 'KGV',              tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '' },
+      { key: 'BEST_PE_RATIO',      label: 'KGV (Fwd.)',       tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '' },
     ],
   },
   {
@@ -38,8 +38,6 @@ export const EQUITY_METRICS_CATEGORIES = [
       { key: 'MA_50_Diff',         label: 'MA50 Distanz',     tableEnabled: false, graphEnabled: true, higherBetter: null,  unit: '%' },
       { key: 'RSI',                label: 'RSI',              tableEnabled: true,  graphEnabled: true, higherBetter: null,  unit: '' },
       { key: 'MACD',               label: 'MACD',             tableEnabled: true,  graphEnabled: true, higherBetter: true,  unit: '' },
-      { key: 'MACD_Signal',        label: 'MACD Signal',      tableEnabled: true,  graphEnabled: true, higherBetter: null,  unit: '' },
-      { key: 'MACD_Histogram',     label: 'MACD Histogramm',  tableEnabled: true,  graphEnabled: true, higherBetter: true,  unit: '' },
     ],
   },
   {

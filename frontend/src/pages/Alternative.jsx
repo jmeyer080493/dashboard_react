@@ -89,7 +89,7 @@ const isValidDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s)
 export default function Alternative({ graphSettings }) {
   const gs = graphSettings ?? {}
   const chartsPerRow = gs.alternativ?.chartsPerRow ?? 2
-  const chartHeight  = gs.alternativ?.chartHeight  ?? 420
+  const chartHeight  = gs.alternativ?.chartHeight  ?? 450
 
   // ── Filter state (seeded from localStorage once at mount) ─────────────
   const _initRef = useRef(null)

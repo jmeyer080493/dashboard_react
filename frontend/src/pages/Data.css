@@ -86,20 +86,21 @@
 
 /* Card holding a table */
 .data-table-card {
-  background: var(--bg-card, #1e1e2e);
-  border: 1px solid var(--border, #2d2d3a);
-  border-radius: 10px;
-  padding: 1.2rem 1rem 0.8rem;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  padding: 1rem 1rem 0.8rem;
   overflow: hidden;
 }
 
 .data-table-title {
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--text-heading, #e0e0e0);
+  color: var(--text-primary, #374151);
   margin: 0 0 0.9rem;
   padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--border, #2d2d3a);
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
 }
 
 /* Scrollable wrapper so wide tables don't blow layout */
@@ -112,21 +113,21 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 0.84rem;
-  color: var(--text-primary, #d0d0d0);
+  color: var(--text-primary, #374151);
 }
 
 .data-table thead th {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-muted, #888);
+  color: var(--text-secondary, #6b7280);
   padding: 0.35rem 0.6rem;
-  border-bottom: 1px solid var(--border, #2d2d3a);
+  border-bottom: 2px solid var(--border-color, #e5e7eb);
   white-space: nowrap;
 }
 
 .data-table tbody tr {
-  border-bottom: 1px solid var(--border, #2d2d3a);
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
   transition: background 0.12s;
 }
 
@@ -135,7 +136,7 @@
 }
 
 .data-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-hover, #f0f0f0);
 }
 
 /* Column sizing */
@@ -212,7 +213,7 @@
 
 /* Detail rows */
 .data-detail-row td {
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--bg-row-even, rgba(0, 0, 0, 0.02));
 }
 
 /* Status dot */

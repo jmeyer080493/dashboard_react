@@ -50,7 +50,7 @@ function GlobalControls({
 }) {
   console.log('[DEBUG GLOBALCONTROLS] Received props:', { activeTab, availableMetricsCount: availableMetrics.length, availableMetrics })
   const [showMetricsModal, setShowMetricsModal] = useState(false)
-  const [activeDateRange, setActiveDateRange] = useState('1Y')
+  const [activeDateRange, setActiveDateRange] = useState('1Y') // '1Y' matches the default dates initialized in App.jsx
 
   // Determine which metric config to use based on active tab
   const isEquityTab = activeTab === 'equity'
@@ -88,7 +88,15 @@ function GlobalControls({
     : (m) => { if (onMetricsChange)      onMetricsChange({ graphMetrics: m }) }
 
   const LOOKBACK_OPTIONS = ['1Y', '3Y', '5Y', 'All']
-  const AVAILABLE_REGIONS = ALL_REGIONS
+
+  // Regions excluded per tab
+  const EXCLUDED_FI    = new Set(['China', 'India', 'EM'])
+  const EXCLUDED_MACRO = new Set(['EM'])
+  const AVAILABLE_REGIONS = isFITab
+    ? ALL_REGIONS.filter(r => !EXCLUDED_FI.has(r))
+    : isMacroTab
+    ? ALL_REGIONS.filter(r => !EXCLUDED_MACRO.has(r))
+    : ALL_REGIONS
 
   const handleDateQuickSelect = (days, label) => {
     const endDate = new Date()
@@ -120,32 +128,49 @@ function GlobalControls({
 
   return (
     <div className="global-controls">
-      {/* Date Range Section with Custom Date Inputs */}
+
+      {/* ── Zeitraum ────────────────────────────────────────────── */}
       <div className="control-section">
-        <label>📅 Zeiträume (Benutzerdefiniert)</label>
+        <span className="ctrl-label">📊 Zeitraum</span>
+        <div className="control-group">
+          {[['1Y', 365], ['3Y', 365 * 3], ['5Y', 365 * 5], ['All', 365 * 10]].map(([label, days]) => (
+            <button
+              key={label}
+              className={`lookback-btn ${activeDateRange === label ? 'active' : ''}`}
+              onClick={() => handleDateQuickSelect(days, label)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Benutzerdefiniert ────────────────────────────────────── */}
+      <div className="control-section">
+        <span className="ctrl-label">📅 Benutzerdefiniert</span>
         <div className="date-inputs">
           <input
             type="date"
             value={filters.startDate || ''}
-            onChange={(e) => onFiltersChange({ startDate: e.target.value })}
-            placeholder="Start Date"
+            onChange={(e) => { setActiveDateRange(null); onFiltersChange({ startDate: e.target.value }) }}
           />
+          <span className="date-sep">→</span>
           <input
             type="date"
             value={filters.endDate || ''}
-            onChange={(e) => onFiltersChange({ endDate: e.target.value })}
-            placeholder="End Date"
+            onChange={(e) => { setActiveDateRange(null); onFiltersChange({ endDate: e.target.value }) }}
           />
         </div>
       </div>
 
-      {/* Region Selection Section */}
+      {/* ── Land / Region ────────────────────────────────────────── */}
       <div className="control-section">
-        <label>🌍 Land / Region auswählen</label>
+        <span className="ctrl-label">🌍 Land / Region</span>
         <div className="control-group">
+          {/* Preset buttons */}
           {Object.keys(REGION_PRESETS).map(preset => {
             const presetRegions = getPresetRegions(preset, AVAILABLE_REGIONS)
-            const isActive = presetRegions.length === filters.regions.length && 
+            const isActive = presetRegions.length === filters.regions.length &&
                              presetRegions.every(r => filters.regions.includes(r))
             return (
               <button
@@ -157,118 +182,88 @@ function GlobalControls({
               </button>
             )
           })}
-        </div>
 
-        <div className="region-selector">
-          <div className="region-tags">
-            {filters.regions.map(region => (
-              <span key={region} className="region-tag">
-                {getRegionDisplayName(region)}
-                <button
-                  className="tag-remove"
-                  onClick={() => toggleRegion(region)}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-          
+          {/* Smart region tag display */}
+          {(() => {
+            // Check if a named preset is active
+            const activePreset = Object.keys(REGION_PRESETS).find(preset => {
+              const pr = getPresetRegions(preset, AVAILABLE_REGIONS)
+              return pr.length === filters.regions.length && pr.every(r => filters.regions.includes(r))
+            })
+
+            if (activePreset) {
+              // Single summary chip – no remove needed, user can switch preset or deselect individually
+              return (
+                <span className="region-tag region-tag--preset">
+                  {activePreset} · {filters.regions.length} Länder
+                </span>
+              )
+            }
+
+            const MAX_VISIBLE = 4
+            const visible = filters.regions.slice(0, MAX_VISIBLE)
+            const overflow = filters.regions.length - MAX_VISIBLE
+            return (
+              <>
+                {visible.map(region => (
+                  <span key={region} className="region-tag">
+                    {getRegionDisplayName(region)}
+                    <button className="tag-remove" onClick={() => toggleRegion(region)}>×</button>
+                  </span>
+                ))}
+                {overflow > 0 && (
+                  <span className="region-tag region-tag--overflow">+{overflow}</span>
+                )}
+              </>
+            )
+          })()}
+
+          {/* Add-region dropdown */}
           <select
-            multiple
-            value={filters.regions}
+            className="region-add-select"
+            value=""
             onChange={(e) => {
-              const selected = Array.from(e.target.selectedOptions, option => option.value)
-              onFiltersChange({ regions: selected })
+              if (e.target.value) toggleRegion(e.target.value)
             }}
-            className="regions-select"
           >
-            {AVAILABLE_REGIONS.map(region => (
-              <option key={region} value={region}>
-                {getRegionDisplayName(region)}
-              </option>
+            <option value="">+ Region</option>
+            {AVAILABLE_REGIONS.filter(r => !filters.regions.includes(r)).map(region => (
+              <option key={region} value={region}>{getRegionDisplayName(region)}</option>
             ))}
           </select>
         </div>
       </div>
 
-      {/* Lookback Period Section - Controls date range */}
-      <div className="control-section">
-        <label>📊 Lookback-Perioden</label>
-        <div className="control-group">
-          <button
-            key="1Y"
-            className={`lookback-btn ${activeDateRange === '1Y' ? 'active' : ''}`}
-            onClick={() => handleDateQuickSelect(365, '1Y')}
-          >
-            1Y
-          </button>
-          <button
-            key="3Y"
-            className={`lookback-btn ${activeDateRange === '3Y' ? 'active' : ''}`}
-            onClick={() => handleDateQuickSelect(365 * 3, '3Y')}
-          >
-            3Y
-          </button>
-          <button
-            key="5Y"
-            className={`lookback-btn ${activeDateRange === '5Y' ? 'active' : ''}`}
-            onClick={() => handleDateQuickSelect(365 * 5, '5Y')}
-          >
-            5Y
-          </button>
-          <button
-            key="All"
-            className={`lookback-btn ${activeDateRange === 'All' ? 'active' : ''}`}
-            onClick={() => handleDateQuickSelect(365 * 10, 'All')}
-          >
-            All
-          </button>
-        </div>
-      </div>
+      {/* ── Spacer ───────────────────────────────────────────────── */}
+      <div className="controls-spacer" />
 
-      {/* Display Options Section */}
-      <div className="control-section">
-        <label>
-          <input
-            type="checkbox"
-            checked={filters.showAverages}
-            onChange={(e) => onFiltersChange({ showAverages: e.target.checked })}
-          />
-          <span>Durchschnitte anzeigen</span>
-        </label>
-      </div>
-
-      {/* Currency Selector (Equity Tab Only) */}
+      {/* ── Währung (Equity only) ─────────────────────────────────── */}
       {activeTab === 'equity' && (
         <div className="control-section">
-          <label>💱 Währung (Aktien)</label>
+          <span className="ctrl-label">💱 Währung</span>
           <div className="control-group">
             <button
               className={`currency-btn ${filters.currency === 'EUR' ? 'active' : ''}`}
               onClick={() => onFiltersChange({ currency: 'EUR' })}
-            >
-              EUR
-            </button>
+            >EUR</button>
             <button
               className={`currency-btn ${filters.currency === 'USD' ? 'active' : ''}`}
               onClick={() => onFiltersChange({ currency: 'USD' })}
-            >
-              USD
-            </button>
+            >USD</button>
           </div>
         </div>
       )}
 
-      {/* Metrics Filter Button - shown for Equity and Fixed Income tabs */}
+      {/* ── Datenfelder Filtern ──────────────────────────────────── */}
       {showMetricsButton && (
         <div className="control-section">
-          <button 
+          <span className="ctrl-label">&nbsp;</span>
+          <button
             className="filter-metrics-btn"
             onClick={() => setShowMetricsModal(true)}
             title="Wählen Sie die Metriken für Tabelle und Diagramme"
           >
-            🔧 Datenfelder Filtern
+            🔧 Datenfelder
           </button>
         </div>
       )}
