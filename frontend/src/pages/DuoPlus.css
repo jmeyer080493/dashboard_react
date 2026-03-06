@@ -1,0 +1,766 @@
+/* DuoPlus.css – Styles for the DuoPlus equity ranking page */
+
+/* ── Page wrapper ─────────────────────────────────────────────────────────── */
+.duo-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  min-height: 100%;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.duo-header {
+  padding: 1.25rem 1.5rem 0.75rem;
+  border-bottom: 1px solid var(--border, #e0e0e0);
+}
+
+.duo-header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary, #333);
+}
+
+.duo-header p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #666);
+}
+
+/* ── Sub-tab bar ──────────────────────────────────────────────────────────── */
+.duo-tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border, #e0e0e0);
+  background: var(--bg-surface, #fafafa);
+  padding: 0 1rem;
+  flex-wrap: wrap;
+}
+
+.duo-tab-btn {
+  padding: 0.6rem 1.2rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary, #666);
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.duo-tab-btn:hover {
+  color: var(--color-primary, #4a90e2);
+}
+
+.duo-tab-btn-active {
+  color: var(--color-primary, #4a90e2);
+  border-bottom-color: var(--color-primary, #4a90e2);
+  font-weight: 600;
+}
+
+/* ── Tab content area ─────────────────────────────────────────────────────── */
+.duo-tab-content {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Controls row ─────────────────────────────────────────────────────────── */
+.duo-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.duo-custom-controls {
+  flex-wrap: wrap;
+}
+
+.duo-ticker-input {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.9rem;
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 5px;
+  background: var(--bg-input, #fff);
+  color: var(--text-primary, #333);
+  width: 240px;
+}
+
+.duo-ticker-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #4a90e2);
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+.duo-universe-select {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.9rem;
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 5px;
+  background: var(--bg-input, #fff);
+  color: var(--text-primary, #333);
+  min-width: 220px;
+  cursor: pointer;
+}
+
+.duo-rank-limit-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.duo-rank-limit-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary, #666);
+  white-space: nowrap;
+}
+
+.duo-rank-limit-input {
+  width: 80px;
+  padding: 0.45rem 0.5rem;
+  font-size: 0.9rem;
+  text-align: center;
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 5px;
+  background: var(--bg-input, #fff);
+  color: var(--text-primary, #333);
+}
+
+.duo-refresh-btn {
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 1px solid var(--color-primary, #4a90e2);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-primary, #4a90e2);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.duo-refresh-btn:hover {
+  background: var(--color-primary, #4a90e2);
+  color: #fff;
+}
+
+.duo-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Factor tables row (3 columns) ───────────────────────────────────────── */
+.duo-factor-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 1100px) {
+  .duo-factor-row { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 700px) {
+  .duo-factor-row { grid-template-columns: 1fr; }
+}
+
+/* ── Section / table wrapper ─────────────────────────────────────────────── */
+.duo-section {
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 0.25rem;
+}
+
+.duo-table-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.duo-table-title {
+  padding: 0.6rem 0.85rem 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text-primary, #333);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid var(--color-primary, #4a90e2);
+  background: var(--bg-table-header, #f7f7f7);
+}
+
+/* ── Table ────────────────────────────────────────────────────────────────── */
+.duo-table-scroll {
+  overflow-x: auto;
+}
+
+.duo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.duo-table th {
+  padding: 0.45rem 0.6rem;
+  text-align: right;
+  font-weight: 600;
+  background: var(--bg-table-header, #f4f4f4);
+  color: var(--text-primary, #333);
+  border-bottom: 2px solid var(--border, #ddd);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.duo-table th:first-child {
+  text-align: left;
+}
+
+.duo-table th:hover {
+  background: var(--bg-table-header-hover, #ebebeb);
+}
+
+.duo-th-active {
+  color: var(--color-primary, #4a90e2) !important;
+}
+
+.duo-sort-icon {
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.duo-table tbody tr {
+  transition: background 0.1s;
+}
+
+.duo-table tbody tr:hover {
+  background: var(--bg-row-hover, rgba(74, 144, 226, 0.06)) !important;
+}
+
+.duo-row-alt {
+  background: var(--bg-row-alt, rgba(0, 0, 0, 0.02));
+}
+
+.duo-td {
+  padding: 0.35rem 0.6rem;
+  text-align: right;
+  color: var(--text-primary, #333);
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+  white-space: nowrap;
+}
+
+.duo-td:first-child {
+  text-align: left;
+  font-weight: 500;
+}
+
+/* smaller variant for data mgmt tables */
+.duo-table-sm {
+  font-size: 11px;
+}
+
+.duo-mono {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+}
+
+/* ── Cell colour codes ────────────────────────────────────────────────────── */
+.duo-cell-mu { color: #2e7d32 !important; font-weight: 600; }   /* Momentum Up    */
+.duo-cell-mn { color: var(--text-secondary, #666); }            /* Momentum Neutral */
+.duo-cell-md { color: #c62828 !important; font-weight: 600; }   /* Momentum Down  */
+.duo-cell-warn { color: #e65100 !important; }
+
+/* ── Pagination ───────────────────────────────────────────────────────────── */
+.duo-pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  border-top: 1px solid var(--border, #e0e0e0);
+  background: var(--bg-surface, #fff);
+  flex-wrap: wrap;
+}
+
+.duo-page-btn {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 4px;
+  background: var(--bg-input, #fff);
+  color: var(--text-primary, #333);
+  cursor: pointer;
+}
+
+.duo-page-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.duo-page-info {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #666);
+  margin: 0 0.4rem;
+}
+
+/* ── Loading / error / empty ─────────────────────────────────────────────── */
+.duo-loading {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-secondary, #888);
+  font-size: 0.95rem;
+}
+
+.duo-error {
+  padding: 0.9rem 1rem;
+  color: var(--color-danger, #e53e3e);
+  background: rgba(229, 62, 62, 0.06);
+  border: 1px solid rgba(229, 62, 62, 0.25);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
+.duo-empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-secondary, #888);
+  font-size: 0.9rem;
+}
+
+/* ── Data Management ─────────────────────────────────────────────────────── */
+.duo-info-box {
+  background: rgba(74, 144, 226, 0.07);
+  border: 1px solid rgba(74, 144, 226, 0.3);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+  color: var(--text-primary, #333);
+}
+
+.duo-info-box strong { display: block; font-size: 1rem; margin-bottom: 0.5rem; }
+.duo-info-box p  { margin: 0.4rem 0; }
+.duo-info-box ul { margin: 0.3rem 0 0.5rem 1.2rem; }
+.duo-info-box code {
+  background: rgba(0,0,0,0.06);
+  border-radius: 3px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.82rem;
+}
+.duo-info-note { font-size: 0.8rem; color: var(--text-secondary, #666); }
+
+.duo-quality-controls {
+  margin-bottom: 1.25rem;
+}
+
+.duo-quality-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 800px) {
+  .duo-quality-grid { grid-template-columns: 1fr; }
+}
+
+.duo-quality-card {
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.duo-quality-card-header {
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  background: var(--bg-table-header, #f4f4f4);
+  border-bottom: 1px solid var(--border, #e0e0e0);
+  color: var(--text-primary, #333);
+}
+
+.duo-quality-meta {
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.88rem;
+  color: var(--text-primary, #333);
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+
+.duo-quality-section {
+  padding: 0.5rem 1rem 1rem;
+}
+
+.duo-quality-sub-header {
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #666);
+  margin-bottom: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* ── Overview placeholder ─────────────────────────────────────────────────── */
+.duo-overview-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.duo-placeholder-box {
+  text-align: center;
+  padding: 2.5rem;
+  background: var(--bg-surface, #fff);
+  border: 2px dashed var(--border, #d0d0d0);
+  border-radius: 10px;
+  max-width: 500px;
+}
+
+.duo-placeholder-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.duo-placeholder-box h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.3rem;
+  color: var(--text-primary, #333);
+}
+
+.duo-placeholder-box p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-secondary, #666);
+  line-height: 1.6;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OVERVIEW TAB
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Controls row */
+.duo-overview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-card, #1e1e2e);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.duo-ctrl-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.duo-ctrl-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary, #aaa);
+  white-space: nowrap;
+}
+
+.duo-ctrl-select {
+  background: var(--bg-surface, #252535);
+  color: var(--text-primary, #eee);
+  border: 1px solid var(--color-border, #444);
+  border-radius: 0.375rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.duo-toggle-btn {
+  padding: 0.25rem 0.65rem;
+  border-radius: 1rem;
+  border: 1px solid var(--color-border, #555);
+  background: var(--bg-surface, #252535);
+  color: var(--text-secondary, #aaa);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.duo-toggle-btn-on {
+  background: var(--color-primary, #4fc3f7);
+  color: #000;
+  border-color: var(--color-primary, #4fc3f7);
+}
+
+/* Main two-column layout */
+.duo-overview-layout {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+.duo-overview-left {
+  flex: 1.4;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.duo-overview-right {
+  flex: 1;
+  min-width: 0;
+}
+
+.duo-panel-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-primary, #4fc3f7);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--color-primary, #4fc3f7);
+  text-align: center;
+}
+
+/* Summary table */
+.duo-summary-table-wrap {
+  overflow-x: auto;
+  max-height: 480px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border, #333);
+  border-radius: 0.375rem;
+}
+
+.duo-summary-table th,
+.duo-summary-table td {
+  white-space: nowrap;
+  font-size: 0.8rem;
+  padding: 5px 8px;
+}
+
+/* Editable cells */
+.duo-td-editable { cursor: pointer; }
+
+.duo-editable-cell {
+  display: inline-block;
+  width: 100%;
+  text-align: center;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.duo-td-editable:hover .duo-editable-cell {
+  background: rgba(79, 195, 247, 0.12);
+  outline: 1px dashed var(--color-primary, #4fc3f7);
+}
+
+.duo-inline-select {
+  background: var(--bg-surface, #252535);
+  color: var(--text-primary, #eee);
+  border: 1px solid var(--color-primary, #4fc3f7);
+  border-radius: 3px;
+  font-size: 0.8rem;
+  padding: 1px 2px;
+  width: 100%;
+}
+
+/* Selected row */
+.duo-row-selected {
+  outline: 2px solid var(--color-primary, #4fc3f7) !important;
+  outline-offset: -2px;
+}
+
+/* Action buttons below summary table */
+.duo-summary-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.duo-btn {
+  padding: 0.35rem 0.85rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--color-border, #555);
+  background: var(--bg-surface, #252535);
+  color: var(--text-primary, #eee);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.duo-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.duo-btn:not(:disabled):hover { background: var(--bg-hover, #333); }
+
+.duo-btn-sm { padding: 0.25rem 0.65rem; font-size: 1rem; line-height: 1; }
+.duo-btn-primary { background: var(--color-primary, #4fc3f7); color: #000; border-color: var(--color-primary, #4fc3f7); }
+.duo-btn-primary:not(:disabled):hover { filter: brightness(1.1); }
+.duo-btn-secondary { background: var(--bg-surface, #3a3a4f); }
+.duo-btn-danger { background: #c62828; color: #fff; border-color: #c62828; }
+.duo-btn-danger:not(:disabled):hover { background: #b71c1c; }
+
+/* Notification */
+.duo-notification {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+}
+.duo-notification-success { background: rgba(46,125,50,0.2); border: 1px solid #2e7d32; color: #81c784; }
+.duo-notification-error   { background: rgba(198,40,40,0.2); border: 1px solid #c62828; color: #ef9a9a; }
+
+/* Right panel: US + EU + period labels grid */
+.duo-overview-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.duo-region-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.duo-region-col-header {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-primary, #4fc3f7);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--color-primary, #4fc3f7);
+  text-align: center;
+}
+
+.duo-period-row {
+  overflow-x: auto;
+}
+
+/* Period label column */
+.duo-period-label-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.duo-period-label-spacer {
+  height: calc(1rem * 1.4 + 0.5rem + 2px + 0.5rem);
+}
+
+.duo-period-label {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-primary, #4fc3f7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  min-height: calc(5 * 32px + 36px);
+}
+
+/* Top-5 compact tables (T+1, T0, T-1, T-2) */
+.duo-top5-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  background: var(--bg-card, #1e1e2e);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 0.375rem;
+}
+
+.duo-top5-table th {
+  background: var(--color-primary, #4fc3f7);
+  color: #000;
+  font-weight: 700;
+  text-align: center;
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
+.duo-top5-table td {
+  text-align: center;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--color-border, #2a2a3a);
+  height: 32px;
+  white-space: nowrap;
+}
+
+.duo-top5-table tr:last-child td { border-bottom: none; }
+.duo-top5-table tr:nth-child(even) td { background: rgba(255,255,255,0.025); }
+
+/* Highlight colours used by T-1/T-2 and decision tables */
+.duo-cell-green { background: rgba(76,175,80,0.25)  !important; color: #81c784; font-weight: 600; }
+.duo-cell-red   { background: rgba(198,40,40,0.2)   !important; color: #ef9a9a; font-weight: 600; }
+.duo-cell-blue  { background: rgba(33,150,243,0.25)  !important; color: #90caf9; font-weight: 600; }
+
+/* Modal */
+.duo-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.duo-modal {
+  background: var(--bg-card, #1e1e2e);
+  border: 1px solid var(--color-border, #444);
+  border-radius: 0.5rem;
+  width: 360px;
+  max-width: 95vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.duo-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem 0.75rem;
+  border-bottom: 2px solid var(--color-primary, #4fc3f7);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.duo-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #aaa);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+.duo-modal-close:hover { color: var(--text-primary, #eee); }
+
+.duo-modal-body   { padding: 1.25rem; }
+
+.duo-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem 1rem;
+  border-top: 1px solid var(--color-border, #333);
+}

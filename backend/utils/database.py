@@ -35,7 +35,7 @@ class DatabaseGateway:
         self.ams_engine: Optional[Engine] = None
         self.duoplus_engine: Optional[Engine] = None
         self.ams_holdings_engine: Optional[Engine] = None
-        self.jm_engine: Optional[Engine] = None
+        self.ams_external_engine: Optional[Engine] = None
         self.jm_engine: Optional[Engine] = None
         
         self._initialize_connections()
@@ -110,6 +110,17 @@ class DatabaseGateway:
             logger.warning(f"⚠ AMS holdings database connection failed: {e}")
 
         try:
+            # AMS External Data database (KVG share type / NAV transactions)
+            ams_external_connection_string = os.getenv(
+                "AMS_EXTERNAL_DB_CONNECTION",
+                "mssql+pyodbc://@apo-sql-prod/AMS_ExternalData?driver=ODBC+Driver+17+for+SQL+Server&Trusted_Connection=yes"
+            )
+            self.ams_external_engine = create_engine(ams_external_connection_string)
+            logger.info("✓ Connected to AMS External Data database")
+        except Exception as e:
+            logger.warning(f"⚠ AMS External Data database connection failed: {e}")
+
+        try:
             # ApoAsset_JM database (STOXX announcements, benchmark dates)
             jm_connection_string = os.getenv(
                 "JM_DB_CONNECTION",
@@ -155,6 +166,12 @@ class DatabaseGateway:
         if self.ams_holdings_engine is None:
             raise RuntimeError("AMS holdings database not initialized")
         return self.ams_holdings_engine
+
+    def get_ams_external_engine(self) -> Engine:
+        """Get AMS External Data engine (apo-sql-prod/AMS_ExternalData) for KVG share type transactions"""
+        if self.ams_external_engine is None:
+            raise RuntimeError("AMS External Data database not initialized")
+        return self.ams_external_engine
 
     def get_jm_engine(self) -> Engine:
         """Get ApoAsset_JM engine (apo-sql-dev) for STOXX / XESC data"""

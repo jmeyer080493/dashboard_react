@@ -13,6 +13,7 @@ import { MetricsTable } from '../../components/MetricsTable'
 import {
   getFIMetricLabel,
   FI_STANDARD_DEFAULTS,
+  FI_METRICS_CATEGORIES,
 } from '../../config/metricsConfig'
 import { useExport } from '../../context/ExportContext'
 import './TabStyles.css'
@@ -236,7 +237,9 @@ function FixedIncomeTab({
         data={allRecords}
         regions={regions}
         columns={tableColumns}
-        formatValue={(value, metricKey) => formatFIValue(value, metricKey)}
+        categories={FI_METRICS_CATEGORIES}
+        lookback={filters.lookback}
+        tabLabel="Anleihen"
       />
 
       {/* Charts – one per selected graph metric */}

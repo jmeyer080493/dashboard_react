@@ -14,7 +14,7 @@ import numpy as np
 logging.basicConfig(level=logging.DEBUG)
 from datetime import datetime, timedelta, timezone
 import jwt
-from typing import List, Optional, Any
+from typing import Dict, List, Optional, Any
 from pydantic import BaseModel
 import pandas as pd
 from utils.export_utils import build_excel, build_pptx
@@ -778,6 +778,432 @@ async def get_anleihen_chart_data(body: BondChartRequest):
         tb = traceback.format_exc()
         logging.error("Anleihen chart data error:\n%s", tb)
         return {"status": "error", "error": str(e)}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DUOPLUS ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+from services.duoplus_service import (
+    get_region_data,
+    get_custom_data,
+    get_distinct_universes,
+    build_factor_table,
+    build_summary_table,
+    get_data_quality_stats,
+    get_overview_data,
+    lookup_ticker_for_summary,
+    save_trades_to_db,
+    generate_bloomberg_csv_file,
+)
+
+# Factor column groups (same as original Dash project)
+_US_VALUE_COLS    = ["P2B", "PE", "P2S"]
+_US_GROWTH_COLS   = ["SG YoY", "EG YoY", "SG QoQ", "EG QoQ"]
+_US_QUALITY_COLS  = ["RoE", "EPS StD", "D2E"]
+_EU_VALUE_COLS    = ["P2B", "PE", "P2S"]
+_EU_GROWTH_COLS   = ["SG YoY", "EG YoY"]
+_EU_QUALITY_COLS  = ["RoE", "EPS StD", "D2E"]
+_CUSTOM_VALUE_COLS   = ["P2B", "PE", "P2S"]
+_CUSTOM_GROWTH_COLS  = ["SG YoY", "EG YoY"]
+_CUSTOM_QUALITY_COLS = ["RoE", "EPS StD", "D2E"]
+
+
+def _build_region_response(df, value_cols, growth_cols, quality_cols,
+                            ticker: Optional[str] = None,
+                            rank_limit: Optional[int] = None,
+                            max_factor_rows: int = 30):
+    """Shared helper: filter by ticker, build all four table payloads."""
+    if ticker and ticker.strip():
+        mask = df["ID"].str.upper().str.contains(ticker.strip().upper(), na=False)
+        df = df[mask]
+
+    factor_rows = rank_limit if rank_limit else max_factor_rows
+    value_tbl   = build_factor_table(df, "Value",   value_cols,  rank_norm_limit=rank_limit, max_rows=factor_rows)
+    growth_tbl  = build_factor_table(df, "Growth",  growth_cols, rank_norm_limit=rank_limit, max_rows=factor_rows)
+    quality_tbl = build_factor_table(df, "Quality", quality_cols, rank_norm_limit=rank_limit, max_rows=factor_rows)
+    summary_tbl = build_summary_table(df)
+
+    return {
+        "value":   value_tbl,
+        "growth":  growth_tbl,
+        "quality": quality_tbl,
+        "summary": summary_tbl,
+        "row_count": len(df),
+    }
+
+
+@app.get("/api/duoplus/us")
+async def get_duoplus_us(ticker: Optional[str] = Query(default=None)):
+    """
+    Return fully ranked US DuoPlus data split into four tables:
+    value, growth, quality (factor rank tables) and summary (metrics table).
+    Optional ?ticker= for filtering by ticker substring.
+    PUBLIC ENDPOINT
+    """
+    try:
+        df = get_region_data("us")
+        if df.empty:
+            return {"status": "error", "error": "No US data available",
+                    "value": {"columns": [], "rows": []},
+                    "growth": {"columns": [], "rows": []},
+                    "quality": {"columns": [], "rows": []},
+                    "summary": {"columns": [], "rows": []}}
+        result = _build_region_response(df, _US_VALUE_COLS, _US_GROWTH_COLS, _US_QUALITY_COLS, ticker=ticker)
+        return _clean_nan_values(result)
+    except Exception as e:
+        logging.error("DuoPlus US error:\n%s", traceback.format_exc())
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/api/duoplus/europe")
+async def get_duoplus_europe(ticker: Optional[str] = Query(default=None)):
+    """
+    Return fully ranked Europe DuoPlus data.
+    Optional ?ticker= for filtering.
+    PUBLIC ENDPOINT
+    """
+    try:
+        df = get_region_data("eu")
+        if df.empty:
+            return {"status": "error", "error": "No Europe data available",
+                    "value": {"columns": [], "rows": []},
+                    "growth": {"columns": [], "rows": []},
+                    "quality": {"columns": [], "rows": []},
+                    "summary": {"columns": [], "rows": []}}
+        result = _build_region_response(df, _EU_VALUE_COLS, _EU_GROWTH_COLS, _EU_QUALITY_COLS, ticker=ticker)
+        return _clean_nan_values(result)
+    except Exception as e:
+        logging.error("DuoPlus Europe error:\n%s", traceback.format_exc())
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/api/duoplus/universes")
+async def get_duoplus_universes():
+    """
+    Return the sorted list of distinct Universe values from the database.
+    Used to populate the Custom tab universe dropdown.
+    PUBLIC ENDPOINT
+    """
+    try:
+        universes = get_distinct_universes()
+        return {"universes": universes}
+    except Exception as e:
+        logging.error("DuoPlus universes error:\n%s", traceback.format_exc())
+        return {"universes": [], "error": str(e)}
+
+
+@app.get("/api/duoplus/custom")
+async def get_duoplus_custom(
+    universe: str = Query(...),
+    rank_limit: int = Query(default=100, ge=1, le=500),
+    ticker: Optional[str] = Query(default=None),
+):
+    """
+    Return ranked data for a custom universe.
+    ?universe=<name>  (required)
+    ?rank_limit=100   (optional, default 100)
+    ?ticker=<sub>     (optional ticker filter)
+    PUBLIC ENDPOINT
+    """
+    try:
+        df = get_custom_data(universe)
+        if df.empty:
+            return {"status": "error", "error": f"No data for universe: {universe}",
+                    "value": {"columns": [], "rows": []},
+                    "growth": {"columns": [], "rows": []},
+                    "quality": {"columns": [], "rows": []},
+                    "summary": {"columns": [], "rows": []}}
+        result = _build_region_response(
+            df, _CUSTOM_VALUE_COLS, _CUSTOM_GROWTH_COLS, _CUSTOM_QUALITY_COLS,
+            ticker=ticker, rank_limit=rank_limit, max_factor_rows=rank_limit
+        )
+        return _clean_nan_values(result)
+    except Exception as e:
+        logging.error("DuoPlus Custom error:\n%s", traceback.format_exc())
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/api/duoplus/data-quality")
+async def get_duoplus_data_quality():
+    """
+    Return data-quality statistics for US and EU regions:
+    total stocks, missing data counts, latest data date, outlier list, missing-data list.
+    PUBLIC ENDPOINT
+    """
+    try:
+        stats = get_data_quality_stats()
+        return _clean_nan_values(stats)
+    except Exception as e:
+        logging.error("DuoPlus data quality error:\n%s", traceback.format_exc())
+        return {"us": {"error": str(e)}, "eu": {"error": str(e)}}
+
+
+@app.get("/api/duoplus/overview")
+async def get_duoplus_overview(
+    factor_order: str = "VGQ",
+    draft: bool = False,
+    momentum: bool = False,
+    highest_rank: bool = False,
+):
+    """
+    Return all Overview tab data: T0 top-5, T-1/T-2 historical with highlights,
+    and the base summary table rows. Recalculates when controls change.
+    PUBLIC ENDPOINT
+    """
+    try:
+        data = get_overview_data(
+            factor_order=factor_order,
+            draft_mode=draft,
+            momentum_filter=momentum,
+            highest_rank=highest_rank,
+        )
+        return _clean_nan_values(data)
+    except Exception as e:
+        logging.error("DuoPlus overview error:\n%s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/duoplus/overview/ticker")
+async def duoplus_ticker_lookup(ticker: str):
+    """
+    Find a ticker in US or EU ranked data and return a summary row for manual add.
+    PUBLIC ENDPOINT
+    """
+    try:
+        row = lookup_ticker_for_summary(ticker)
+        if row is None:
+            return {"found": False, "row": None}
+        return {"found": True, "row": _clean_nan_values(row)}
+    except Exception as e:
+        return {"found": False, "row": None, "error": str(e)}
+
+
+@app.post("/api/duoplus/trades")
+async def duoplus_save_trades(body: dict):
+    """
+    Save Hold/Buy trades from the summary table to [Duoplus_Trades].
+    Validates exactly 5 tickers per factor per region.
+    PUBLIC ENDPOINT
+    """
+    summary  = body.get("trades", [])
+    username = body.get("username", "")
+    success, msg = save_trades_to_db(summary, username)
+    return {"success": success, "message": msg}
+
+
+@app.post("/api/duoplus/bloomberg-csv")
+async def duoplus_bloomberg_csv(body: dict):
+    """
+    Write Bloomberg upload CSV to the shared network path.
+    PUBLIC ENDPOINT
+    """
+    decision_data = body.get("trades", [])
+    success, msg = generate_bloomberg_csv_file(decision_data)
+    return {"success": success, "message": msg}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PORTFOLIOS ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+from services.portfolio_service import (
+    get_overview_data as _portfolios_overview,
+    get_portfolio_list as _portfolios_list,
+    get_portfolio_detail as _portfolios_detail,
+)
+
+
+@app.get("/api/portfolios/overview")
+async def portfolios_overview():
+    """
+    Return all data for the Portfolios → Overview subtab:
+      - AUM summary cards (total, MA, HC, Spezial)
+      - AUM by portfolio table
+      - Liquiditätsübersicht table rows (with expandable currency sub-rows)
+    PUBLIC ENDPOINT
+    """
+    try:
+        result = _portfolios_overview()
+        result = _clean_nan_values(result)
+        return result
+    except Exception as e:
+        tb = traceback.format_exc()
+        logging.error("Portfolios overview error:\n%s", tb)
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/api/portfolios/holdings")
+async def portfolios_holdings_list():
+    """
+    Return the sorted list of portfolios for the dropdown in the Portfolio subtab.
+    PUBLIC ENDPOINT
+    """
+    try:
+        return _portfolios_list()
+    except Exception as e:
+        logging.error("Portfolios list error: %s", e)
+        return {"status": "error", "error": str(e), "portfolios": []}
+
+
+@app.get("/api/portfolios/holdings/{portfolio_name}")
+async def portfolios_holdings_detail(portfolio_name: str):
+    """
+    Return holdings, allocation slices, and metric cards for one portfolio.
+    PUBLIC ENDPOINT
+    """
+    try:
+        result = _portfolios_detail(portfolio_name)
+        result = _clean_nan_values(result)
+        return result
+    except Exception as e:
+        tb = traceback.format_exc()
+        logging.error("Portfolios detail error:\n%s", tb)
+        return {"status": "error", "error": str(e)}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PORTFOLIOS → PERFORMANCE ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+from services.performance_service import (
+    get_performance_meta  as _perf_meta,
+    get_performance_table as _perf_table,
+    get_performance_chart as _perf_chart,
+)
+from pydantic import BaseModel as _PydanticBase
+
+
+class _PerfTableRequest(_PydanticBase):
+    portfolios:     List[str]                   = []
+    source:         str                         = "kvg"
+    anteilsklasse:  Dict[str, bool]             = {"V": True, "R": False}
+    portfolio_type: Dict[str, bool]             = {"All": True, "EQ": False, "FI": False}
+    as_of_date:     Optional[str]               = None
+    custom_start:   Optional[str]               = None
+    custom_end:     Optional[str]               = None
+
+
+class _PerfChartRequest(_PydanticBase):
+    portfolios:      List[str]        = []
+    source:          str              = "bloomberg"
+    portfolio_type:  Dict[str, bool]  = {"All": True, "EQ": False, "FI": False}
+    anteilsklasse:   Dict[str, bool]  = {"V": True, "R": False}
+    start_date:      Optional[str]    = None
+    end_date:        Optional[str]    = None
+    show_benchmarks: bool             = False
+
+
+@app.get("/api/portfolios/performance/meta")
+async def performance_meta():
+    """Return fund list and team structure for Performance tab dropdowns."""
+    try:
+        return _perf_meta()
+    except Exception as e:
+        logging.error("Performance meta error: %s", e)
+        return {"status": "error", "error": str(e), "funds": [], "teams": {}}
+
+
+@app.post("/api/portfolios/performance/table")
+async def performance_table(req: _PerfTableRequest):
+    """
+    Return multi-period performance table rows.
+    Periods: MtD, LM, YtD, 1Y (+ optional custom range).
+    Each row has portfolio return, benchmark return (Bloomberg composite), and relative.
+    """
+    try:
+        result = _perf_table(
+            portfolios=req.portfolios,
+            source=req.source,
+            anteilsklasse=req.anteilsklasse,
+            portfolio_type=req.portfolio_type,
+            as_of_date=req.as_of_date,
+            custom_start=req.custom_start,
+            custom_end=req.custom_end,
+        )
+        result = _clean_nan_values(result)
+        return result
+    except Exception as e:
+        tb = traceback.format_exc()
+        logging.error("Performance table error:\n%s", tb)
+        return {"status": "error", "error": str(e), "rows": []}
+
+
+@app.post("/api/portfolios/performance/chart")
+async def performance_chart(req: _PerfChartRequest):
+    """
+    Return cumulative return series (rebased to 0% at start) for the chart.
+    Includes optional benchmark series as dashed lines.
+    """
+    try:
+        result = _perf_chart(
+            portfolios=req.portfolios,
+            source=req.source,
+            portfolio_type=req.portfolio_type,
+            anteilsklasse=req.anteilsklasse,
+            start_date=req.start_date,
+            end_date=req.end_date,
+            show_benchmarks=req.show_benchmarks,
+        )
+        result = _clean_nan_values(result)
+        return result
+    except Exception as e:
+        tb = traceback.format_exc()
+        logging.error("Performance chart error:\n%s", tb)
+        return {"status": "error", "error": str(e), "series": []}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PORTFOLIOS → ATTRIBUTION ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+from services.attribution_service import (
+    get_attribution_meta  as _attr_meta,
+    get_attribution_table as _attr_table,
+)
+
+
+class _AttrTableRequest(_PydanticBase):
+    portfolio_name: str
+    scope:          str
+    period:         str
+    run_date:       Optional[str] = None   # "YYYY-MM-DD"; latest if omitted
+
+
+@app.get("/api/portfolios/attribution/meta")
+async def attribution_meta():
+    """
+    Return all distinct filter values for Attribution tab dropdowns:
+    portfolios, scopes per portfolio, periods and run dates.
+    """
+    try:
+        return _attr_meta()
+    except Exception as e:
+        logging.error("Attribution meta error: %s", e)
+        return {"status": "error", "error": str(e), "portfolios": []}
+
+
+@app.post("/api/portfolios/attribution/table")
+async def attribution_table(req: _AttrTableRequest):
+    """
+    Return hierarchical attribution rows for a portfolio/scope/period/date.
+    Each row carries: id, parent_id, structure, level, name,
+    weightPortfolio/Benchmark/Active, CTRPortfolio/Benchmark/Active,
+    returnPortfolio/Benchmark/Active.
+    """
+    try:
+        result = _attr_table(
+            portfolio_name=req.portfolio_name,
+            scope=req.scope,
+            period=req.period,
+            run_date=req.run_date,
+        )
+        result = _clean_nan_values(result)
+        return result
+    except Exception as e:
+        tb = traceback.format_exc()
+        logging.error("Attribution table error:\n%s", tb)
+        return {"status": "error", "error": str(e), "rows": []}
 
 
 if __name__ == "__main__":

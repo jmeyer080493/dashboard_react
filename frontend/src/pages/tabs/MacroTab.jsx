@@ -13,6 +13,7 @@ import { MetricsTable } from '../../components/MetricsTable'
 import {
   getMacroMetricLabel,
   MACRO_STANDARD_DEFAULTS,
+  MACRO_METRICS_CATEGORIES,
 } from '../../config/metricsConfig'
 import { useExport } from '../../context/ExportContext'
 import './TabStyles.css'
@@ -252,7 +253,9 @@ function MacroTab({
         data={allRecords}
         regions={regions}
         columns={tableColumns}
-        formatValue={(value, metricKey) => formatMacroValue(value, metricKey)}
+        categories={MACRO_METRICS_CATEGORIES}
+        lookback={filters.lookback}
+        tabLabel="Makro"
       />
 
       {/* Charts – one per selected graph metric */}

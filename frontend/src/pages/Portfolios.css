@@ -1,0 +1,1052 @@
+/* ─── Theme variables ──────────────────────────────────────────────────────── */
+:root {
+  --portfolio-positive: #16a34a;
+  --portfolio-negative: #dc2626;
+}
+
+/* ─── Page layout ─────────────────────────────────────────────────────────── */
+.portfolio-page {
+  padding: 0 1.5rem 2rem;
+}
+
+/* ─── Sub-tab navigation ──────────────────────────────────────────────────── */
+.portfolio-subtabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 2px solid var(--border-color, #e5e7eb);
+}
+
+.portfolio-subtab {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #6b7280);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.portfolio-subtab:hover {
+  color: var(--text-primary, #111827);
+}
+
+.portfolio-subtab.active {
+  color: var(--primary-color, #3b82f6);
+  border-bottom-color: var(--primary-color, #3b82f6);
+}
+
+/* ─── AUM Summary Cards ───────────────────────────────────────────────────── */
+.portfolio-aum-cards {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.portfolio-aum-card {
+  flex: 1 1 180px;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.portfolio-aum-card-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #6b7280);
+  margin-bottom: 0.35rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.portfolio-aum-card-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary, #111827);
+}
+
+/* Card accent colours */
+.portfolio-aum-card.card-total  { border-left: 4px solid #3b82f6; }
+.portfolio-aum-card.card-ma     { border-left: 4px solid #8b5cf6; }
+.portfolio-aum-card.card-hc     { border-left: 4px solid #10b981; }
+.portfolio-aum-card.card-spezial{ border-left: 4px solid #f59e0b; }
+.portfolio-aum-card.card-equity { border-left: 4px solid #3b82f6; }
+.portfolio-aum-card.card-fi     { border-left: 4px solid #10b981; }
+.portfolio-aum-card.card-cash   { border-left: 4px solid #f59e0b; }
+
+/* ─── Tables layout ───────────────────────────────────────────────────────── */
+.portfolio-tables-row {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.portfolio-tables-row > * {
+  flex: 1 1 400px;
+  min-width: 0;
+}
+
+/* ─── Table section wrapper ───────────────────────────────────────────────── */
+.portfolio-table-section,
+.portfolio-holdings-section {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+/* ─── Section header ──────────────────────────────────────────────────────── */
+.portfolio-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.portfolio-section-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+}
+
+/* ─── Generic data table ──────────────────────────────────────────────────── */
+.portfolio-table-scroll {
+  overflow-x: auto;
+}
+
+.portfolio-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.portfolio-data-table th {
+  padding: 0.45rem 0.75rem;
+  text-align: left;
+  background: var(--table-header-bg, #f9fafb);
+  border-bottom: 2px solid var(--border-color, #e5e7eb);
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.portfolio-data-table td {
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  color: var(--text-primary, #374151);
+}
+
+.portfolio-data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.portfolio-data-table tr:hover td {
+  background: var(--row-hover-bg, #f9fafb);
+}
+
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable-header:hover {
+  color: var(--text-primary, #111827);
+}
+
+.num-cell,
+.num-header {
+  text-align: right !important;
+}
+
+/* ─── Liquidity table ─────────────────────────────────────────────────────── */
+.liquidity-main-row td {
+  background: transparent;
+}
+
+.liquidity-main-row.liquidity-negative td {
+  background: rgba(220, 38, 38, 0.04);
+}
+
+.liquidity-portfolio-cell {
+  min-width: 140px;
+}
+
+.liquidity-chevron {
+  display: inline-block;
+  width: 1.1rem;
+  font-size: 0.65rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+.liquidity-maturity-asterisk {
+  color: var(--primary-color, #3b82f6);
+  font-weight: 700;
+}
+
+/* Currency sub-rows */
+.liquidity-currency-row td {
+  background: var(--table-stripe-bg, #fafafa);
+  font-size: 0.8rem;
+}
+
+.liquidity-currency-name {
+  padding-left: 1.75rem !important;
+  color: var(--text-secondary, #6b7280);
+}
+
+/* Liquidity mode toggle */
+.portfolio-liquidity-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.portfolio-mode-btns {
+  display: flex;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.portfolio-mode-btn {
+  padding: 0.25rem 0.65rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #6b7280);
+  transition: background 0.12s;
+}
+
+.portfolio-mode-btn.active {
+  background: var(--primary-color, #3b82f6);
+  color: #fff;
+}
+
+/* ─── Holdings table ──────────────────────────────────────────────────────── */
+.holdings-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.holdings-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.portfolio-search {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 5px;
+  font-size: 0.82rem;
+  background: var(--input-bg, #fff);
+  color: var(--text-primary, #111827);
+  outline: none;
+  min-width: 180px;
+}
+
+.portfolio-search:focus {
+  border-color: var(--primary-color, #3b82f6);
+}
+
+/* ─── Portfolio controls row ──────────────────────────────────────────────── */
+.portfolio-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.portfolio-selector-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+}
+
+.portfolio-selector {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: var(--input-bg, #fff);
+  color: var(--text-primary, #111827);
+  outline: none;
+  min-width: 220px;
+}
+
+.portfolio-selector:focus {
+  border-color: var(--primary-color, #3b82f6);
+}
+
+/* ─── Pie chart grid ──────────────────────────────────────────────────────── */
+.portfolio-pie-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.portfolio-pie-container {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.portfolio-pie-wrapper {
+  width: 100%;
+}
+
+.portfolio-chart-date {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #6b7280);
+  text-align: right;
+  margin-top: 0.25rem;
+}
+
+/* ─── Export row ──────────────────────────────────────────────────────────── */
+.portfolio-export-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
+.portfolio-export-btn {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 500;
+  transition: background 0.12s, border-color 0.12s;
+  background: transparent;
+  color: var(--text-primary, #374151);
+}
+
+.portfolio-export-btn.xlsx {
+  border-color: #16a34a;
+  color: #16a34a;
+}
+
+.portfolio-export-btn.xlsx:hover {
+  background: #f0fdf4;
+}
+
+.portfolio-export-btn.pptx {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.portfolio-export-btn.pptx:hover {
+  background: #fef2f2;
+}
+
+/* ─── State messages ──────────────────────────────────────────────────────── */
+.portfolio-loading,
+.portfolio-error,
+.portfolio-empty {
+  padding: 1.5rem;
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--text-secondary, #6b7280);
+  border-radius: 6px;
+}
+
+.portfolio-error {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+/* ─── Tab content ─────────────────────────────────────────────────────────── */
+.portfolio-tab-content {
+  padding-top: 0.25rem;
+}
+
+/* ─── Dark-mode overrides ─────────────────────────────────────────────────── */
+[data-theme="dark"] .portfolio-aum-card,
+[data-theme="dark"] .portfolio-table-section,
+[data-theme="dark"] .portfolio-holdings-section,
+[data-theme="dark"] .portfolio-pie-container {
+  background: var(--card-bg);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .portfolio-data-table th {
+  background: var(--table-header-bg);
+}
+
+[data-theme="dark"] .liquidity-currency-row td {
+  background: var(--table-stripe-bg, #1e2330);
+}
+
+[data-theme="dark"] .portfolio-export-btn {
+  color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PERFORMANCE TAB
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.perf-tab {
+  padding: 1rem 0;
+}
+
+/* ─── Shared controls bar ─────────────────────────────────────────────────── */
+.perf-shared-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  align-items: flex-start;
+  padding: 0.75rem 1rem;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.perf-control-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.perf-control-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  white-space: nowrap;
+}
+
+/* Team filter buttons */
+.perf-team-btn {
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.perf-team-btn.active {
+  background: var(--primary-color, #3b82f6);
+  border-color: var(--primary-color, #3b82f6);
+  color: #fff;
+}
+.perf-team-btn:hover:not(.active) { background: var(--hover-bg, #f1f5f9); }
+
+/* Generic toggle buttons (Source / Anteilsklasse / Portfolio Typ) */
+.perf-toggle-btn {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.perf-toggle-btn.active {
+  background: var(--primary-light, #dbeafe);
+  border-color: var(--primary-color, #3b82f6);
+  color: var(--primary-color, #3b82f6);
+  font-weight: 600;
+}
+.perf-toggle-btn:hover:not(.active) { background: var(--hover-bg, #f1f5f9); }
+
+/* Fund checklist */
+.perf-fund-select-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.perf-fund-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  max-height: 72px;
+  overflow-y: auto;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 4px;
+  background: var(--input-bg, #f8fafc);
+}
+.perf-fund-check-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.perf-fund-check-item input { cursor: pointer; }
+
+/* ─── Two-column layout ───────────────────────────────────────────────────── */
+.perf-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .perf-two-col { grid-template-columns: 1fr; }
+}
+
+/* ─── Panel card shared ──────────────────────────────────────────────────── */
+.perf-panel {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.perf-panel-header {
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.perf-panel-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+  flex: 1 1 100%;
+}
+
+.perf-table-controls,
+.perf-chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Date inputs */
+.perf-date-input {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 4px;
+  background: var(--input-bg, #f8fafc);
+  color: var(--text-primary);
+  width: 130px;
+}
+
+/* Load button */
+.perf-load-btn {
+  padding: 0.25rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--primary-color, #3b82f6);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.perf-load-btn:hover:not(:disabled) { opacity: 0.85; }
+.perf-load-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Checkbox label */
+.perf-check-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+/* ─── Performance table ──────────────────────────────────────────────────── */
+.perf-table-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 480px;
+}
+
+.perf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  min-width: 760px;
+}
+
+.perf-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--table-header-bg, #f1f5f9);
+}
+
+.perf-th-portfolio {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  font-weight: 700;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  min-width: 110px;
+}
+
+.perf-th-period {
+  text-align: center;
+  padding: 0.35rem 0.4rem;
+  font-weight: 700;
+  font-size: 0.73rem;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  border-left: 1px solid var(--border-color, #e2e8f0);
+  white-space: nowrap;
+}
+
+.perf-th-sub {
+  text-align: right;
+  padding: 0.3rem 0.4rem;
+  font-weight: 600;
+  font-size: 0.7rem;
+  color: var(--text-secondary, #64748b);
+  border-bottom: 2px solid var(--border-color, #e2e8f0);
+  white-space: nowrap;
+}
+
+.perf-table tbody tr:nth-child(even) {
+  background: var(--table-stripe-bg, #f8fafc);
+}
+.perf-table tbody tr:hover {
+  background: var(--hover-bg, #f1f5f9);
+}
+
+.perf-td-portfolio {
+  padding: 0.35rem 0.6rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border-right: 1px solid var(--border-color, #e2e8f0);
+}
+
+.perf-td-num {
+  padding: 0.35rem 0.4rem;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.perf-td-rel {
+  border-right: 1px solid var(--border-color, #e2e8f0);
+}
+
+/* ─── Period buttons (chart) ──────────────────────────────────────────────── */
+.perf-period-btn {
+  padding: 0.22rem 0.55rem;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.perf-period-btn.active {
+  background: var(--primary-color, #3b82f6);
+  border-color: var(--primary-color, #3b82f6);
+  color: #fff;
+}
+.perf-period-btn:hover:not(.active) { background: var(--hover-bg, #f1f5f9); }
+
+/* ─── Chart wrapper ─────────────────────────────────────────────────────── */
+.perf-chart-wrapper {
+  padding: 0.75rem 0.5rem 0.5rem;
+}
+
+/* ─── Dark theme overrides ──────────────────────────────────────────────── */
+[data-theme="dark"] .perf-shared-controls,
+[data-theme="dark"] .perf-panel {
+  background: var(--card-bg);
+  border-color: var(--border-color);
+}
+[data-theme="dark"] .perf-fund-checklist,
+[data-theme="dark"] .perf-date-input {
+  background: var(--input-bg, #1e2330);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+[data-theme="dark"] .perf-table thead {
+  background: var(--table-header-bg, #2d3748);
+}
+[data-theme="dark"] .perf-table tbody tr:nth-child(even) {
+  background: var(--table-stripe-bg, #1e2330);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ATTRIBUTION TAB
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.attr-tab {
+  padding: 1rem 0;
+}
+
+/* ─── Controls bar ──────────────────────────────────────────────────────── */
+.attr-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.65rem 1rem;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.attr-ctrl-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.attr-ctrl-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  white-space: nowrap;
+}
+
+.attr-select {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 4px;
+  background: var(--input-bg, #f8fafc);
+  color: var(--text-primary);
+  min-width: 100px;
+  max-width: 180px;
+}
+
+.attr-load-btn {
+  padding: 0.28rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--primary-color, #3b82f6);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.attr-load-btn:hover:not(:disabled) { opacity: 0.85; }
+.attr-load-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.attr-expand-btn {
+  padding: 0.22rem 0.6rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.attr-expand-btn:hover { background: var(--hover-bg, #f1f5f9); }
+
+.attr-run-date {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #64748b);
+  margin-left: 0.5rem;
+}
+
+/* ─── Table wrapper ──────────────────────────────────────────────────────── */
+.attr-table-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 70vh;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  background: var(--card-bg, #fff);
+}
+
+.attr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  min-width: 760px;
+}
+
+/* ─── Table head ─────────────────────────────────────────────────────────── */
+.attr-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.attr-thead-group th {
+  background: var(--table-header-bg, #1e3a5f);
+  color: var(--table-header-text, #fff);
+  text-align: center;
+  font-size: 0.73rem;
+  font-weight: 700;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--border-color, #2d5986);
+  white-space: nowrap;
+}
+
+/* Thin separator lines between the three groups */
+.attr-thead-group th:nth-child(3),
+.attr-thead-sub    th:nth-child(4),
+.attr-thead-filter th:nth-child(4),
+.attr-thead-group th:nth-child(6),
+.attr-thead-sub    th:nth-child(7),
+.attr-thead-filter th:nth-child(7) {
+  border-left: 2px solid rgba(255,255,255,0.25);
+}
+.attr-table tbody td:nth-child(4),
+.attr-table tbody td:nth-child(7) {
+  border-left: 1px solid var(--border-color, #e2e8f0);
+}
+
+.attr-th-group {
+  letter-spacing: 0.03em;
+}
+
+.attr-th-name-header {
+  text-align: left !important;
+  min-width: 220px;
+}
+
+.attr-thead-sub th {
+  background: var(--table-header-bg-light, #2a4a73);
+  color: var(--table-header-text, #e2e8f0);
+  text-align: right;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  white-space: nowrap;
+}
+
+.attr-th-name {
+  text-align: left !important;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.attr-th-num {
+  min-width: 64px;
+  text-align: right !important;
+}
+
+.attr-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.attr-sortable:hover { opacity: 0.8; }
+
+.attr-thead-filter th {
+  background: var(--table-header-bg, #f1f5f9);
+  padding: 0.2rem 0.25rem;
+  border-bottom: 2px solid var(--border-color, #e2e8f0);
+}
+
+.attr-th-filter-name {
+  min-width: 200px;
+}
+
+.attr-th-filter-num {
+  min-width: 60px;
+}
+
+.attr-filter-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.18rem 0.35rem;
+  font-size: 0.72rem;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 3px;
+  background: var(--input-bg, #fff);
+  color: var(--text-primary);
+}
+
+.attr-filter-num {
+  text-align: right;
+}
+
+/* ─── Table body ─────────────────────────────────────────────────────────── */
+.attr-tr {
+  border-bottom: 1px solid var(--border-color, #e8edf2);
+  transition: background 0.1s;
+}
+.attr-tr:hover { filter: brightness(0.97); }
+
+/* Row type backgrounds */
+.attr-row-overall   { background: #dbeafe; font-weight: 700; }   /* Portfolio */
+.attr-row-holdings  { background: #dcfce7; font-weight: 700; }   /* Holdings  */
+.attr-row-residuals { background: #fef9c3; font-weight: 600; }   /* Residuals */
+.attr-row-l2        { background: #f0f4ff; font-weight: 600; }   /* L2 category */
+.attr-row-l3        { background: #fafafa; }                     /* L3 subcategory */
+.attr-row-security  { background: transparent; }                  /* Security */
+
+/* Toggle column */
+.attr-td-toggle {
+  width: 22px;
+  min-width: 22px;
+  padding: 0 2px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.attr-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.65rem;
+  color: var(--text-secondary, #64748b);
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.attr-toggle.expanded { color: var(--primary-color, #3b82f6); }
+.attr-toggle-spacer { display: inline-block; width: 18px; }
+
+.attr-td-name {
+  padding: 0.3rem 0.4rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+  vertical-align: middle;
+}
+
+.attr-td-num {
+  padding: 0.3rem 0.5rem;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  vertical-align: middle;
+}
+
+/* Value coloring */
+.attr-pos { color: var(--portfolio-positive, #16a34a); font-weight: 600; }
+.attr-neg { color: var(--portfolio-negative, #dc2626); font-weight: 600; }
+
+/* ─── Dark theme ─────────────────────────────────────────────────────────── */
+[data-theme="dark"] .attr-controls,
+[data-theme="dark"] .attr-table-wrap {
+  background: var(--card-bg);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .attr-select,
+[data-theme="dark"] .attr-filter-input {
+  background: var(--input-bg, #1e2330);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .attr-row-overall   { background: #1e3a5f; }
+[data-theme="dark"] .attr-row-holdings  { background: #14532d; }
+[data-theme="dark"] .attr-row-residuals { background: #422006; }
+[data-theme="dark"] .attr-row-l2        { background: #1e2740; }
+[data-theme="dark"] .attr-row-l3        { background: #1a1f2e; }
+[data-theme="dark"] .attr-row-security  { background: var(--card-bg); }
+
+[data-theme="dark"] .attr-thead-group th  { background: var(--table-header-bg, #1e2740); }
+[data-theme="dark"] .attr-thead-sub   th  { background: var(--table-header-bg, #252d42); }
+[data-theme="dark"] .attr-thead-filter th { background: var(--table-header-bg, #1e2330); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ATTRIBUTION TAB – CHARTS
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.attr-chart-section {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
+/* ─── Chart control bar ───────────────────────────────────────────────────── */
+.attr-chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+/* ─── Two-chart grid ──────────────────────────────────────────────────────── */
+.attr-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .attr-charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Individual chart panel ──────────────────────────────────────────────── */
+.attr-chart-panel {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  padding: 0.75rem 1rem 0.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  overflow-x: auto;
+}
+
+.attr-chart-title {
+  margin: 0 0 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ─── Dark theme ─────────────────────────────────────────────────────────── */
+[data-theme="dark"] .attr-chart-section {
+  border-top-color: var(--border-color);
+}
+
+[data-theme="dark"] .attr-chart-panel {
+  background: var(--card-bg);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .attr-chart-panel .recharts-cartesian-grid-horizontal line,
+[data-theme="dark"] .attr-chart-panel .recharts-cartesian-grid-vertical line {
+  stroke: var(--border-color, #2d3748);
+}
+
+[data-theme="dark"] .attr-chart-panel .recharts-text {
+  fill: var(--text-secondary, #9ca3af);
+}

@@ -1,6 +1,6 @@
 import { PerformanceChart, MetricChart } from '../../components/Charts'
 import { MetricsTable } from '../../components/MetricsTable'
-import { getMetricLabel } from '../../config/metricsConfig'
+import { getMetricLabel, EQUITY_METRICS_CATEGORIES } from '../../config/metricsConfig'
 import './TabStyles.css'
 
 /**
@@ -90,10 +90,13 @@ function EquityTab({
       </div>
 
       {/* Latest Values Table */}
-      <MetricsTable 
+      <MetricsTable
         data={data.data}
         regions={filters.regions}
         columns={selectedMetricsTable.length > 0 ? selectedMetricsTable : columns}
+        categories={EQUITY_METRICS_CATEGORIES}
+        lookback={filters.lookback}
+        tabLabel="Aktien"
       />
 
       <div

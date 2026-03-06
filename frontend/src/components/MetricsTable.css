@@ -1,69 +1,232 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   MetricsTable – styled to match the reference Dash dashboard layout
+   ───────────────────────────────────────────────────────────────────────────── */
+
 .metrics-table-container {
   margin-bottom: 2rem;
   background: var(--bg-surface);
   border-radius: 8px;
-  padding: 1.5rem;
+  padding: 1rem 1.25rem 1.25rem;
   border: 1px solid var(--border);
-  overflow-x: auto;
   transition: background 0.25s ease;
 }
 
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+.metrics-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Toggle: Istwerte / Perzentile */
+.metrics-table-mode-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mode-btn {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.mode-btn:first-child {
+  border-right: 1px solid var(--border);
+}
+
+.mode-btn.active {
+  background: #667eea;
+  color: #fff;
+}
+
+.mode-btn:not(.active):hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Export button */
+.metrics-table-export-btn {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.metrics-table-export-btn:hover {
+  background: rgba(34, 197, 94, 0.07);
+  border-color: #22c55e;
+  color: #22c55e;
+}
+
+/* ── Scroll wrapper ──────────────────────────────────────────────────────── */
+.metrics-table-scroll {
+  overflow-x: auto;
+}
+
+/* ── Table base ──────────────────────────────────────────────────────────── */
 .metrics-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
+  min-width: 480px;
 }
 
+/* ── Header rows ─────────────────────────────────────────────────────────── */
 .metrics-table thead {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  color: #fff;
 }
 
-.metrics-table th {
-  padding: 0.75rem 0.5rem;
-  text-align: left;
-  font-weight: 600;
-  border-bottom: 2px solid #667eea;
+/* Group row (category names) */
+.metrics-table-group-row th {
+  padding: 0.45rem 0.5rem;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-right: 2px solid rgba(255,255,255,0.25);
   white-space: nowrap;
 }
 
-.metrics-table th.region-header {
-  text-align: center;
-  min-width: 120px;
+.metrics-table-group-row th:last-child {
+  border-right: none;
 }
 
+.metrics-table-corner {
+  text-align: left !important;
+  min-width: 130px;
+  border-right: 2px solid rgba(255,255,255,0.3) !important;
+}
+
+/* Subtle category tints on group cells */
+.cat-trend              { background: rgba(99,  102, 241, 0.30); }
+.cat-bewertung          { background: rgba(16,  185, 129, 0.28); }
+.cat-technisch          { background: rgba(245, 158, 11,  0.28); }
+.cat-zinsen             { background: rgba(96,  165, 250, 0.30); }
+.cat-kreditqualit-t     { background: rgba(239, 68,  68,  0.28); }
+.cat-inflationserwartun { background: rgba(168, 85,  247, 0.28); }
+.cat-konjunktur         { background: rgba(34,  197, 94,  0.28); }
+.cat-fundamental        { background: rgba(251, 191, 36,  0.28); }
+.cat-gesch-ftsklima     { background: rgba(14,  165, 233, 0.28); }
+.cat-au-enhandel        { background: rgba(244, 114, 182, 0.28); }
+.cat-fiskal             { background: rgba(167, 139, 250, 0.28); }
+.cat-andere             { background: rgba(148, 163, 184, 0.28); }
+
+/* Metric name sub-header row */
+.metrics-table-metric-header,
+.metrics-table-region-label {
+  padding: 0.45rem 0.5rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: normal;
+  word-break: break-word;
+  min-width: 76px;
+  border-right: 1px solid rgba(255,255,255,0.15);
+  hyphens: auto;
+}
+
+.metrics-table-metric-header:last-child {
+  border-right: none;
+}
+
+/* ── Body rows ───────────────────────────────────────────────────────────── */
 .metrics-table tbody tr {
   border-bottom: 1px solid var(--border-table);
-  transition: background-color 0.2s ease;
+  transition: filter 0.15s ease;
 }
 
 .metrics-table tbody tr:hover {
-  background-color: var(--bg-hover);
+  filter: brightness(1.06);
 }
 
 .metrics-table tbody tr:nth-child(even) {
   background-color: var(--bg-row-even);
 }
 
-.metrics-table td {
-  padding: 0.75rem 0.5rem;
-  text-align: left;
-}
-
-.metrics-table td.metric-name {
-  font-weight: 500;
+/* Region cell */
+.metrics-table-region-cell {
+  padding: 0.55rem 0.75rem;
+  font-weight: 600;
+  font-size: 0.82rem;
   color: var(--text-primary);
-  padding-right: 1rem;
-  min-width: 180px;
+  white-space: nowrap;
+  border-right: 2px solid var(--border);
 }
 
-.metrics-table td.metric-value {
+.region-flag {
+  margin-right: 0.4em;
+  font-size: 1rem;
+}
+
+.region-name {
+  vertical-align: middle;
+}
+
+/* Stale data indicator */
+.stale-region {
+  border-left: 3px solid #ff6b6b;
+}
+
+.stale-badge {
+  margin-left: 0.4em;
+  color: #ff6b6b;
+  font-size: 0.75rem;
+  cursor: help;
+}
+
+/* Value cells */
+.metric-value {
+  padding: 0.5rem 0.5rem;
   text-align: center;
   color: var(--text-value);
-  font-family: 'Monaco', 'Courier New', monospace;
-  font-size: 0.85rem;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 0.78rem;
+  border-right: 1px solid var(--border-table);
+  transition: background 0.2s ease;
 }
 
+.metric-value:last-child {
+  border-right: none;
+}
+
+/* ── Percentile legend ───────────────────────────────────────────────────── */
+.metrics-table-legend {
+  margin-top: 0.75rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.legend-bar {
+  display: inline-block;
+  width: 80px;
+  height: 10px;
+  border-radius: 3px;
+  background: linear-gradient(to right, rgba(255,0,0,0.5), rgba(255,200,0,0.4), rgba(0,255,0,0.5));
+  flex-shrink: 0;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
 .metrics-table-empty {
   text-align: center;
   color: var(--text-muted);
@@ -71,25 +234,27 @@
   font-style: italic;
 }
 
+/* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .metrics-table-container {
-    padding: 1rem;
+    padding: 0.75rem;
   }
 
   .metrics-table {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
   }
 
-  .metrics-table th,
-  .metrics-table td {
-    padding: 0.5rem 0.3rem;
+  .metrics-table-metric-header,
+  .metrics-table-region-label {
+    padding: 0.35rem 0.3rem;
+    min-width: 60px;
   }
 
-  .metrics-table td.metric-name {
-    min-width: 120px;
+  .metric-value {
+    padding: 0.4rem 0.3rem;
   }
 
-  .metrics-table th.region-header {
-    min-width: 90px;
+  .metrics-table-region-cell {
+    padding: 0.4rem 0.5rem;
   }
 }
