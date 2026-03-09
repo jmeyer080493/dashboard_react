@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './Länder.css'
 import GlobalControls from '../components/GlobalControls'
 import EquityTab from './tabs/EquityTab'
@@ -45,6 +45,12 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
   const [macroData, setMacroData] = useState(null)
   const [macroLoading, setMacroLoading] = useState(false)
   const [macroError, setMacroError] = useState(null)
+
+  // Track which tabs need a refresh after filter changes (lazy loading)
+  const [staleFlags, setStaleFlags] = useState({ equity: false, 'fixed-income': false, macro: false })
+  // Keep a ref so filter-change effect always reads the current activeTab (avoids stale closure)
+  const activeTabRef = useRef(activeTab)
+  useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
 
   // ── Equity metrics filter state ──────────────────────────────────────────
   const [selectedMetricsTable, setSelectedMetricsTable] = useState(() => {
@@ -281,56 +287,63 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
       .catch(err => console.error('[DEBUG] INIT MACRO COLUMNS: Fetch error:', err))
   }, []) // Only run once on mount
 
-  // Fetch all data upfront when filters change
+  // Helper: fetch equity data + columns together
+  const fetchEquityFull = () => {
+    fetchTabData('/countries/equity', setEquityData, setEquityLoading, setEquityError, true)
+
+    const params = new URLSearchParams()
+    params.append('regions', filters.regions.join(','))
+    params.append('lookback', filters.lookback)
+    fetch(`/api/countries/equity/columns?${params.toString()}`)
+      .then(r => r.json())
+      .then(result => {
+        if (result.status === 'ok') {
+          const newColumns = result.columns || []
+          setEquityColumns(newColumns)
+          const filteredTable = selectedMetricsTable.filter(m => newColumns.includes(m))
+          const filteredGraph = selectedMetricsGraph.filter(m => newColumns.includes(m))
+          if (filteredTable.length !== selectedMetricsTable.length) setSelectedMetricsTable(filteredTable)
+          if (filteredGraph.length !== selectedMetricsGraph.length) setSelectedMetricsGraph(filteredGraph)
+        }
+      })
+      .catch(err => console.error('Failed to fetch columns:', err))
+  }
+
+  // Fetch only the active tab's data when filters change; mark others as stale
   useEffect(() => {
-    console.log('[DEBUG] EFFECT FILTERS: Filters changed')
-    console.log('[DEBUG] EFFECT FILTERS: filters =', filters)
-    console.log('[DEBUG] EFFECT FILTERS: selectedMetricsTable =', selectedMetricsTable)
-    console.log('[DEBUG] EFFECT FILTERS: selectedMetricsGraph =', selectedMetricsGraph)
-    
     const timeout = setTimeout(() => {
-      console.log('[DEBUG] FILTERS DEBOUNCE: Fetching data after debounce')
-      // Fetch all three endpoints in parallel
-      fetchTabData('/countries/equity', setEquityData, setEquityLoading, setEquityError, true)
-      fetchTabData('/countries/fixed-income', setFixedIncomeData, setFixedIncomeLoading, setFixedIncomeError)
-      fetchTabData('/countries/macro', setMacroData, setMacroLoading, setMacroError)
-      
-      // Fetch columns but DON'T reset selections
-      const regionsParam = filters.regions.join(',')
-      const params = new URLSearchParams()
-      params.append('regions', regionsParam)
-      params.append('lookback', filters.lookback)
-
-      console.log('[DEBUG] FILTERS: Fetching columns for regions:', regionsParam)
-      fetch(`/api/countries/equity/columns?${params.toString()}`)
-        .then(r => r.json())
-        .then(result => {
-          if (result.status === 'ok') {
-            const newColumns = result.columns || []
-            console.log('[DEBUG] FILTERS: Columns fetched:', newColumns)
-            setEquityColumns(newColumns)
-            console.log('[DEBUG] FILTERS: selectedMetricsTable still =', selectedMetricsTable)
-            console.log('[DEBUG] FILTERS: selectedMetricsGraph still =', selectedMetricsGraph)
-            
-            // CRITICAL FIX: Filter selected metrics to only include newly available ones
-            const filteredTable = selectedMetricsTable.filter(m => newColumns.includes(m))
-            const filteredGraph = selectedMetricsGraph.filter(m => newColumns.includes(m))
-            
-            if (filteredTable.length !== selectedMetricsTable.length) {
-              console.log('[DEBUG] FILTERS: ⚠️ Filtering table metrics from', selectedMetricsTable.length, 'to', filteredTable.length)
-              setSelectedMetricsTable(filteredTable)
-            }
-            if (filteredGraph.length !== selectedMetricsGraph.length) {
-              console.log('[DEBUG] FILTERS: ⚠️ Filtering graph metrics from', selectedMetricsGraph.length, 'to', filteredGraph.length)
-              setSelectedMetricsGraph(filteredGraph)
-            }
-          }
-        })
-        .catch(err => console.error('Failed to fetch columns:', err))
+      const tab = activeTabRef.current
+      if (tab === 'equity') {
+        fetchEquityFull()
+      } else if (tab === 'fixed-income') {
+        fetchTabData('/countries/fixed-income', setFixedIncomeData, setFixedIncomeLoading, setFixedIncomeError)
+      } else if (tab === 'macro') {
+        fetchTabData('/countries/macro', setMacroData, setMacroLoading, setMacroError)
+      }
+      // Mark all other tabs as needing a refresh
+      setStaleFlags({
+        equity: tab !== 'equity',
+        'fixed-income': tab !== 'fixed-income',
+        macro: tab !== 'macro',
+      })
     }, 300)
-
     return () => clearTimeout(timeout)
   }, [filters])
+
+  // When the user switches tabs, fetch data if that tab is stale or not yet loaded
+  useEffect(() => {
+    if (!staleFlags[activeTab]) return
+    if (activeTab === 'equity') {
+      fetchEquityFull()
+      setStaleFlags(prev => ({ ...prev, equity: false }))
+    } else if (activeTab === 'fixed-income') {
+      fetchTabData('/countries/fixed-income', setFixedIncomeData, setFixedIncomeLoading, setFixedIncomeError)
+      setStaleFlags(prev => ({ ...prev, 'fixed-income': false }))
+    } else if (activeTab === 'macro') {
+      fetchTabData('/countries/macro', setMacroData, setMacroLoading, setMacroError)
+      setStaleFlags(prev => ({ ...prev, macro: false }))
+    }
+  }, [activeTab])
 
   return (
     <div className="länder-container">

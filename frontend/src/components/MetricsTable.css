@@ -142,6 +142,29 @@
   hyphens: auto;
 }
 
+/* Sortable sub-header columns */
+.sortable-col {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.sortable-col:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sortable-col.sorted {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.sort-indicator {
+  display: inline-block;
+  margin-left: 2px;
+  font-size: 0.65rem;
+  opacity: 0.75;
+  vertical-align: middle;
+}
+
 .metrics-table-metric-header:last-child {
   border-right: none;
 }

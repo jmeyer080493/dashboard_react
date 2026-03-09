@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './GlobalControls.css'
 import MetricsFilterModal from './MetricsFilterModal'
 import {
@@ -98,6 +98,15 @@ function GlobalControls({
     ? ALL_REGIONS.filter(r => !EXCLUDED_MACRO.has(r))
     : ALL_REGIONS
 
+  // Auto-filter regions when switching tabs if selected regions include excluded ones
+  useEffect(() => {
+    const invalidRegions = filters.regions.filter(r => !AVAILABLE_REGIONS.includes(r))
+    if (invalidRegions.length > 0) {
+      const validRegions = filters.regions.filter(r => AVAILABLE_REGIONS.includes(r))
+      onFiltersChange({ regions: validRegions })
+    }
+  }, [activeTab])
+
   const handleDateQuickSelect = (days, label) => {
     const endDate = new Date()
     const startDate = new Date()
@@ -186,9 +195,14 @@ function GlobalControls({
           {/* Smart region tag display */}
           {(() => {
             // Check if a named preset is active
+            // Allow partial matches: if selected regions are a subset of a preset, consider it active
             const activePreset = Object.keys(REGION_PRESETS).find(preset => {
               const pr = getPresetRegions(preset, AVAILABLE_REGIONS)
-              return pr.length === filters.regions.length && pr.every(r => filters.regions.includes(r))
+              const isExactMatch = pr.length === filters.regions.length &&
+                                   pr.every(r => filters.regions.includes(r))
+              const isSubsetMatch = pr.length > 0 &&
+                                    filters.regions.every(r => pr.includes(r))
+              return isExactMatch || isSubsetMatch
             })
 
             if (activePreset) {

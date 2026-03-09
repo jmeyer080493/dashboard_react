@@ -10,7 +10,7 @@ import {
   ReferenceLine,
 } from 'recharts'
 import { MetricsTable } from '../../components/MetricsTable'
-import { getMetricLabel, EQUITY_METRICS_CATEGORIES } from '../../config/metricsConfig'
+import { getMetricLabel, getYAxisLabel, isEquityMetricCurrencyAffected, EQUITY_METRICS_CATEGORIES } from '../../config/metricsConfig'
 import { useExport } from '../../context/ExportContext'
 import './TabStyles.css'
 
@@ -56,12 +56,61 @@ function pivotDataForChart(records, metricKey, regions) {
   )
 }
 
-/** Short date label for chart axes */
-function fmtDate(isoStr) {
+/** Short date label for chart axes - smart formatting */
+function fmtDate(isoStr, isLongTimeseries = false) {
   if (!isoStr) return ''
   const d = new Date(isoStr)
   if (isNaN(d)) return isoStr.slice(0, 10)
-  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  if (isLongTimeseries) {
+    // For long series (>6 months): "Mrz. 25" format
+    return d.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' })
+  } else {
+    // For short series: "31. Mrz" (month-end format)
+    return d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short' })
+  }
+}
+
+/** Format y-axis label: 0 decimals */
+function formatYValue(value) {
+  if (typeof value !== 'number') return value
+  return String(Math.round(value))
+}
+
+/** Determine if timeseries is long (>6 months) */
+function isLongTimeseries(chartData) {
+  if (!chartData || chartData.length < 2) return false
+  const dates = chartData
+    .map(r => r.DatePoint)
+    .filter(d => d)
+    .sort()
+  if (dates.length < 2) return false
+  const firstDate = new Date(dates[0])
+  const lastDate = new Date(dates[dates.length - 1])
+  const monthsDiff = (lastDate.getFullYear() - firstDate.getFullYear()) * 12 +
+                     (lastDate.getMonth() - firstDate.getMonth())
+  return monthsDiff > 6
+}
+
+/** Compute smart y-axis domain from data with padding */
+function computeSmartDomain(chartData, regions) {
+  if (!chartData || chartData.length === 0 || regions.length === 0) return [undefined, undefined]
+  
+  let min = Infinity, max = -Infinity
+  for (const row of chartData) {
+    for (const region of regions) {
+      const val = row[region]
+      if (val !== undefined && val !== null && typeof val === 'number') {
+        if (val < min) min = val
+        if (val > max) max = val
+      }
+    }
+  }
+  
+  if (min === Infinity || max === -Infinity) return [undefined, undefined]
+  
+  const range = max - min
+  const padding = range * 0.1 // 10% padding
+  return [min - padding, max + padding]
 }
 
 /** Convert column name to friendly title using the central metricsConfig. */
@@ -75,10 +124,16 @@ function getColumnTitle(columnName) {
   return extras[columnName] || columnName
 }
 
+/** Format a value for legend display: 0 decimals, German locale */
+function fmtLegendValue(val) {
+  if (val === null || val === undefined || typeof val !== 'number') return null
+  return Math.round(val).toLocaleString('de-DE')
+}
+
 /**
  * Multi-Region Line Chart for a single equity metric.
  */
-function EquityLineChart({ chartData, regions, metricLabel, metricKey, height = 300 }) {
+function EquityLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel = '', currency = 'EUR', height = 300 }) {
   const { addToPptx, addToXlsx } = useExport()
 
   if (!chartData || chartData.length === 0) {
@@ -90,17 +145,47 @@ function EquityLineChart({ chartData, regions, metricLabel, metricKey, height = 
     )
   }
 
+  // Only render lines for regions that actually have at least one data point
+  const activeRegions = regions.filter(r => chartData.some(d => d[r] !== undefined && d[r] !== null))
+
+  if (activeRegions.length === 0) {
+    return (
+      <div className="chart-container">
+        <h3>{metricLabel}</h3>
+        <div className="chart-empty">Keine Daten verfügbar</div>
+      </div>
+    )
+  }
+
   const isRSI = metricKey && metricKey.includes('RSI')
+  const [yMin, yMax] = computeSmartDomain(chartData, activeRegions)
+  const isLongSeries = isLongTimeseries(chartData)
+  
+  // Compute even interval spacing for y-axis
+  let yDomain = ['auto', 'auto']
+  if (yMin !== undefined && yMax !== undefined) {
+    const range = yMax - yMin
+    const step = Math.pow(10, Math.floor(Math.log10(range)))
+    const roundedMin = Math.floor(yMin / step) * step
+    const roundedMax = Math.ceil(yMax / step) * step
+    yDomain = [roundedMin, roundedMax]
+  }
+
+  const isCurrencyAffected = isEquityMetricCurrencyAffected(metricKey)
+  const dateRange = getDateRange(chartData, 'DatePoint')
+  const subheading = isCurrencyAffected
+    ? (dateRange ? `${dateRange}, in ${currency}` : `in ${currency}`)
+    : dateRange
 
   const fullTitle = `Aktien – ${metricLabel}`
   const exportItem = {
     id: makeId(fullTitle),
     title: fullTitle,
     pptx_title: metricLabel,
-    subheading: getDateRange(chartData, 'DatePoint'),
+    subheading,
     tab: 'Aktien',
     chartData,
-    regions,
+    regions: activeRegions,
     xKey: 'DatePoint',
   }
 
@@ -113,10 +198,16 @@ function EquityLineChart({ chartData, regions, metricLabel, metricKey, height = 
           <XAxis
             dataKey="DatePoint"
             tick={{ fontSize: 11 }}
-            tickFormatter={fmtDate}
+            tickFormatter={(isoStr) => fmtDate(isoStr, isLongSeries)}
             interval="preserveStartEnd"
           />
-          <YAxis tick={{ fontSize: 11 }} />
+          <YAxis 
+            tick={{ fontSize: 11 }}
+            domain={yDomain}
+            tickFormatter={formatYValue}
+            width={yAxisLabel ? 48 : 40}
+            label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', offset: 12, style: { textAnchor: 'middle', fontSize: 11, fill: '#6b7280' } } : undefined}
+          />
           <Tooltip
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', fontSize: 12 }}
             formatter={(value) => typeof value === 'number' ? value.toFixed(2) : value}
@@ -130,19 +221,28 @@ function EquityLineChart({ chartData, regions, metricLabel, metricKey, height = 
               <ReferenceLine y={30} stroke="#10b981" strokeDasharray="4 2" />
             </>
           )}
-          {regions.map((region, idx) => (
-            <Line
-              key={region}
-              type="monotone"
-              dataKey={region}
-              name={region}
-              stroke={REGION_COLORS[idx % REGION_COLORS.length]}
-              dot={false}
-              strokeWidth={2}
-              isAnimationActive={false}
-              connectNulls
-            />
-          ))}
+          {[...activeRegions]
+            .sort((a, b) => {
+              const lastRow = chartData[chartData.length - 1] || {}
+              return (lastRow[b] ?? -Infinity) - (lastRow[a] ?? -Infinity)
+            })
+            .map((region) => {
+            const latest = fmtLegendValue(chartData[chartData.length - 1]?.[region])
+            const legendName = latest !== null ? `${region} (${latest})` : region
+            return (
+              <Line
+                key={region}
+                type="monotone"
+                dataKey={region}
+                name={legendName}
+                stroke={REGION_COLORS[regions.indexOf(region) % REGION_COLORS.length]}
+                dot={false}
+                strokeWidth={2}
+                isAnimationActive={false}
+                connectNulls
+              />
+            )
+          })}
         </LineChart>
       </ResponsiveContainer>
       <div className="chart-export-buttons">
@@ -183,6 +283,7 @@ function EquityTab({
   }
 
   const regions = filters.regions || []
+  const currency = filters.currency || 'EUR'
   const allRecords = data.data || []
 
   // Apply date-range filter for charts
@@ -223,6 +324,8 @@ function EquityTab({
               regions={regions}
               metricLabel={getColumnTitle(column)}
               metricKey={column}
+              yAxisLabel={getYAxisLabel(column)}
+              currency={currency}
               height={chartHeight}
             />
           ))

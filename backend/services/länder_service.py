@@ -1,7 +1,7 @@
 """
-Länder/Countries page data service - V2
+Laender/Countries page data service - V2
 
-Rewritten to follow the reference project (C:\Projekte\dashboard) architecture:
+Rewritten to follow the reference project (C:/Projekte/dashboard) architecture:
 1. Query Bloomberg in LONG format  
 2. Merge with region mapping
 3. Calculate technical indicators per region per currency
@@ -61,8 +61,6 @@ class EquityIndicatorCalculator:
             ema12 = prices.ewm(span=12, adjust=False).mean()
             ema26 = prices.ewm(span=26, adjust=False).mean()
             indicators['MACD'] = ema12 - ema26
-            indicators['MACD_Signal'] = indicators['MACD'].ewm(span=9, adjust=False).mean()
-            indicators['MACD_Histogram'] = indicators['MACD'] - indicators['MACD_Signal']
             
             # RSI (14-period)
             delta = prices.diff()
@@ -74,20 +72,27 @@ class EquityIndicatorCalculator:
             indicators['RSI'] = 100 - (100 / (1 + rs))
             indicators['RSI'] = indicators['RSI'].fillna(50)  # Default to 50 if not calculable
             
+            # rolling lookback = 126 trading days (DATA_LOOKBACK_SHORT), mirroring original dashboard
+            ROLLING_LOOKBACK = 126
+
             # Momentum indicators
             # 3-month: (price[t-21] / price[t-63] - 1) * 100
             indicators['MOM_3'] = (prices.shift(21) / prices.shift(63) - 1) * 100
             
-            # 12-month: (price[t-21] / price[t-252] - 1) * 100  
-            indicators['MOM_12'] = (prices.shift(21) / prices.shift(252) - 1) * 100
+            # 12-month: (price[t-21] / price[t-ROLLING_LOOKBACK] - 1) * 100
+            # Original: DATA_LOOKBACK_SHORT = 126 trading days (~6 months)
+            indicators['MOM_12'] = (prices.shift(21) / prices.shift(ROLLING_LOOKBACK) - 1) * 100
             
-            # Time Series momentum: EWMA of returns
+            # Time Series momentum: EWMA of ROLLING_LOOKBACK-period price change, alpha=0.03 (1-0.97)
+            # Mirrors original: mom_ts = s.pct_change(rolling_lookback); ewm(alpha=1-0.97)
+            price_change_lb = prices.pct_change(ROLLING_LOOKBACK)
+            indicators['MOM_TS'] = price_change_lb.ewm(alpha=0.03, adjust=False).mean() * 100
+            
+            # Volatility: rolling(ROLLING_LOOKBACK).std() * sqrt(ROLLING_LOOKBACK)
+            # Mirrors original: rolling(window=rolling_lookback).std() * (rolling_lookback ** 0.5) * 100
             returns = prices.pct_change()
-            indicators['MOM_TS'] = returns.ewm(span=33, adjust=False).mean() * 100
-            
-            # Volatility (annualized, 252-day window)
-            rolling_std = returns.rolling(window=252, min_periods=1).std()
-            indicators['Rolling Volatility'] = rolling_std * np.sqrt(252) * 100
+            rolling_std = returns.rolling(window=ROLLING_LOOKBACK, min_periods=1).std()
+            indicators['Rolling Volatility'] = rolling_std * np.sqrt(ROLLING_LOOKBACK) * 100
             
             # Sharpe ratio (rolling, risk-free rate = 2.5%)
             rolling_returns = returns.rolling(window=252, min_periods=1).mean()
@@ -325,11 +330,26 @@ class LänderDataService:
             df['Value'] = pd.to_numeric(df['Value'], errors='coerce')
             df = df.drop(columns=['Value_Raw'])
             
-            # Handle duplicates: prefer rows with non-NULL Currency
+            # Handle duplicates: preserve ALL rows that have a non-NULL Currency
+            # (both EUR and USD rows must survive so the currency filter in get_equity_data
+            # can return data regardless of which currency the user selects).
+            # Only deduplicate rows where Currency IS NULL (rare / metadata rows).
             if 'Currency' in df.columns:
-                df = df.sort_values('Currency', na_position='last')
-                df = df.drop_duplicates(subset=['DatePoint', 'Ticker', 'FieldName'], keep='first')
-            
+                non_null_mask = df['Currency'].notna()
+                data_with_currency = df[non_null_mask]
+                data_without_currency = df[~non_null_mask]
+
+                # For null-currency rows, keep one per (DatePoint, Ticker, FieldName)
+                if not data_without_currency.empty:
+                    data_without_currency = data_without_currency.drop_duplicates(
+                        subset=['DatePoint', 'Ticker', 'FieldName'], keep='first'
+                    )
+
+                # Combine: all rows with an explicit currency + cleaned null-currency rows
+                df = pd.concat([data_with_currency, data_without_currency], ignore_index=True)
+                logger.info(f"  Kept {len(data_with_currency)} rows with explicit currency, "
+                            f"{len(data_without_currency)} null-currency rows (after dedup)")
+
             logger.info(f"✓ Cleaned {len(df)} Bloomberg rows")
             return df
             
@@ -391,7 +411,9 @@ class LänderDataService:
         # Define currency-independent fields (metrics that don't depend on currency)
         CURRENCY_INDEPENDENT_FIELDS = {
             'PE_RATIO', 'PX_TO_BOOK_RATIO', 'PX_TO_SALES_RATIO', 
-            'EARN_YLD', 'BEST_PE_RATIO', 'IS_DIL_EPS_CONT_OPS'
+            'EARN_YLD', 'BEST_PE_RATIO', 'IS_DIL_EPS_CONT_OPS',
+            'DIV_YLD', 'EQY_DVD_YLD_IND',   # Dividend Yield Bloomberg fields
+            'BEST_EPS_GROWTH',                # Earnings growth rate Bloomberg field
         }
         
         # Normalize currency for currency-independent fields to match the requested currency
@@ -633,6 +655,34 @@ class LänderDataService:
                 logger.error("✗ Final dataframe is empty")
                 raise ValueError("No data in final output")
             
+            # ── ERP merge: adds Div_Yld, Grwth_Rate, Div_Pay_Ratio, Mkt_Return, RF_Rate, Premium ──
+            # Mirrors original: erp = pd.read_sql_query('SELECT * FROM erp', dev_engine)
+            # Merged on ['DatePoint', 'Regions'] with forward-fill so Bloomberg trading days
+            # that have no exact ERP date still receive the most recent ERP values.
+            try:
+                erp_engine = DatabaseGateway().jm_engine
+                if erp_engine is not None:
+                    erp_df = pd.read_sql_query("SELECT * FROM erp", erp_engine)
+                    erp_df["Date"] = pd.to_datetime(erp_df["Date"], format="%m/%d/%y", errors="coerce")
+                    erp_df = erp_df.rename(columns={"Date": "DatePoint", "Country": "Regions"})
+                    erp_df["DatePoint"] = pd.to_datetime(erp_df["DatePoint"])
+                    erp_cols = [c for c in erp_df.columns if c not in ["DatePoint", "Regions"]]
+
+                    # Sort both sides by date so ffill propagates correctly
+                    df_final = df_final.sort_values(["Regions", "DatePoint"]).reset_index(drop=True)
+                    df_final = pd.merge(df_final, erp_df, how="left", on=["DatePoint", "Regions"])
+
+                    # Forward-fill within each region: Bloomberg trading days that have no
+                    # exact ERP entry get the most recent available ERP values
+                    df_final[erp_cols] = df_final.groupby("Regions", sort=False)[erp_cols].ffill()
+
+                    filled = df_final[erp_cols[0]].notna().sum()
+                    logger.info(f"✓ ERP merge added {erp_cols} columns ({filled}/{len(df_final)} rows filled after ffill)")
+                else:
+                    logger.warning("⚠ jm_engine not available – skipping ERP merge (Div_Yld, Grwth_Rate, Premium will be missing)")
+            except Exception as erp_exc:
+                logger.warning(f"⚠ ERP merge failed (non-fatal): {erp_exc}")
+
             # Optional date range filter
             if start_date:
                 df_final = df_final[df_final["DatePoint"] >= pd.Timestamp(start_date)]
@@ -642,6 +692,30 @@ class LänderDataService:
             if df_final.empty:
                 logger.warning(f"⚠ No data after date filtering: start_date={start_date}, end_date={end_date}")
                 raise ValueError("No data within the specified date range")
+
+            # Rebase Performance to 0% at the start of the filtered period.
+            # Mirrors the old dashboard: pct_change().cumprod() so the chart
+            # always starts at 0% regardless of which lookback window is selected.
+            if 'Performance' in df_final.columns and 'PX_LAST' in df_final.columns:
+                df_final = df_final.sort_values(['Regions', 'DatePoint']).reset_index(drop=True)
+
+                def _rebase_performance(group):
+                    prices = group['PX_LAST'].copy()
+                    valid = prices.dropna()
+                    if valid.empty:
+                        group['Performance'] = np.nan
+                        return group
+                    pct_chg = prices.pct_change()
+                    perf_ts = (1 + pct_chg).cumprod()
+                    perf_ts.iloc[0] = 1.0
+                    perf_pct = (perf_ts - 1.0) * 100
+                    perf_pct.iloc[0] = 0.0
+                    group = group.copy()
+                    group['Performance'] = perf_pct
+                    return group
+
+                df_final = df_final.groupby('Regions', group_keys=False).apply(_rebase_performance)
+                logger.info("✓ Performance rebased to 0% at start of filtered period")
             
             # Convert to records for JSON serialization
             records = df_final.to_dict('records')
@@ -731,29 +805,31 @@ class LänderDataService:
         Returns:
             List of all possible column names that could appear in equity data
         """
-        # All possible columns: Bloomberg fields + computed indicators
+        # All possible columns: Bloomberg fields + ERP fields + computed indicators
+        # Mirrors COLS_EQ_AGG from C:\Projekte\dashboard\countries\mapping.py
         return [
             # Trend
-            'MOM_3',              # 3-Month Momentum
-            'MOM_12',             # 12-Month Momentum
-            'MOM_TS',             # Time Series Momentum
+            'MOM_3',              # 3-Month Momentum  (price[t-21]/price[t-63]-1)*100
+            'MOM_12',             # 6-Month Momentum  (price[t-21]/price[t-126]-1)*100 (name is legacy)
+            'MOM_TS',             # TS-Momentum       pct_change(126).ewm(alpha=0.03)*100
+            'Grwth_Rate',         # Wachstumsrate     from ERP table
             # Bewertung (Valuation)
-            'Weighted Valuation', # Aggregated valuation (mean of PE/PB/PS)
-            'EARN_YLD',           # Earnings Yield
-            'PX_TO_SALES_RATIO',  # Price-to-Sales (KUV)
-            'PX_TO_BOOK_RATIO',   # Price-to-Book (KBV)
-            'PE_RATIO',           # Price-to-Earnings (KGV)
-            'BEST_PE_RATIO',      # Forward PE Ratio
+            'Weighted Valuation', # Bewertung Agg.    mean(PE, PB, PS)
+            'Premium',            # Risikoprämie      from ERP table
+            'Div_Yld',            # Dividendenrendite from ERP table
+            'EARN_YLD',           # Ertragsrendite    Bloomberg
+            'PX_TO_SALES_RATIO',  # KUV               Bloomberg
+            'PX_TO_BOOK_RATIO',   # KBV               Bloomberg
+            'PE_RATIO',           # KGV               Bloomberg
+            'BEST_PE_RATIO',      # KGV Fwd.          Bloomberg (graph-only, not in table)
             # Technisch (Technical)
-            'Rolling Volatility', # Annualized Rolling Volatility
-            'MA_50_Diff',         # Distance from 50-day MA (%)
-            'RSI',                # Relative Strength Index
-            'MACD',               # MACD line
-            'MACD_Signal',        # MACD Signal line
-            'MACD_Histogram',     # MACD Histogram
+            'Rolling Volatility', # Volatilität       rolling(126).std()*sqrt(126)*100
+            'MA_50_Diff',         # MA50 Distanz      (price-MA50)/MA50*100 (graph-only)
+            'RSI',                # RSI               14-period
+            'MACD',               # MACD              EMA(12)-EMA(26)
             # Spezial (Special / Graph-only)
-            'Performance',        # Cumulative performance (%)
-            'EPS_Growth',         # Cumulative EPS growth (%)
+            'Performance',        # Wertentwicklung   cumulative return
+            'EPS_Growth',         # Gewinnentwicklung cumulative EPS
             # Extra price / supporting columns
             'PX_LAST',            # Price
             'MA_50',              # 50-day Moving Average
@@ -900,7 +976,15 @@ class LänderDataService:
 
         # Filter to requested regions (drop rows where Regions is NaN or not in list)
         mapped = mapped.dropna(subset=["Regions"])
-        mapped = mapped[mapped["Regions"].isin(regions)].copy()
+
+        # Always include Germany rows so "Spreads to Bunds" can be computed even
+        # when the user has not selected Germany.  Germany rows are removed from
+        # the final output afterwards if they were not originally requested.
+        regions_with_germany = list(regions)
+        if "Germany" not in regions_with_germany:
+            regions_with_germany.append("Germany")
+
+        mapped = mapped[mapped["Regions"].isin(regions_with_germany)].copy()
 
         if mapped.empty:
             logger.error(f"No FI data for regions {regions} after mapping")
@@ -958,6 +1042,14 @@ class LänderDataService:
                 pivot_df["Spreads to Bunds"] = pivot_df["10Y Yields"] - pivot_df["_bund_10y"]
                 pivot_df = pivot_df.drop(columns=["_bund_10y"], errors="ignore")
                 logger.info("  ✓ Computed Spreads to Bunds")
+            else:
+                logger.warning("  ⚠ Germany 10Y Yield not available – Spreads to Bunds not computed")
+
+        # Drop Germany rows from the final result if it was added only for the
+        # Bunds spread calculation and was not in the originally requested regions
+        if "Germany" not in regions:
+            pivot_df = pivot_df[pivot_df["Regions"] != "Germany"].copy()
+            logger.info("  ✓ Removed Germany rows (not in requested regions)")
 
         logger.info(
             f"✓ FI wide-format: {pivot_df.shape}, columns: {sorted(pivot_df.columns.tolist())}"
@@ -1265,9 +1357,12 @@ class LänderDataService:
         # Keep only PX_LAST rows
         raw_df = raw_df[raw_df["FieldName"] == "PX_LAST"].copy()
 
-        # Merge with ticker mapping
+        # Merge with ticker mapping – include Period so we can pick the right pct_change lag
+        merge_cols = ["Ticker", "Regions", "GroupingName", "AdjustPct"]
+        if "Period" in ticker_mapping.columns:
+            merge_cols.append("Period")
         mapped = raw_df.merge(
-            ticker_mapping[["Ticker", "Regions", "GroupingName", "AdjustPct"]],
+            ticker_mapping[merge_cols],
             on="Ticker",
             how="left",
         )
@@ -1287,18 +1382,64 @@ class LänderDataService:
         mapped["DatePoint"] = pd.to_datetime(mapped["DatePoint"])
         mapped = mapped.sort_values(["MetricCol", "Regions", "DatePoint"])
 
-        # ── Apply YoY % change for level-data tickers (AdjustPct == 'X') ──
-        adjust_metrics = mapped[mapped["AdjustPct"] == "X"]["MetricCol"].unique()
-        if len(adjust_metrics) > 0:
+        # ── Apply YoY % change for level-data tickers ──
+        # Metrics flagged AdjustPct='X' in the DB, plus a hard-coded fallback list
+        # for trade metrics that must always be converted from levels to YoY %.
+        ALWAYS_YOY_METRICS = {"Trade Balance", "Exports", "Imports", "New Orders"}
+
+        adjust_metrics = set(mapped[mapped["AdjustPct"] == "X"]["MetricCol"].unique())
+        # Add fallback metrics that appear in the data even if the DB flag is missing
+        adjust_metrics |= ALWAYS_YOY_METRICS & set(mapped["MetricCol"].unique())
+
+        # Map Period code → number of observations per year (for pct_change lag)
+        PERIOD_TO_LAG = {"M": 12, "Q": 4, "A": 1, "Y": 1, "D": 252}
+
+        if adjust_metrics:
             logger.info(f"  Applying YoY pct_change for: {sorted(adjust_metrics)}")
-            for metric in adjust_metrics:
+            for metric in sorted(adjust_metrics):
                 mask = mapped["MetricCol"] == metric
                 for region in mapped.loc[mask, "Regions"].unique():
                     sub_mask = mask & (mapped["Regions"] == region)
                     vals = mapped.loc[sub_mask, "Value"]
-                    if len(vals) >= 13:
-                        mapped.loc[sub_mask, "Value"] = vals.pct_change(periods=12) * 100
-                    # drop NaN rows produced by pct_change (first 12 rows)
+
+                    # Determine YoY lag from Period column; fall back to inferring
+                    # it from median date spacing so annual/quarterly data is handled
+                    # correctly regardless of what the DB flag says.
+                    lag = 12  # default: monthly
+                    if "Period" in mapped.columns:
+                        period_codes = mapped.loc[sub_mask, "Period"].dropna().unique()
+                        if len(period_codes) == 1:
+                            lag = PERIOD_TO_LAG.get(str(period_codes[0]).strip().upper(), 12)
+                        else:
+                            # Infer from median gap between observations
+                            dates = mapped.loc[sub_mask, "DatePoint"].dropna().sort_values()
+                            if len(dates) >= 2:
+                                median_days = dates.diff().dt.days.median()
+                                if median_days >= 300:
+                                    lag = 1   # annual
+                                elif median_days >= 80:
+                                    lag = 4   # quarterly
+                                else:
+                                    lag = 12  # monthly
+                    else:
+                        # No Period column – infer from date spacing
+                        dates = mapped.loc[sub_mask, "DatePoint"].dropna().sort_values()
+                        if len(dates) >= 2:
+                            median_days = dates.diff().dt.days.median()
+                            if median_days >= 300:
+                                lag = 1
+                            elif median_days >= 80:
+                                lag = 4
+
+                    min_required = lag + 1
+                    if len(vals) >= min_required:
+                        mapped.loc[sub_mask, "Value"] = vals.pct_change(periods=lag) * 100
+                    else:
+                        logger.warning(
+                            f"  ⚠ Not enough data for YoY ({len(vals)} pts, need {min_required}) "
+                            f"– metric={metric}, region={region}, lag={lag}"
+                        )
+                    # NaN rows produced by pct_change are dropped below
             mapped = mapped.dropna(subset=["Value"])
 
         # Remove duplicates before pivot
@@ -1359,6 +1500,12 @@ class LänderDataService:
                 lookback, 1460
             )
 
+            # Always query extra 2 years of data so that annual-frequency metrics
+            # (Trade Balance, Exports, Imports, New Orders) have enough data points
+            # for the YoY pct_change computation regardless of the selected lookback.
+            # The result is trimmed back to the actual lookback window after processing.
+            query_days_back = lookback_days + 730 if lookback != "All" else 3650
+
             # Normalize region names
             normalized_regions = [
                 LänderDataService._normalize_region_name(r) for r in regions
@@ -1377,12 +1524,12 @@ class LänderDataService:
                 f"Quant tickers: {len(quant_tickers)}"
             )
 
-            # Query both data sources
+            # Query both data sources using the extended buffer window
             df_bloomberg = LänderDataService._get_bloomberg_macro_data(
-                bloomberg_tickers, days_back=lookback_days
+                bloomberg_tickers, days_back=query_days_back
             )
             df_quant = LänderDataService._get_quant_macro_data(
-                quant_tickers, days_back=lookback_days
+                quant_tickers, days_back=query_days_back
             )
 
             # Combine
@@ -1404,6 +1551,13 @@ class LänderDataService:
             )
             if df_final.empty:
                 raise ValueError("No Macro data after processing/pivoting")
+
+            # Trim back to the actually requested lookback window after YoY computation.
+            # The extra buffer data was needed only so pct_change could produce valid values.
+            if lookback != "All":
+                lookback_cutoff = pd.Timestamp.now(tz=None).normalize() - pd.Timedelta(days=lookback_days)
+                df_final = df_final[df_final["DatePoint"] >= lookback_cutoff].copy()
+                logger.info(f"  Trimmed to lookback window: {len(df_final)} rows remain after {lookback} cutoff")
 
             # Optional date range filter
             if start_date:

@@ -12,28 +12,32 @@
 .sektoren-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.25rem 2rem;
-  padding: 0.75rem 1rem;
-  background: var(--card-bg, #fff);
-  border: 1px solid var(--border-color, #e5e7eb);
-  border-radius: 8px;
-  box-shadow: var(--card-shadow, 0 1px 4px rgba(0,0,0,0.08));
-  align-items: flex-start;
+  align-items: center;
+  gap: 0;
+  padding: 0.6rem 1.25rem;
+  background: var(--bg-controls, var(--card-bg, #f9fafc));
+  border-bottom: 1px solid var(--border, var(--border-color, #e5e7eb));
   transition: background 0.25s ease, border-color 0.25s ease;
 }
 
 .sektoren-control-section {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.3rem;
+  padding: 0.45rem 1.1rem;
+}
+
+.sektoren-control-section + .sektoren-control-section {
+  border-left: 1px solid var(--border, var(--border-color, #e5e7eb));
 }
 
 .sektoren-control-section > label {
-  font-size: 12px;
+  font-size: 0.7rem;
   font-weight: 600;
-  color: var(--text-secondary, #666);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: var(--text-secondary, #666);
+  white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -42,35 +46,36 @@
 .sektoren-btn-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
+  gap: 0.35rem;
 }
 
 .sektoren-date-inputs {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.25rem;
+  gap: 0.35rem;
 }
 
 .sektoren-date-input {
-  width: 104px;
-  padding: 0.3rem 0.5rem;
-  font-size: 12px;
-  border: 1px solid var(--border-color, #d1d5db);
-  border-radius: 4px;
-  background: var(--input-bg, #fff);
+  width: 120px;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.8rem;
+  border: 1px solid var(--border-input, var(--border-color, #d1d5db));
+  border-radius: 6px;
+  background: var(--bg-input, var(--input-bg, #fff));
   color: var(--text-primary, #333);
-  font-family: monospace;
+  line-height: 1.4;
+  transition: border-color 0.15s ease;
 }
 
 .sektoren-date-input:focus {
   outline: none;
-  border-color: var(--accent-color, #6366f1);
+  border-color: #c9a0dc;
 }
 
 .sektoren-date-sep {
+  font-size: 0.75rem;
   color: var(--text-secondary, #888);
-  font-size: 14px;
+  padding: 0 0.1rem;
 }
 
 /* ── Sector section ─────────────────────────────────────────────────────── */
@@ -166,9 +171,8 @@
 /* ── Dark mode overrides ─────────────────────────────────────────────────── */
 
 [data-theme="dark"] .sektoren-controls {
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--card-shadow);
+  background: var(--bg-controls, var(--card-bg));
+  border-bottom-color: var(--border, var(--border-color));
 }
 
 [data-theme="dark"] .sektoren-date-input {

@@ -59,6 +59,16 @@ function buildFmt(yUnit) {
   }
 }
 
+/** Same as buildFmt but rounds to 0 decimals – used for legend labels. */
+function buildLegendFmt(yUnit) {
+  switch (yUnit) {
+    case 'M':   return v => (v == null ? '—' : `${(v / 1e6).toFixed(0)}M`)
+    case 'B':   return v => (v == null ? '—' : `${(v / 1e9).toFixed(0)}B`)
+    case 'raw': return v => (v == null ? '—' : typeof v === 'number' ? v.toFixed(0) : String(v))
+    default:    return v => (v == null ? '—' : `${v.toFixed(0)} %`)  // 'pct'
+  }
+}
+
 /** Custom tooltip – receives a `format` prop injected by the parent */
 function CustomTooltip({ active, payload, label, format }) {
   if (!active || !payload || payload.length === 0) return null
@@ -132,8 +142,11 @@ export default function FaktorenChart({
     )
   }
 
-  // The main series = all series except "Difference"
-  const mainSeries = series.filter(s => s !== 'Difference')
+  // The main series = all series except "Difference", sorted by latest value (high to low)
+  const lastRow = data[data.length - 1] || {}
+  const mainSeries = series
+    .filter(s => s !== 'Difference')
+    .sort((a, b) => (lastRow[b] ?? -Infinity) - (lastRow[a] ?? -Infinity))
 
   // Export: include all columns (the consumer will flatten them)
   const fullTitle   = tab ? `${tab} – ${title}` : title
@@ -153,11 +166,12 @@ export default function FaktorenChart({
 
   // Build formatter and axis config from yUnit
   const fmtValue = buildFmt(yUnit)
+  const fmtLegend = buildLegendFmt(yUnit)
   const yAxisWidth = yUnit === 'B' ? 72 : yUnit === 'M' ? 64 : 52
   const yAxisTickFmt = (v) => {
-    if (yUnit === 'M') return `${(v / 1e6).toFixed(1)}M`
-    if (yUnit === 'B') return `${(v / 1e9).toFixed(2)}B`
-    if (yUnit === 'raw') return v.toFixed(1)
+    if (yUnit === 'M') return `${(v / 1e6).toFixed(0)}M`
+    if (yUnit === 'B') return `${(v / 1e9).toFixed(0)}B`
+    if (yUnit === 'raw') return v.toFixed(0)
     return `${v.toFixed(0)} %`
   }
   // Smart domain: 5 % padding on each side so the chart never pins to 0
@@ -204,7 +218,7 @@ export default function FaktorenChart({
             wrapperStyle={{ fontSize: 12 }}
             formatter={name => {
               const lastVal = data[data.length - 1]?.[name]
-              return `${name} (${lastVal != null ? fmtValue(lastVal) : '—'})`
+              return `${name} (${lastVal != null ? fmtLegend(lastVal) : '—'})`
             }}
           />
           {mainSeries.map((s, idx) => (

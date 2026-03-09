@@ -100,7 +100,7 @@ function exportTableAsCSV(regions, metricsInfo, latestValues, tabLabel = 'Tabell
     const cells = regions.map(region => {
       const v = latestValues[region]?.[key]
       if (v === null || v === undefined) return ''
-      if (typeof v === 'number') return v.toFixed(2)
+      if (typeof v === 'number') return v.toFixed(1)
       return String(v)
     })
     return [label, ...cells].join(';')
@@ -148,6 +148,7 @@ export function MetricsTable({
   formatValue = null,
 }) {
   const [displayMode, setDisplayMode] = useState('latest') // 'latest' | 'percentile'
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
 
   // ── Latest value per region ──────────────────────────────────────────────
   const latestDataPerRegion = useMemo(() => {
@@ -234,6 +235,15 @@ export function MetricsTable({
     return groups
   }, [categories, metricsToDisplay, metricMeta])
 
+  // ── Sort handler ────────────────────────────────────────────────────────
+  function handleSortClick(metricKey) {
+    setSortConfig(prev =>
+      prev.key === metricKey
+        ? { key: metricKey, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+        : { key: metricKey, direction: 'asc' }
+    )
+  }
+
   // ── Pre-compute all percentiles ──────────────────────────────────────────
   const percentiles = useMemo(() => {
     if (!data || data.length === 0) return {}
@@ -246,6 +256,22 @@ export function MetricsTable({
     }
     return result
   }, [data, regions, metricsToDisplay, latestDataPerRegion, lookback])
+
+  // ── Sorted regions ─────────────────────────────────────────────────────
+  const sortedRegions = useMemo(() => {
+    if (!sortConfig.key) return regions
+    return [...regions].sort((a, b) => {
+      const va = displayMode === 'percentile'
+        ? (percentiles[`${a}::${sortConfig.key}`] ?? null)
+        : (latestDataPerRegion[a]?.[sortConfig.key] ?? null)
+      const vb = displayMode === 'percentile'
+        ? (percentiles[`${b}::${sortConfig.key}`] ?? null)
+        : (latestDataPerRegion[b]?.[sortConfig.key] ?? null)
+      if (va === null || va === undefined) return 1
+      if (vb === null || vb === undefined) return -1
+      return sortConfig.direction === 'asc' ? va - vb : vb - va
+    })
+  }, [regions, sortConfig, displayMode, percentiles, latestDataPerRegion])
 
   // ── Stale-data detection ─────────────────────────────────────────────────
   const staleRegions = useMemo(() => {
@@ -289,7 +315,7 @@ export function MetricsTable({
     if (value === null || value === undefined) return '–'
     if (typeof value === 'number') {
       const unit = metricMeta[metricKey]?.unit || ''
-      return `${value.toFixed(2)}${unit ? '\u00a0' + unit : ''}`
+      return `${value.toFixed(1)}${unit ? '\u00a0' + unit : ''}`
     }
     return String(value)
   }
@@ -360,18 +386,30 @@ export function MetricsTable({
                 ))}
               </tr>
             )}
-            {/* ── Row 2: metric name headers ── */}
+            {/* ── Row 2: metric name headers (sortable) ── */}
             <tr>
               {!columnGroups && <th className="metrics-table-region-label">Region</th>}
-              {metricsToDisplay.map(metric => (
-                <th key={metric} className="metrics-table-metric-header">
-                  {metricMeta[metric]?.label || metric}
-                </th>
-              ))}
+              {metricsToDisplay.map(metric => {
+                const isSorted = sortConfig.key === metric
+                const indicator = isSorted
+                  ? (sortConfig.direction === 'asc' ? ' ↑' : ' ↓')
+                  : ' ⇅'
+                return (
+                  <th
+                    key={metric}
+                    className={`metrics-table-metric-header sortable-col${isSorted ? ' sorted' : ''}`}
+                    onClick={() => handleSortClick(metric)}
+                    title="Klicken zum Sortieren"
+                  >
+                    {metricMeta[metric]?.label || metric}
+                    <span className="sort-indicator">{indicator}</span>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
-            {regions.map(region => {
+            {sortedRegions.map(region => {
               const flag = REGION_FLAGS[region] || ''
               const displayName = REGION_TRANSLATIONS[region] || region
               const isStale = staleRegions[region]

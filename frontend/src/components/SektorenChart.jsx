@@ -202,7 +202,14 @@ export default function SektorenChart({
     const pad = (hi - lo) * 0.05
     return [lo - pad, hi + pad]
   }, [yAxisScale, chartType, data, series])
-
+  // ── Sort series by latest value (high to low) for line chart legend ──────
+  const sortedSeriesForLine = useMemo(() => {
+    if (!data.length || !series.length) return series.map((name, i) => ({ name, i }))
+    const lastRow = data[data.length - 1] || {}
+    return series
+      .map((name, i) => ({ name, i }))
+      .sort((a, b) => (lastRow[b.name] ?? -Infinity) - (lastRow[a.name] ?? -Infinity))
+  }, [data, series])
   // (yAxisWidth removed – bar charts are now vertical so label length doesn't affect Y-axis)
 
   // ── Chart height split ───────────────────────────────────────────────────
@@ -233,15 +240,19 @@ export default function SektorenChart({
               : [undefined, undefined]
         }
         allowDataOverflow={yDomain != null}
-        tickFormatter={v => typeof v === 'number' ? (v >= 100 ? Math.round(v) : v % 1 === 0 ? v : v.toFixed(1)) : v}
+        tickFormatter={v => typeof v === 'number' ? Math.round(v) : v}
       />
       <Tooltip content={<LineTooltip />} />
       <Legend
         wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
         iconType="plainline"
         iconSize={16}
+        formatter={name => {
+          const lastVal = data[data.length - 1]?.[name]
+          return `${name} (${lastVal != null ? Math.round(lastVal) : '—'})`
+        }}
       />
-      {series.map((name, i) => (
+      {sortedSeriesForLine.map(({ name, i }) => (
         <Line
           key={name}
           type="monotone"
@@ -276,7 +287,7 @@ export default function SektorenChart({
       <YAxis
         tick={{ fontSize: 11 }}
         width={48}
-        tickFormatter={v => typeof v === 'number' ? (v >= 100 ? Math.round(v) : v % 1 === 0 ? v : v.toFixed(1)) : v}
+        tickFormatter={v => typeof v === 'number' ? Math.round(v) : v}
       />
       <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
 

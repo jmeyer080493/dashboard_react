@@ -141,16 +141,20 @@ def build_excel(items: list) -> bytes:
                     series.append(pd.Series(tr.get("y", []), name=nm))
                 df = pd.concat(series, axis=1)
 
-                # Write to sheet: title in row 0, data from row 1
+                # Write to sheet: title in row 0, optional subheading in row 1, data below
+                subheading = it.get("subheading", "")
+                data_start_row = 2 if subheading else 1
                 df.to_excel(
                     writer,
                     sheet_name=sheet_name,
-                    startrow=1,
+                    startrow=data_start_row,
                     startcol=startcol,
                     index=False,
                 )
                 worksheet = writer.sheets[sheet_name]
                 worksheet.write(0, startcol, it["title"])
+                if subheading:
+                    worksheet.write(1, startcol, subheading)
 
                 startcol += df.shape[1] + 1  # advance for next chart
 

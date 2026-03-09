@@ -12,6 +12,7 @@ import {
 import { MetricsTable } from '../../components/MetricsTable'
 import {
   getFIMetricLabel,
+  getFIYAxisLabel,
   FI_STANDARD_DEFAULTS,
   FI_METRICS_CATEGORIES,
 } from '../../config/metricsConfig'
@@ -61,11 +62,37 @@ function pivotDataForChart(records, metricKey, regions) {
 }
 
 /** Short date label for chart axes */
-function fmtDate(isoStr) {
+function fmtDate(isoStr, isLongTimeseries = false) {
   if (!isoStr) return ''
   const d = new Date(isoStr)
   if (isNaN(d)) return isoStr.slice(0, 10)
-  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  if (isLongTimeseries) {
+    return d.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' })
+  } else {
+    return d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short' })
+  }
+}
+
+/** Compute smart y-axis domain from data with padding */
+function computeSmartDomain(chartData, regions) {
+  if (!chartData || chartData.length === 0 || regions.length === 0) return [undefined, undefined]
+  
+  let min = Infinity, max = -Infinity
+  for (const row of chartData) {
+    for (const region of regions) {
+      const val = row[region]
+      if (val !== undefined && val !== null && typeof val === 'number') {
+        if (val < min) min = val
+        if (val > max) max = val
+      }
+    }
+  }
+  
+  if (min === Infinity || max === -Infinity) return [undefined, undefined]
+  
+  const range = max - min
+  const padding = range * 0.1 // 10% padding
+  return [min - padding, max + padding]
 }
 
 /** Return unit string for an FI metric key */
@@ -90,10 +117,35 @@ function formatFIValue(value, metricKey) {
   return `${value.toFixed(2)}${unit ? ' ' + unit : ''}`
 }
 
+/** Format Y-axis values: 0 decimals */
+function formatYValue(value) {
+  if (typeof value !== 'number') return value
+  return String(Math.round(value))
+}
+
+/** Check if time series is longer than 6 months for smart formatting */
+function isLongTimeseries(chartData) {
+  if (!chartData || chartData.length < 2) return false
+  const dates = chartData.map(r => r.DatePoint).filter(d => d).sort()
+  if (dates.length < 2) return false
+  const firstDate = new Date(dates[0])
+  const lastDate = new Date(dates[dates.length - 1])
+  const monthsDiff = (lastDate.getFullYear() - firstDate.getFullYear()) * 12 +
+                     (lastDate.getMonth() - firstDate.getMonth())
+  return monthsDiff > 6
+}
+
+/** Format a value for legend display: 0 decimals, German locale */
+function fmtLegendValue(val, unit = '') {
+  if (val === null || val === undefined || typeof val !== 'number') return null
+  const formatted = Math.round(val).toLocaleString('de-DE')
+  return unit ? `${formatted}\u00a0${unit}` : formatted
+}
+
 /**
  * Multi-Region Line Chart for a single FI metric.
  */
-function FILineChart({ chartData, regions, metricLabel, unit = '', height = 300 }) {
+function FILineChart({ chartData, regions, metricLabel, yAxisLabel = '', unit = '', height = 300 }) {
   const { addToPptx, addToXlsx } = useExport()
 
   if (!chartData || chartData.length === 0) {
@@ -104,13 +156,42 @@ function FILineChart({ chartData, regions, metricLabel, unit = '', height = 300 
       </div>
     )
   }
+
+  // Only render lines for regions that actually have at least one data point
+  const activeRegions = regions.filter(r => chartData.some(d => d[r] !== undefined && d[r] !== null))
+
+  if (activeRegions.length === 0) {
+    return (
+      <div className="chart-container">
+        <h3>{metricLabel}</h3>
+        <div className="chart-empty">Keine Daten verfügbar</div>
+      </div>
+    )
+  }
+
+  const [yMin, yMax] = computeSmartDomain(chartData, activeRegions)
+  const isLongSeries = isLongTimeseries(chartData)
+  
+  // Compute even interval spacing for y-axis
+  let yDomain = ['auto', 'auto']
+  if (yMin !== undefined && yMax !== undefined) {
+    const range = yMax - yMin
+    const step = Math.pow(10, Math.floor(Math.log10(range)))
+    const roundedMin = Math.floor(yMin / step) * step
+    const roundedMax = Math.ceil(yMax / step) * step
+    yDomain = [roundedMin, roundedMax]
+  }
+  
   const formatter = (value) => {
     if (typeof value !== 'number') return value
     return `${value.toFixed(2)}${unit ? ' ' + unit : ''}`
   }
 
+  const dateRange = getDateRange(chartData, 'DatePoint')
+  const subheading = dateRange
+
   const fullTitle = `Anleihen – ${metricLabel}`
-  const exportItem = { id: makeId(fullTitle), title: fullTitle, pptx_title: metricLabel, subheading: getDateRange(chartData, 'DatePoint'), tab: 'Anleihen', chartData, regions, xKey: 'DatePoint' }
+  const exportItem = { id: makeId(fullTitle), title: fullTitle, pptx_title: metricLabel, subheading, tab: 'Anleihen', chartData, regions: activeRegions, xKey: 'DatePoint' }
 
   return (
     <div className="chart-container">
@@ -121,10 +202,16 @@ function FILineChart({ chartData, regions, metricLabel, unit = '', height = 300 
           <XAxis
             dataKey="DatePoint"
             tick={{ fontSize: 11 }}
-            tickFormatter={fmtDate}
+            tickFormatter={(isoStr) => fmtDate(isoStr, isLongSeries)}
             interval="preserveStartEnd"
           />
-          <YAxis tick={{ fontSize: 11 }} />
+          <YAxis 
+            tick={{ fontSize: 11 }}
+            domain={yDomain}
+            tickFormatter={formatYValue}
+            width={yAxisLabel ? 48 : 40}
+            label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', offset: 12, style: { textAnchor: 'middle', fontSize: 11, fill: '#6b7280' } } : undefined}
+          />
           <Tooltip
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', fontSize: 12 }}
             formatter={formatter}
@@ -132,19 +219,28 @@ function FILineChart({ chartData, regions, metricLabel, unit = '', height = 300 
           />
           <Legend />
           <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="4 2" />
-          {regions.map((region, idx) => (
-            <Line
-              key={region}
-              type="monotone"
-              dataKey={region}
-              name={region}
-              stroke={REGION_COLORS[idx % REGION_COLORS.length]}
-              dot={false}
-              strokeWidth={2}
-              isAnimationActive={false}
-              connectNulls
-            />
-          ))}
+          {[...activeRegions]
+            .sort((a, b) => {
+              const lastRow = chartData[chartData.length - 1] || {}
+              return (lastRow[b] ?? -Infinity) - (lastRow[a] ?? -Infinity)
+            })
+            .map((region) => {
+            const latest = fmtLegendValue(chartData[chartData.length - 1]?.[region], unit)
+            const legendName = latest !== null ? `${region} (${latest})` : region
+            return (
+              <Line
+                key={region}
+                type="monotone"
+                dataKey={region}
+                name={legendName}
+                stroke={REGION_COLORS[regions.indexOf(region) % REGION_COLORS.length]}
+                dot={false}
+                strokeWidth={2}
+                isAnimationActive={false}
+                connectNulls
+              />
+            )
+          })}
         </LineChart>
       </ResponsiveContainer>
       <div className="chart-export-buttons">
@@ -243,6 +339,7 @@ function FixedIncomeTab({
               chartData={pivotDataForChart(filteredRecords, metric, regions)}
               regions={regions}
               metricLabel={getFIMetricLabel(metric)}
+              yAxisLabel={getFIYAxisLabel(metric)}
               unit={getUnit(metric)}
               height={chartHeight}
             />

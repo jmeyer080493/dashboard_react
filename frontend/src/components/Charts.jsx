@@ -40,10 +40,13 @@ export function PerformanceChart({ data, title = 'Market Performance', tab = 'Ak
   // Determine date key (could be 'date' or 'DatePoint')
   const dateKey = data[0]?.DatePoint ? 'DatePoint' : 'date'
   
-  // Get unique region names from first data point (region names without underscore prefixes)
+  // Get unique region names from first data point, sorted by latest value (high to low)
   const regions = data[0] ? Object.keys(data[0])
     .filter(k => k !== dateKey && !k.includes('_'))
-    .sort() : []
+    .sort((a, b) => {
+      const lastRow = data[data.length - 1] || {}
+      return (lastRow[b] ?? -Infinity) - (lastRow[a] ?? -Infinity)
+    }) : []
   
   const colors = ['#8b5cf6', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444']
 
@@ -57,12 +60,17 @@ export function PerformanceChart({ data, title = 'Market Performance', tab = 'Ak
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
           <XAxis dataKey={dateKey} tick={{ fontSize: 12 }} />
-          <YAxis tick={{ fontSize: 12 }} />
+          <YAxis tick={{ fontSize: 12 }} tickFormatter={v => typeof v === 'number' ? Math.round(v) : v} />
           <Tooltip 
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
             formatter={(value) => typeof value === 'number' ? value.toFixed(2) : value}
           />
-          <Legend />
+          <Legend
+            formatter={(name, entry) => {
+              const lastVal = data[data.length - 1]?.[entry.dataKey]
+              return `${name} (${lastVal != null ? Math.round(lastVal) : '—'})`
+            }}
+          />
           {regions.map((region, idx) => (
             <Line
               key={region}
@@ -108,7 +116,10 @@ export function MetricChart({ data, dataKey, title, yAxisLabel = '', tab = 'Akti
       if (key.endsWith(`_${dataKey}`)) return true
       return false
     })
-    .sort()
+    .sort((a, b) => {
+      const lastRow = data[data.length - 1] || {}
+      return (lastRow[b] ?? -Infinity) - (lastRow[a] ?? -Infinity)
+    })
   
   // Extract region names from column keys
   const regions = metricColumns.map(col =>
@@ -130,12 +141,17 @@ export function MetricChart({ data, dataKey, title, yAxisLabel = '', tab = 'Akti
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
           <XAxis dataKey="DatePoint" tick={{ fontSize: 12 }} />
-          <YAxis tick={{ fontSize: 12 }} label={{ value: yAxisLabel, angle: -90, position: 'insideLeft' }} />
+          <YAxis tick={{ fontSize: 12 }} label={{ value: yAxisLabel, angle: -90, position: 'insideLeft' }} tickFormatter={v => typeof v === 'number' ? Math.round(v) : v} />
           <Tooltip 
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
             formatter={(value) => typeof value === 'number' ? value.toFixed(2) : value}
           />
-          <Legend />
+          <Legend
+            formatter={(name, entry) => {
+              const lastVal = data[data.length - 1]?.[entry.dataKey]
+              return `${name} (${lastVal != null ? Math.round(lastVal) : '—'})`
+            }}
+          />
           {metricColumns.length > 0 ? (
             metricColumns.map((column, idx) => {
               // Extract region name from column (e.g., "Germany_MACD" -> "Germany")
@@ -190,6 +206,12 @@ export function ComparisonChart({ data, metrics, title, tab = '', height = 300 }
 
   const colors = ['#8b5cf6', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444']
 
+  // Sort metrics by latest value (high to low)
+  const sortedMetrics = [...(metrics ?? [])].sort((a, b) => {
+    const lastRow = data[data.length - 1] || {}
+    return (lastRow[b] ?? -Infinity) - (lastRow[a] ?? -Infinity)
+  })
+
   const fullTitle = tab ? `${tab} – ${title}` : title
   const exportItem = { id: makeId(fullTitle || 'chart'), title: fullTitle, pptx_title: title, subheading: getDateRange(data, 'date'), tab, chartData: data, regions: metrics ?? [], xKey: 'date' }
 
@@ -200,13 +222,18 @@ export function ComparisonChart({ data, metrics, title, tab = '', height = 300 }
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
           <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-          <YAxis tick={{ fontSize: 12 }} />
+          <YAxis tick={{ fontSize: 12 }} tickFormatter={v => typeof v === 'number' ? Math.round(v) : v} />
           <Tooltip 
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
             formatter={(value) => typeof value === 'number' ? value.toFixed(4) : value}
           />
-          <Legend />
-          {metrics.map((metric, idx) => (
+          <Legend
+            formatter={(name, entry) => {
+              const lastVal = data[data.length - 1]?.[entry.dataKey]
+              return `${name} (${lastVal != null ? Math.round(lastVal) : '—'})`
+            }}
+          />
+          {sortedMetrics.map((metric, idx) => (
             <Line
               key={metric}
               type="monotone"
