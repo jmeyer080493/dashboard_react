@@ -17,6 +17,7 @@
 .content-wrapper {
   width: 100%;
   padding: 2rem;
+  background: var(--bg-main);
 }
 
 .content-wrapper h1 {
@@ -86,10 +87,10 @@ button:hover {
   border-color: #646cff;
 }
 
-button:focus,
+/* button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
-}
+} */
 
 @media (prefers-color-scheme: light) {
   a:hover {

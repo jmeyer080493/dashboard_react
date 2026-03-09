@@ -90,7 +90,7 @@ function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback, 
             <div className="bottom-button-row">
               <button
                 className="bottom-button"
-                style={{ backgroundColor: '#c0392b', flex: 1, margin: '0.3rem' }}
+                style={{ backgroundColor: '#c0392b', flex: 1, margin: '0.3rem', marginLeft: '0' }}
                 onClick={() => setPptxModalOpen(true)}
               >
                 <span className="button-icon">
@@ -105,7 +105,7 @@ function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback, 
             <div className="bottom-button-row">
               <button
                 className="bottom-button"
-                style={{ backgroundColor: '#198754', flex: 1, margin: '0.3rem' }}
+                style={{ backgroundColor: '#198754', flex: 1, margin: '0.3rem', marginLeft: '0' }}
                 onClick={() => setXlsxModalOpen(true)}
               >
                 <span className="button-icon">
@@ -132,8 +132,10 @@ function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback, 
             </div>
           )}
 
+          <div className="divider"></div>
+
           <div className="footer-items">
-            <button className="footer-item" onClick={onOpenEinstellungen}>
+            <button className="footer-item " onClick={onOpenEinstellungen}>
               <span className="footer-icon">⚙️</span>
               <span className="footer-label">Einstellungen</span>
             </button>
@@ -141,7 +143,7 @@ function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback, 
               <span className="footer-icon">💬</span>
               <span className="footer-label">Feedback</span>
             </button>
-            <button className="footer-item footer-item--logout" onClick={onLogout}>
+            <button className="footer-item" onClick={onLogout}>
               <span className="footer-icon">🚪</span>
               <span className="footer-label">Abmelden</span>
             </button>

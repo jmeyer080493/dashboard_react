@@ -35,7 +35,7 @@
 
 .divider {
   height: 1px;
-  background: linear-gradient(90deg, var(--sidebar-border) 0%, rgba(0, 0, 0, 0) 100%);
+  background: var(--sidebar-border);
   margin: 1rem 0;
   transition: background 0.25s ease;
 }
@@ -65,7 +65,7 @@
   gap: 0.5rem;
   font-size: 0.85rem;
   transition: all 0.2s ease;
-  border-left: 3px solid transparent;
+  border-left: 5px solid transparent;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -74,6 +74,7 @@
 .menu-item:hover {
   background: var(--sidebar-hover-bg);
   color: var(--sidebar-text);
+  border-left-color: var(--sidebar-btn-border-left);
 }
 
 .menu-item.active {
@@ -129,7 +130,7 @@
 }
 
 .bottom-buttons {
-  padding: 0 1rem;
+  padding: 0 0.5em;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -137,8 +138,9 @@
 }
 
 .bottom-button {
-  padding: 0.6rem;
+  padding: 0.6rem 0.6rem 0.6rem 0.75rem;
   border: none;
+  border-left: 5px solid transparent;
   border-radius: 8px;
   color: var(--sidebar-text);
   font-size: 0.9rem;
@@ -153,6 +155,8 @@
 
 .bottom-button:hover {
   opacity: 0.8;
+  border-left: 5px solid transparent;
+
 }
 
 .bottom-button-row {
@@ -181,6 +185,7 @@
 
 .button-icon {
   font-size: 1.1rem;
+  display: flex;
 }
 
 .button-label {
@@ -190,32 +195,32 @@
 }
 
 .footer-items {
-  padding: 0 1rem;
+  padding: 0 0.5em;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
 .footer-item {
-  padding: 0.75rem 1rem;
-  background: none;
+  padding: 0.75rem 0.75rem;
   border: none;
-  color: var(--sidebar-text-muted);
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active-text);
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   font-size: 0.9rem;
-  transition: all 0.2s ease;
+  transition: opacity 0.2s, background 0.2s;
   justify-content: flex-start;
+  margin-left: 0;
+  border-left: 5px solid transparent;
 }
 
 .footer-item:hover {
-  color: var(--sidebar-text);
-}
+  color: #fff;
+  border-left: 12px solid transparent;
 
-.footer-item--logout:hover {
-  color: #ff9999;
 }
 
 .footer-icon {
@@ -232,13 +237,15 @@
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  padding: 0.6rem 1rem;
+  padding: 0.6rem 0.5em;
   margin-bottom: 0.25rem;
 }
 
 .sidebar-user-icon {
   font-size: 1.15rem;
   flex-shrink: 0;
+  border-left: 5px solid transparent;
+  margin-left: 0.75rem;
 }
 
 .sidebar-user-info {
