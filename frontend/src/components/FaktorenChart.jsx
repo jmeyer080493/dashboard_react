@@ -25,7 +25,7 @@ import {
 import { useExport } from '../context/ExportContext'
 import { getSmartDateFormat } from '../config/metricsConfig'
 import './Charts.css'
-import './FaktorenChart.css'
+import { ExcelIcon, PowerPointIcon } from '../icons/MicrosoftIcons'
 
 /** Stable ID from a string */
 function makeId(s) {
@@ -303,14 +303,14 @@ export default function FaktorenChart({
           onClick={() => addToPptx(exportItem)}
           title="Zu PowerPoint hinzufügen"
         >
-          📊 PPTX
+          <PowerPointIcon width={26} height={26} />
         </button>
         <button
           className="chart-export-btn xlsx"
           onClick={() => addToXlsx(exportItem)}
           title="Zu Excel hinzufügen"
         >
-          📗 Excel
+          <ExcelIcon width={26} height={26} />
         </button>
       </div>
     </div>

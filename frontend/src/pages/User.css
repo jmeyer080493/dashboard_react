@@ -328,6 +328,7 @@
   align-items: center;
   gap: 0.25rem;
   padding: 0.3rem 0.65rem;
+  margin: 0;
   border: none;
   border-radius: 5px;
   font-size: 0.78rem;

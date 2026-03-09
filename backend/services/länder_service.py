@@ -20,6 +20,55 @@ logger = logging.getLogger(__name__)
 
 # Import database gateway
 from utils.database import DatabaseGateway
+from config.settings import USE_SYNTHETIC_DATA
+
+
+def _generate_synthetic_equity_data(
+    tickers: List[str],
+    start_date: datetime,
+    end_date: datetime
+) -> pd.DataFrame:
+    """
+    Generate synthetic equity price data for testing/demo purposes.
+
+    Returns a DataFrame with columns: DatePoint, Value, FieldName, Ticker, Currency
+    """
+    rows = []
+    current = start_date.date() if isinstance(start_date, datetime) else start_date
+    end = end_date.date() if isinstance(end_date, datetime) else end_date
+    
+    # Generate base prices per ticker (seeded for consistency)
+    np.random.seed(42)
+    base_prices = {}
+    for ticker in tickers:
+        base_prices[ticker] = np.random.uniform(80, 150)
+    
+    while current <= end:
+        # Skip weekends
+        if current.weekday() < 5:  # Monday=0, Friday=4
+            for ticker in tickers:
+                # Generate PX_LAST with realistic drift
+                base = base_prices[ticker]
+                daily_return = np.random.normal(0.0003, 0.015)  # ~0.03% mean, 1.5% std
+                price = base * (1 + daily_return)
+                
+                rows.append({
+                    "DatePoint": current,
+                    "Value": round(price, 4),
+                    "FieldName": "PX_LAST",
+                    "Ticker": ticker,
+                    "Currency": "EUR",  # Default to EUR for synthetic data
+                })
+        
+        current = current + timedelta(days=1)
+    
+    if not rows:
+        return pd.DataFrame(columns=["DatePoint", "Value", "FieldName", "Ticker", "Currency"])
+    
+    df = pd.DataFrame(rows)
+    df["DatePoint"] = pd.to_datetime(df["DatePoint"])
+    logger.info("Generated %d synthetic equity price rows for %d tickers", len(df), len(tickers))
+    return df
 
 
 class EquityIndicatorCalculator:
@@ -285,6 +334,11 @@ class LänderDataService:
             start_date = datetime.now() - timedelta(days=1460)  # 4 years
         if end_date is None:
             end_date = datetime.now()
+        
+        # Use synthetic data if flag is set
+        if USE_SYNTHETIC_DATA:
+            logger.info("USE_SYNTHETIC_DATA is True – generating synthetic equity data")
+            return _generate_synthetic_equity_data(tickers, start_date, end_date)
         
         try:
             db = DatabaseGateway()
@@ -874,10 +928,81 @@ class LänderDataService:
             return pd.DataFrame()
 
     @staticmethod
+    def _generate_synthetic_fi_data(
+        tickers: List[str],
+        days_back: int = 1460,
+    ) -> pd.DataFrame:
+        """
+        Generate synthetic fixed income data for testing/demo purposes.
+
+        Returns a DataFrame with columns: DatePoint, Value, FieldName, Ticker, Currency
+        """
+        rows = []
+        end_date = datetime.now().date()
+        start_date = (datetime.now() - timedelta(days=days_back)).date()
+        
+        # Generate base values per ticker (seeded for consistency)
+        np.random.seed(42)
+        base_values = {}
+        for ticker in tickers:
+            # Realistic FI ranges
+            if 'Yields' in ticker or 'YLD' in ticker:
+                base_values[ticker] = np.random.uniform(0.5, 5.0)  # 0.5-5% yields
+            elif 'CDS' in ticker:
+                base_values[ticker] = np.random.uniform(20, 200)  # 20-200 bps CDS spreads
+            elif 'Breakeven' in ticker or 'Inflation' in ticker:
+                base_values[ticker] = np.random.uniform(1.0, 3.0)  # 1-3% inflation expectations
+            else:
+                base_values[ticker] = np.random.uniform(0, 100)
+        
+        current = start_date
+        
+        while current <= end_date:
+            # Generate daily data for FI
+            if current.weekday() < 5:  # Only trading days
+                for ticker in tickers:
+                    base = base_values[ticker]
+                    # Daily volatility for FI (less volatile than equities)
+                    daily_change = np.random.normal(0, 0.3)  # ~0.3% daily std dev
+                    value = base * (1 + daily_change / 100)
+                    
+                    # Keep values realistic
+                    if 'Yields' in ticker or 'YLD' in ticker:
+                        value = max(0.1, min(8.0, value))
+                    elif 'CDS' in ticker:
+                        value = max(10, min(500, value))
+                    elif 'Breakeven' in ticker or 'Inflation' in ticker:
+                        value = max(0.5, min(5.0, value))
+                    
+                    rows.append({
+                        "DatePoint": current,
+                        "Value": round(value, 4),
+                        "FieldName": "PX_LAST",
+                        "Ticker": ticker,
+                        "Currency": "EUR",
+                    })
+            
+            current = current + timedelta(days=1)
+        
+        if not rows:
+            return pd.DataFrame(columns=["DatePoint", "Value", "FieldName", "Ticker", "Currency"])
+        
+        df = pd.DataFrame(rows)
+        df["DatePoint"] = pd.to_datetime(df["DatePoint"])
+        logger.info("Generated %d synthetic FI data rows for %d tickers", len(df), len(tickers))
+        return df
+
+    @staticmethod
     def _get_bloomberg_fi_data(tickers: List[str], days_back: int = 1460) -> pd.DataFrame:
         """Query Bloomberg ReferenceDataHistoricalField for FI tickers."""
         if not tickers:
             return pd.DataFrame()
+        
+        # Use synthetic data if flag is set
+        if USE_SYNTHETIC_DATA:
+            logger.info("USE_SYNTHETIC_DATA is True – generating synthetic FI data")
+            return LänderDataService._generate_synthetic_fi_data(tickers, days_back)
+        
         try:
             db = DatabaseGateway()
             engine = db.get_prod_engine()
@@ -1260,6 +1385,74 @@ class LänderDataService:
             return pd.DataFrame()
 
     @staticmethod
+    def _generate_synthetic_macro_data(
+        tickers: List[str],
+        days_back: int = 1460,
+    ) -> pd.DataFrame:
+        """
+        Generate synthetic macro economic data for testing/demo purposes.
+
+        Returns a DataFrame with columns: DatePoint, Value, FieldName, Ticker, Currency
+        """
+        rows = []
+        end_date = datetime.now().date()
+        start_date = (datetime.now() - timedelta(days=days_back)).date()
+        
+        # Generate base values per ticker (seeded for consistency)
+        np.random.seed(42)
+        base_values = {}
+        for ticker in tickers:
+            # Realistic macro ranges
+            if 'GDP' in ticker or 'GROWTH' in ticker:
+                base_values[ticker] = np.random.uniform(1.5, 3.5)  # 1.5-3.5% growth
+            elif 'INFLATION' in ticker or 'CPI' in ticker:
+                base_values[ticker] = np.random.uniform(1.0, 4.0)  # 1-4% inflation
+            elif 'UNEMPLOYMENT' in ticker:
+                base_values[ticker] = np.random.uniform(3.0, 8.0)  # 3-8% unemployment
+            elif 'PMI' in ticker:
+                base_values[ticker] = np.random.uniform(45, 55)  # 45-55 PMI
+            else:
+                base_values[ticker] = np.random.uniform(0, 100)
+        
+        current = start_date
+        ticker_idx = 0
+        
+        while current <= end_date:
+            # Generate monthly data (more realistic for macro)
+            for ticker in tickers:
+                # Monthly frequency for most macro data
+                if current.day == 1 or ticker_idx % 22 == 0:  # Approximate monthly
+                    base = base_values[ticker]
+                    # Realistic monthly volatility
+                    monthly_change = np.random.normal(0, 0.5)  # ~0.5% monthly std dev
+                    value = base * (1 + monthly_change / 100)
+                    # Keep values realistic
+                    if 'GDP' in ticker or 'GROWTH' in ticker:
+                        value = max(0.5, min(5.0, value))
+                    elif 'UNEMPLOYMENT' in ticker:
+                        value = max(2.0, min(15.0, value))
+                    elif 'PMI' in ticker:
+                        value = max(30, min(70, value))
+                    
+                    rows.append({
+                        "DatePoint": current,
+                        "Value": round(value, 2),
+                        "FieldName": "PX_LAST",
+                        "Ticker": ticker,
+                        "Currency": "EUR",
+                    })
+            
+            current = current + timedelta(days=1)
+        
+        if not rows:
+            return pd.DataFrame(columns=["DatePoint", "Value", "FieldName", "Ticker", "Currency"])
+        
+        df = pd.DataFrame(rows)
+        df["DatePoint"] = pd.to_datetime(df["DatePoint"])
+        logger.info("Generated %d synthetic macro data rows for %d tickers", len(df), len(tickers))
+        return df
+
+    @staticmethod
     def _get_bloomberg_macro_data(tickers: List[str], days_back: int = 1460) -> pd.DataFrame:
         """Query Bloomberg ReferenceDataHistoricalField for Macro Bloomberg tickers.
         
@@ -1268,6 +1461,12 @@ class LänderDataService:
         """
         if not tickers:
             return pd.DataFrame()
+        
+        # Use synthetic data if flag is set
+        if USE_SYNTHETIC_DATA:
+            logger.info("USE_SYNTHETIC_DATA is True – generating synthetic macro data")
+            return LänderDataService._generate_synthetic_macro_data(tickers, days_back)
+        
         try:
             db = DatabaseGateway()
             engine = db.get_prod_engine()

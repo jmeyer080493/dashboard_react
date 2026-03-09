@@ -50,7 +50,7 @@ function GlobalControls({
 }) {
   console.log('[DEBUG GLOBALCONTROLS] Received props:', { activeTab, availableMetricsCount: availableMetrics.length, availableMetrics })
   const [showMetricsModal, setShowMetricsModal] = useState(false)
-  const [activeDateRange, setActiveDateRange] = useState('1Y') // '1Y' matches the default dates initialized in App.jsx
+  const [activeDateRange, setActiveDateRange] = useState(filters.customMode ? null : (filters.lookback ?? '1Y'))
 
   // Determine which metric config to use based on active tab
   const isEquityTab = activeTab === 'equity'
@@ -120,7 +120,8 @@ function GlobalControls({
     onFiltersChange({
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0],
-      lookback: label
+      lookback: label,
+      customMode: false,
     })
   }
 
@@ -165,13 +166,13 @@ function GlobalControls({
           <input
             type="date"
             value={filters.startDate || ''}
-            onChange={(e) => { setActiveDateRange(null); onFiltersChange({ startDate: e.target.value }) }}
+            onChange={(e) => { setActiveDateRange(null); onFiltersChange({ startDate: e.target.value, customMode: true }) }}
           />
           <span className="date-sep">→</span>
           <input
             type="date"
             value={filters.endDate || ''}
-            onChange={(e) => { setActiveDateRange(null); onFiltersChange({ endDate: e.target.value }) }}
+            onChange={(e) => { setActiveDateRange(null); onFiltersChange({ endDate: e.target.value, customMode: true }) }}
           />
         </div>
       </div>

@@ -1,19 +1,21 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import { useAuth } from '../context/AuthContext'
 import './FeedbackModal.css'
 
 const API_BASE = 'http://localhost:8000'
 
 const PAGE_OPTIONS = [
-  { label: '💬 Allgemein',   value: 'Allgemein' },
-  { label: '🌍 Länder',      value: 'Länder' },
-  { label: '📊 Faktoren',    value: 'Faktoren' },
-  { label: '🏢 Sektoren',    value: 'Sektoren' },
-  { label: '💼 Portfolios',  value: 'Portfolios' },
-  { label: '📈 Data',        value: 'Data' },
-  { label: '📝 Anleihen',    value: 'Anleihen' },
-  { label: '⚡ DuoPlus',     value: 'DuoPlus' },
-  { label: '🔄 Alternative', value: 'Alternative' },
+  { label: '💬 Allgemein',   value: 'Allgemein',   permission: null },
+  { label: '🌍 Länder',      value: 'Länder',      permission: 'countries' },
+  { label: '📊 Faktoren',    value: 'Faktoren',    permission: 'factors' },
+  { label: '🏢 Sektoren',    value: 'Sektoren',    permission: 'sectors' },
+  { label: '💼 Portfolios',  value: 'Portfolios',  permission: 'portfolios' },
+  { label: '📈 Data',        value: 'Data',        permission: 'data' },
+  { label: '📝 Anleihen',    value: 'Anleihen',    permission: 'anleihen' },
+  { label: '⚡ DuoPlus',     value: 'DuoPlus',     permission: 'duoplus' },
+  { label: '🔄 Alternative', value: 'Alternative', permission: 'extras' },
+  { label: '👤 User',        value: 'User',        permission: 'user' },
 ]
 
 const TYPE_OPTIONS = [
@@ -26,6 +28,9 @@ const TYPE_OPTIONS = [
 const MAX_CHARS = 2000
 
 export default function FeedbackModal({ isOpen, onClose, currentPage }) {
+  const { permissions } = useAuth()
+  const visiblePageOptions = PAGE_OPTIONS.filter(p => !p.permission || permissions.includes(p.permission))
+  
   const [page, setPage]           = useState('')
   const [feedbackType, setType]   = useState('')
   const [text, setText]           = useState('')
@@ -36,14 +41,14 @@ export default function FeedbackModal({ isOpen, onClose, currentPage }) {
   // Auto-populate page when modal opens
   useEffect(() => {
     if (isOpen) {
-      const matched = PAGE_OPTIONS.find(o => o.value === currentPage)
-      setPage(matched ? matched.value : 'Allgemein')
+      const matched = visiblePageOptions.find(o => o.value === currentPage)
+      setPage(matched ? matched.value : visiblePageOptions[0]?.value ?? 'Allgemein')
       setType('')
       setText('')
       setErrors({})
       setSuccess(false)
     }
-  }, [isOpen, currentPage])
+  }, [isOpen, currentPage, visiblePageOptions])
 
   if (!isOpen) return null
 
@@ -117,7 +122,7 @@ export default function FeedbackModal({ isOpen, onClose, currentPage }) {
                   onChange={e => { setPage(e.target.value); setErrors(prev => ({ ...prev, page: '' })) }}
                 >
                   <option value="" disabled>Bitte Seite auswählen...</option>
-                  {PAGE_OPTIONS.map(o => (
+                  {visiblePageOptions.map(o => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
                 </select>

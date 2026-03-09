@@ -111,7 +111,7 @@ export function PptxModal() {
             {pptxItems.length === 0 ? (
               <div className="export-queue-empty">
                 Keine Diagramme ausgewählt.<br />
-                Klicken Sie auf den 📊-Button unter einem Diagramm.
+                Klicken Sie auf eine PowerPoint-Schaltfläche unter einem Diagramm.
               </div>
             ) : (
               pptxItems.map((item) => (
@@ -220,7 +220,7 @@ export function XlsxModal() {
             {xlsxItems.length === 0 ? (
               <div className="export-queue-empty">
                 Keine Diagramme ausgewählt.<br />
-                Klicken Sie auf den 📗-Button unter einem Diagramm.
+                Klicken Sie auf eine Excel-Schaltfläche unter einem Diagramm.
               </div>
             ) : (
               xlsxItems.map((item) => (

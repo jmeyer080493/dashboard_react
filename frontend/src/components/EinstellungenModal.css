@@ -98,9 +98,8 @@
 /* ── Body ────────────────────────────────────────────────────────────────── */
 .eins-body {
   padding: 1.5rem;
-  flex: 1;
   overflow-y: auto;
-  min-height: 260px;
+  height: 400px;
 }
 
 .eins-section {

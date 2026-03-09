@@ -22,6 +22,7 @@ from typing import Optional, List, Dict, Any, Tuple
 logger = logging.getLogger(__name__)
 
 from utils.database import DatabaseGateway
+from config.settings import USE_SYNTHETIC_DATA
 
 db = DatabaseGateway()
 
@@ -100,8 +101,70 @@ def _get_date_range(period: str, as_of: Optional[date] = None) -> Tuple[date, da
 # Data loaders
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _generate_synthetic_kvg_data() -> pd.DataFrame:
+    """
+    Generate synthetic KVG share-type NAV transaction data for testing/demo purposes.
+    Returns a DataFrame with columns matching the SQL query from _load_kvg_data().
+    """
+    np.random.seed(42)
+    
+    # Fund names from FUND_NAME_MAPPING (share types)
+    FUNDS = [
+        "apo Forte INKA V", "apo Forte INKA R",
+        "DuoPlus V", "DuoPlus R",
+        "Global ETFs Portfolio EUR", "Global ETFs Portfolio R",
+        "apo Vivace INKA V", "apo Vivace INKA R",
+        "apo Piano INKA V", "apo Piano INKA R",
+        "apo Mezzo INKA V", "apo Mezzo INKA R",
+        "apo Medical Opportunities V", "apo Medical Opportunities R",
+        "apo Digital Health Aktien Fonds I", "apo Digital Health Aktien Fonds R",
+        "apo Medical Balance I", "apo Medical Balance R",
+        "MEDICAL BioHealth I",
+        "apo Future Health",
+        "apo Medical Core",
+    ]
+    
+    rows = []
+    today = datetime.today().date()
+    
+    # Generate 2-3 years of NAV data for each fund
+    for share_type_id, fund_name in enumerate(FUNDS, start=1):
+        # Starting NAV and date
+        start_date = today - relativedelta(years=2)
+        nav = np.random.uniform(100, 200)  # Starting NAV between 100-200
+        
+        # Generate daily NAV values (business days only)
+        current_date = start_date
+        while current_date <= today:
+            # Skip weekends
+            if current_date.weekday() < 5:
+                # Daily returns: 0.02% mean, 1% volatility
+                daily_return = np.random.normal(0.0002, 0.01)
+                nav = nav * (1 + daily_return)
+                nav = max(nav, 50)  # Ensure NAV stays positive
+                
+                rows.append({
+                    "ShareTypeId": share_type_id,
+                    "Name": fund_name,
+                    "ShareValue": round(nav, 4),
+                    "TransactionDate": current_date,
+                    "TransactionShareTypeId": share_type_id,
+                })
+            
+            current_date += timedelta(days=1)
+    
+    df = pd.DataFrame(rows)
+    logger.info("Generated %d synthetic KVG NAV records for %d funds", len(df), len(FUNDS))
+    return df
+
+
 def _load_kvg_data() -> pd.DataFrame:
     """Load KVG share-type NAV transactions from AMS_ExternalData."""
+    # Use synthetic data if flag is set
+    if USE_SYNTHETIC_DATA:
+        logger.info("USE_SYNTHETIC_DATA is True – generating synthetic KVG data")
+        return _generate_synthetic_kvg_data()
+    
     engine = db.ams_external_engine
     if engine is None:
         logger.warning("AMS External engine not available")

@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { ExcelIcon } from '../icons/MicrosoftIcons'
 import './MetricsTable.css'
 
 // ─── Region flag emoji map ──────────────────────────────────────────────────
@@ -147,9 +148,16 @@ export function MetricsTable({
   tabLabel = 'Tabelle',
   formatValue = null,
 }) {
-  const [displayMode, setDisplayMode] = useState('latest') // 'latest' | 'percentile'
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
+const [displayMode, setDisplayMode] = useState(() => {
+  try { return localStorage.getItem(`metricsTable_displayMode_${tabLabel}`) || 'latest' } catch { return 'latest' }
+})
 
+// Persist displayMode whenever it changes
+useEffect(() => {
+  try { localStorage.setItem(`metricsTable_displayMode_${tabLabel}`, displayMode) } catch {}
+}, [displayMode, tabLabel])
+
+const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   // ── Latest value per region ──────────────────────────────────────────────
   const latestDataPerRegion = useMemo(() => {
     if (!data || data.length === 0 || !regions) return {}
@@ -364,7 +372,7 @@ export function MetricsTable({
           onClick={() => exportTableAsCSV(regions, metricsInfo, latestDataPerRegion, tabLabel)}
           title="Tabelle als CSV exportieren"
         >
-          ⬇ Excel / CSV
+          <ExcelIcon width={26} height={26} />
         </button>
       </div>
 

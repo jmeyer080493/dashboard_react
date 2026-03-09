@@ -18,6 +18,7 @@ import numpy as np
 from datetime import date, timedelta
 import logging
 from typing import Optional
+from config.settings import USE_SYNTHETIC_DATA
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,39 @@ def _get_engine():
     return DatabaseGateway().get_prod_engine()
 
 
+def _generate_synthetic_ticker_map() -> dict:
+    """
+    Generate synthetic ticker map for testing/demo purposes.
+
+    Returns:
+        { ticker_str: (db_region, grouping_name) }
+    """
+    # Collect all unique regions and factors from GRAPH_DICTIONARY
+    regions_set = set()
+    factors_set = set()
+    
+    for view_cfg in GRAPH_DICTIONARY.values():
+        for graph_cfg in view_cfg.values():
+            regions_set.update(graph_cfg["regions"])
+            factors_set.update(graph_cfg["factors"])
+    
+    # Resolve aliases to database region names
+    db_regions = {REGION_ALIAS.get(r, r) for r in regions_set}
+    
+    result = {}
+    ticker_counter = 1
+    
+    for region in sorted(db_regions):
+        for factor in sorted(factors_set):
+            # Generate synthetic ticker name
+            ticker = f"M{ticker_counter}SYN{region[:2].upper()}{factor.replace(' ', '')[:3]} Index"
+            result[ticker] = (region, factor)
+            ticker_counter += 1
+    
+    logger.info("Generated %d synthetic tickers from GRAPH_DICTIONARY", len(result))
+    return result
+
+
 def _load_factor_ticker_map() -> dict:
     """
     Query ticker_master for all active factor tickers.
@@ -89,6 +123,11 @@ def _load_factor_ticker_map() -> dict:
         { ticker_str: (db_region, grouping_name) }
         e.g.  {"M1USLC Index": ("U.S.", "Large"), ...}
     """
+    # Use synthetic data if flag is set
+    if USE_SYNTHETIC_DATA:
+        logger.info("USE_SYNTHETIC_DATA is True – generating synthetic ticker map")
+        return _generate_synthetic_ticker_map()
+    
     engine = _get_engine()
     query = """
         SELECT Ticker, Regions, [Dashboard Grouping Name]
@@ -122,6 +161,11 @@ def _fetch_bloomberg_prices(
     """
     if not tickers:
         return pd.DataFrame(columns=["DatePoint", "Ticker", "Currency", "Value"])
+
+    # Use synthetic data if flag is set
+    if USE_SYNTHETIC_DATA:
+        logger.info("USE_SYNTHETIC_DATA is True – generating synthetic prices")
+        return _generate_synthetic_prices(tickers, start_date, end_date, currency)
 
     engine = _get_engine()
     ticker_list_sql = "', '".join(tickers)
@@ -167,6 +211,52 @@ def _fetch_bloomberg_prices(
 # ---------------------------------------------------------------------------
 # Date helpers
 # ---------------------------------------------------------------------------
+
+def _generate_synthetic_prices(
+    tickers: list,
+    start_date: str,
+    end_date: str,
+    currency: str,
+) -> pd.DataFrame:
+    """
+    Generate synthetic price data for testing/demo purposes.
+
+    Returns a DataFrame with realistic-looking price movements.
+    """
+    from datetime import datetime
+    
+    start = datetime.strptime(start_date, "%Y-%m-%d")
+    end = datetime.strptime(end_date, "%Y-%m-%d")
+    
+    rows = []
+    current = start
+    ticker_idx = 0
+    
+    while current <= end:
+        # Skip weekends
+        if current.weekday() < 5:  # Monday=0, Friday=4
+            for ticker in tickers:
+                # Generate realistic synthetic price variation
+                base_price = 100 + (len(ticker) * 10)
+                daily_return = np.random.normal(0.0005, 0.015)  # ~0.05% mean, 1.5% std
+                price = base_price * (1 + daily_return)
+                
+                rows.append({
+                    "DatePoint": current,
+                    "Ticker": ticker,
+                    "Currency": currency,
+                    "Value": round(price, 4),
+                })
+        
+        current = current + timedelta(days=1)
+    
+    if not rows:
+        return pd.DataFrame(columns=["DatePoint", "Ticker", "Currency", "Value"])
+    
+    df = pd.DataFrame(rows)
+    logger.info("Generated %d synthetic price rows for %d tickers", len(df), len(tickers))
+    return df
+
 
 def _compute_lookback_dates(lookback: str) -> tuple:
     today = date.today()

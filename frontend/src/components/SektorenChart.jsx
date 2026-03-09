@@ -27,6 +27,7 @@ import { useExport } from '../context/ExportContext'
 import { getSmartDateFormat } from '../config/metricsConfig'
 import './Charts.css'
 import './SektorenChart.css'
+import { ExcelIcon, PowerPointIcon } from '../icons/MicrosoftIcons'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -349,14 +350,14 @@ export default function SektorenChart({
           title="Zu PowerPoint hinzufügen"
           onClick={() => addToPptx(exportItem)}
         >
-          PPT
+          <PowerPointIcon width={26} height={26} />
         </button>
         <button
           className="chart-export-btn xlsx"
           title="Zu Excel hinzufügen"
           onClick={() => addToXlsx(exportItem)}
         >
-          XLS
+          <ExcelIcon width={26} height={26} />
         </button>
       </div>
     </div>

@@ -334,6 +334,7 @@
 
 .portfolio-export-btn {
   padding: 0.3rem 0.75rem;
+  margin: 0;
   border: 1px solid var(--border-color, #e5e7eb);
   border-radius: 5px;
   cursor: pointer;
