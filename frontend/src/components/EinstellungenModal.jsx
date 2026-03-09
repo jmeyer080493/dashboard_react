@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
 import './EinstellungenModal.css'
 
 const API_BASE = 'http://localhost:8000'
@@ -14,10 +15,10 @@ const PAGE_NAME_TO_KEY = {
 }
 
 const PAGE_OPTIONS = [
-  { value: 'laender',    label: '🌍 Länder'     },
-  { value: 'faktoren',   label: '📊 Faktoren'   },
-  { value: 'sektoren',   label: '🏭 Sektoren'   },
-  { value: 'alternativ', label: '📈 Alternative' },
+  { value: 'laender',    label: '🌍 Länder',      permission: 'countries' },
+  { value: 'faktoren',   label: '📊 Faktoren',    permission: 'factors'   },
+  { value: 'sektoren',   label: '🏭 Sektoren',    permission: 'sectors'   },
+  { value: 'alternativ', label: '📈 Alternative', permission: 'extras'    },
 ]
 
 const LAENDER_TABS = [
@@ -43,7 +44,11 @@ const CHART_HEIGHT_OPTIONS = [
 
 export default function EinstellungenModal({ isOpen, onClose, activePage, graphSettings, onSaveSettings }) {
   const { theme, setTheme } = useTheme()
+  const { permissions } = useAuth()
   const [activeTab, setActiveTab] = useState('grafiken')
+
+  // Only show pages the current user has access to
+  const visiblePageOptions = PAGE_OPTIONS.filter(p => permissions.includes(p.permission))
 
   // Page selector in Grafiken tab
   const [selectedPage, setSelectedPage] = useState('laender')
@@ -64,7 +69,10 @@ export default function EinstellungenModal({ isOpen, onClose, activePage, graphS
   useEffect(() => {
     if (isOpen) {
       setDraft(graphSettings)
-      setSelectedPage(PAGE_NAME_TO_KEY[activePage] ?? 'laender')
+      // Pre-select current page, but fall back to first visible page if not accessible
+      const preferred = PAGE_NAME_TO_KEY[activePage]
+      const fallback = visiblePageOptions[0]?.value ?? 'laender'
+      setSelectedPage(visiblePageOptions.find(p => p.value === preferred) ? preferred : fallback)
       setActiveLänderTab('all')
     }
   }, [isOpen, graphSettings, activePage])
@@ -79,10 +87,43 @@ export default function EinstellungenModal({ isOpen, onClose, activePage, graphS
 
   // ── Graph settings helpers ───────────────────────────────────────────────
 
+  const getAllTabsValues = (field) => {
+    return {
+      equity: draft.equity?.[field],
+      fi: draft.fi?.[field],
+      macro: draft.macro?.[field],
+    }
+  }
+
+  const areAllTabsEqual = (field) => {
+    const vals = getAllTabsValues(field)
+    return vals.equity === vals.fi && vals.fi === vals.macro
+  }
+
+  const getMostCommonValue = (field) => {
+    const vals = getAllTabsValues(field)
+    const valuesArray = [vals.equity, vals.fi, vals.macro]
+    
+    // Count occurrences
+    const counts = {}
+    valuesArray.forEach(v => {
+      counts[v] = (counts[v] || 0) + 1
+    })
+    
+    // Return the most common value
+    return Object.keys(counts).reduce((a, b) => 
+      counts[a] > counts[b] ? a : b
+    )
+  }
+
   const getEffectiveValue = (field) => {
     if (selectedPage === 'laender') {
-      const tab = activeLänderTab === 'all' ? 'equity' : activeLänderTab
-      return draft[tab]?.[field]
+      if (activeLänderTab === 'all') {
+        // Return the most common value across all tabs
+        return getMostCommonValue(field)
+      } else {
+        return draft[activeLänderTab]?.[field]
+      }
     }
     return draft[selectedPage]?.[field]
   }
@@ -188,18 +229,22 @@ export default function EinstellungenModal({ isOpen, onClose, activePage, graphS
             <div className="eins-section">
               <h3 className="eins-section-title">Design-Modus</h3>
               <p className="eins-hint">Wählen Sie zwischen hellem und dunklem Dashboard-Design.</p>
-              <div className="eins-btn-group" style={{ marginTop: '0.25rem' }}>
+              <div className="eins-btn-group" style={{ marginTop: '0.25rem', flexDirection: 'column', gap: '0.5rem' }}>
                 <button
                   className={`eins-theme-btn ${theme === 'light' ? 'eins-theme-btn--active' : ''}`}
                   onClick={() => setTheme('light')}
+                  style={{ width: '100%', margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}
                 >
-                  ☀️ Hell
+                  <span>☀️ Hell</span>
+                  <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>Helles Dashboard-Design</span>
                 </button>
                 <button
                   className={`eins-theme-btn ${theme === 'dark' ? 'eins-theme-btn--active' : ''}`}
                   onClick={() => setTheme('dark')}
+                  style={{ width: '100%', margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}
                 >
-                  🌙 Dunkel
+                  <span>🌙 Dunkel</span>
+                  <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>Dunkles Dashboard-Design</span>
                 </button>
               </div>
             </div>
@@ -212,48 +257,59 @@ export default function EinstellungenModal({ isOpen, onClose, activePage, graphS
 
               {/* Page selector */}
               <label className="eins-label">Seite auswählen:</label>
-              <div className="eins-btn-group eins-btn-group--pages">
-                {PAGE_OPTIONS.map(p => (
-                  <button
-                    key={p.value}
-                    className={`eins-page-btn ${selectedPage === p.value ? 'eins-page-btn--active' : ''}`}
-                    onClick={() => { setSelectedPage(p.value); setActiveLänderTab('all') }}
-                  >
-                    {p.label}
-                  </button>
-                ))}
+              <div className="eins-select-wrap">
+                <select
+                  className="eins-select"
+                  value={selectedPage}
+                  onChange={(e) => { setSelectedPage(e.target.value); setActiveLänderTab('all') }}
+                >
+                  {visiblePageOptions.map(p => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Tab selector – only for Länder */}
               {selectedPage === 'laender' && (
                 <>
                   <label className="eins-label">Anwenden auf:</label>
-                  <div className="eins-btn-group eins-btn-group--tabs">
-                    {LAENDER_TABS.map(t => (
-                      <button
-                        key={t.value}
-                        className={`eins-tab-sel-btn ${activeLänderTab === t.value ? 'eins-tab-sel-btn--active' : ''}`}
-                        onClick={() => setActiveLänderTab(t.value)}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
+                  
+                  {activeLänderTab === 'all' && (
+                    <>
+                      <p style={{ fontSize: '0.55rem', margin: '0', opacity: 0.5 }}>
+                        {areAllTabsEqual('chartsPerRow') && areAllTabsEqual('chartHeight')
+                          ? '✓ Alle Tabs nutzen die gleichen Einstellungen'
+                          : '⚠ Die Tabs nutzen unterschiedliche Einstellungen. Die Dropdowns zeigen die häufigste Einstellung an.'}
+                      </p>
+                    </>
+                  )}
+                  
+                  <div className="eins-select-wrap">
+                    <select
+                      className="eins-select"
+                      value={activeLänderTab}
+                      onChange={(e) => setActiveLänderTab(e.target.value)}
+                    >
+                      {LAENDER_TABS.map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
                   </div>
                 </>
               )}
 
               {/* Graphs per row */}
               <label className="eins-label">Grafiken pro Zeile:</label>
-              <div className="eins-btn-group">
-                {CHARTS_PER_ROW_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    className={`eins-option-btn ${getEffectiveValue('chartsPerRow') === opt.value ? 'eins-option-btn--active' : ''}`}
-                    onClick={() => setFieldValue('chartsPerRow', opt.value)}
-                  >
-                    {opt.value}
-                  </button>
-                ))}
+              <div className="eins-select-wrap">
+                <select
+                  className="eins-select"
+                  value={getEffectiveValue('chartsPerRow')}
+                  onChange={(e) => setFieldValue('chartsPerRow', Number(e.target.value))}
+                >
+                  {CHARTS_PER_ROW_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Chart height */}
@@ -316,10 +372,6 @@ export default function EinstellungenModal({ isOpen, onClose, activePage, graphS
                 {pwdMessage && (
                   <p className={`eins-message eins-message--${pwdMessage.type}`}>{pwdMessage.text}</p>
                 )}
-
-                <button type="submit" className="eins-btn eins-btn--primary eins-btn--full" disabled={pwdLoading}>
-                  {pwdLoading ? <span className="eins-spinner" /> : 'Passwort ändern'}
-                </button>
               </form>
             </div>
           )}
@@ -328,16 +380,23 @@ export default function EinstellungenModal({ isOpen, onClose, activePage, graphS
         {/* Footer */}
         <div className="eins-footer">
           {activeTab === 'grafiken' ? (
-            <>
-              <button className="eins-btn eins-btn--secondary" onClick={handleClose}>
+            <div style={{ display: 'flex', gap: '0.6rem', width: '100%' }}>
+              <button className="eins-btn eins-btn--secondary" onClick={handleClose} style={{ flex: 1, margin: 0 }}>
                 Abbrechen
               </button>
-              <button className="eins-btn eins-btn--primary" onClick={handleSaveGraphSettings}>
+              <button className="eins-btn eins-btn--primary" onClick={handleSaveGraphSettings} style={{ flex: 1, margin: 0 }}>
                 Speichern
               </button>
-            </>
-          ) : (
-            <button className="eins-btn eins-btn--secondary eins-btn--full" onClick={handleClose}>
+            </div>          ) : activeTab === 'sicherheit' ? (
+            <div style={{ display: 'flex', gap: '0.6rem', width: '100%' }}>
+              <button className="eins-btn eins-btn--secondary" onClick={handleClose} style={{ flex: 1, margin: 0 }}>
+                Schließen
+              </button>
+              <button type="submit" className="eins-btn eins-btn--primary" onClick={handlePasswordSubmit} style={{ flex: 1, margin: 0 }} disabled={pwdLoading}>
+                {pwdLoading ? <span className="eins-spinner" /> : 'Passwort ändern'}
+              </button>
+            </div>          ) : (
+            <button className="eins-btn eins-btn--secondary eins-btn--full" onClick={handleClose} style={{ margin: 0 }}>
               Schließen
             </button>
           )}

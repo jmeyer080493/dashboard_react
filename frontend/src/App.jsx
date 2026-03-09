@@ -102,20 +102,48 @@ function AppShell() {
   const firstPermitted = ALL_PAGES.find(canAccess) ?? 'Länder'
   const activePage = (currentPage && canAccess(currentPage)) ? currentPage : firstPermitted
   
-  // Länder page state - persists across page navigation
-  const [länderActiveTab, setLänderActiveTab] = useState('equity')
+  // Länder page state - persists across page navigation AND page reload (localStorage)
+  const [länderActiveTab, setLänderActiveTab] = useState(() => {
+    try { return localStorage.getItem('länder_activeTab') || 'equity' } catch { return 'equity' }
+  })
   const [länderFilters, setLänderFilters] = useState(() => {
-    const today = new Date()
-    const oneYearAgo = new Date()
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-    return {
-      regions: ALL_REGIONS.length > 0 ? [ALL_REGIONS[0]] : ['Germany'],
-      startDate: oneYearAgo.toISOString().split('T')[0],
-      endDate: today.toISOString().split('T')[0],
-      lookback: '1Y',
-      currency: 'EUR'
+    try {
+      const saved = JSON.parse(localStorage.getItem('länder_filters') || '{}')
+      const today = new Date()
+      const oneYearAgo = new Date()
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+      const defaultRegion = ALL_REGIONS.length > 0 ? [ALL_REGIONS[0]] : ['Germany']
+      return {
+        regions:    saved.regions    || defaultRegion,
+        startDate:  saved.startDate  || oneYearAgo.toISOString().split('T')[0],
+        endDate:    saved.endDate    || today.toISOString().split('T')[0],
+        lookback:   saved.lookback   || '1Y',
+        currency:   saved.currency   || 'EUR',
+        customMode: saved.customMode || false,
+      }
+    } catch {
+      const today = new Date()
+      const oneYearAgo = new Date()
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+      return {
+        regions:    ALL_REGIONS.length > 0 ? [ALL_REGIONS[0]] : ['Germany'],
+        startDate:  oneYearAgo.toISOString().split('T')[0],
+        endDate:    today.toISOString().split('T')[0],
+        lookback:   '1Y',
+        currency:   'EUR',
+        customMode: false,
+      }
     }
   })
+
+  // Persist Länder state to localStorage on every change
+  useEffect(() => {
+    try { localStorage.setItem('länder_activeTab', länderActiveTab) } catch {}
+  }, [länderActiveTab])
+
+  useEffect(() => {
+    try { localStorage.setItem('länder_filters', JSON.stringify(länderFilters)) } catch {}
+  }, [länderFilters])
 
   const handleLänderFiltersChange = (newFilters) => {
     setLänderFilters(prev => ({

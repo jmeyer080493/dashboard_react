@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useExport } from '../context/ExportContext'
+import { ExcelIcon, PowerPointIcon } from '../icons/MicrosoftIcons'
 import './Charts.css'
 
 /** Produce a stable string ID from a chart title */
@@ -85,8 +86,8 @@ export function PerformanceChart({ data, title = 'Market Performance', tab = 'Ak
         </LineChart>
       </ResponsiveContainer>
       <div className="chart-export-buttons">
-        <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen">📊 PPTX</button>
-        <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen">📗 Excel</button>
+        <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={26} height={26} /></button>
+        <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={26} height={26} /></button>
       </div>
     </div>
   )
@@ -186,8 +187,8 @@ export function MetricChart({ data, dataKey, title, yAxisLabel = '', tab = 'Akti
         </LineChart>
       </ResponsiveContainer>
       <div className="chart-export-buttons">
-        <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen">📊 PPTX</button>
-        <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen">📗 Excel</button>
+        <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={26} height={26} /></button>
+        <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={26} height={26} /></button>
       </div>
     </div>
   )
@@ -247,8 +248,8 @@ export function ComparisonChart({ data, metrics, title, tab = '', height = 300 }
         </LineChart>
       </ResponsiveContainer>
       <div className="chart-export-buttons">
-        <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen">📊 PPTX</button>
-        <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen">📗 Excel</button>
+        <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={20} height={20} /></button>
+        <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={20} height={20} /></button>
       </div>
     </div>
   )

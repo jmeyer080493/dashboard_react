@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useExport } from './context/ExportContext'
 import { useAuth } from './context/AuthContext'
+import { ExcelIcon, PowerPointIcon } from './icons/MicrosoftIcons'
 import './Sidebar.css'
 
 /**
@@ -89,10 +90,12 @@ function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback, 
             <div className="bottom-button-row">
               <button
                 className="bottom-button"
-                style={{ backgroundColor: '#c0392b', flex: 1 }}
+                style={{ backgroundColor: '#c0392b', flex: 1, margin: '0.3rem' }}
                 onClick={() => setPptxModalOpen(true)}
               >
-                <span className="button-icon">📊</span>
+                <span className="button-icon">
+                  <PowerPointIcon width={24} height={24} />
+                </span>
                 <span className="button-label">PPTX ({pptxItems.length})</span>
               </button>
               {pptxItems.length > 0 && (
@@ -102,10 +105,12 @@ function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback, 
             <div className="bottom-button-row">
               <button
                 className="bottom-button"
-                style={{ backgroundColor: '#198754', flex: 1 }}
+                style={{ backgroundColor: '#198754', flex: 1, margin: '0.3rem' }}
                 onClick={() => setXlsxModalOpen(true)}
               >
-                <span className="button-icon">📗</span>
+                <span className="button-icon">
+                  <ExcelIcon width={24} height={24} />
+                </span>
                 <span className="button-label">Excel ({xlsxItems.length})</span>
               </button>
               {xlsxItems.length > 0 && (

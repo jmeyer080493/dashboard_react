@@ -6,6 +6,7 @@ import {
   ComposedChart, Bar, ReferenceLine,
 } from 'recharts'
 import { useExport } from '../context/ExportContext'
+import { ExcelIcon, PowerPointIcon } from '../icons/MicrosoftIcons'
 import './Portfolios.css'
 
 const API_BASE = 'http://localhost:8000'
@@ -110,7 +111,7 @@ function AumTable({ rows, columns, onExport }) {
       </div>
       <div className="portfolio-export-row">
         <button className="portfolio-export-btn xlsx" onClick={onExport} title="Zu Excel hinzufügen">
-          📗 Excel
+          <ExcelIcon width={26} height={26} />
         </button>
       </div>
     </div>
@@ -212,7 +213,7 @@ function LiquidityTable({ rows, dateLabels, dateKeys, onExport }) {
       </div>
       <div className="portfolio-export-row">
         <button className="portfolio-export-btn xlsx" onClick={onExport} title="Zu Excel hinzufügen">
-          📗 Excel
+          <ExcelIcon width={26} height={26} />
         </button>
       </div>
     </div>
@@ -320,7 +321,7 @@ function HoldingsTable({ holdings, onExport }) {
       </div>
       <div className="portfolio-export-row">
         <button className="portfolio-export-btn xlsx" onClick={onExport} title="Zu Excel hinzufügen">
-          📗 Excel
+          <ExcelIcon width={26} height={26} />
         </button>
       </div>
     </div>
@@ -408,9 +409,13 @@ function AllocationPieChart({ title, chartId, data, latestDate, tab }) {
       )}
       <div className="portfolio-export-row">
         <button className="portfolio-export-btn pptx" onClick={() => addToPptx(exportItem)}
-                title="Zu PowerPoint hinzufügen">📊 PPTX</button>
+                title="Zu PowerPoint hinzufügen">
+          <PowerPointIcon width={26} height={26} />
+        </button>
         <button className="portfolio-export-btn xlsx" onClick={() => addToXlsx(exportItem)}
-                title="Zu Excel hinzufügen">📗 Excel</button>
+                title="Zu Excel hinzufügen">
+          <ExcelIcon width={26} height={26} />
+        </button>
       </div>
     </div>
   )

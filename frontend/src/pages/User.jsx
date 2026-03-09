@@ -14,6 +14,7 @@ import {
   ReferenceLine,
 } from 'recharts'
 import { useExport } from '../context/ExportContext'
+import { ExcelIcon, PowerPointIcon } from '../icons/MicrosoftIcons'
 import './User.css'
 
 // ─── small helpers ────────────────────────────────────────────────────────────
@@ -173,14 +174,14 @@ function PerformanceChart({ data, latestDate, loading, selectedPeriod, onPeriodC
           onClick={() => addToPptx(exportItem)}
           title="Zu PowerPoint hinzufügen"
         >
-          📊 PPTX
+          <PowerPointIcon width={26} height={26} />
         </button>
         <button
           className="user-export-btn xlsx"
           onClick={() => addToXlsx(exportItem)}
           title="Zu Excel hinzufügen"
         >
-          📗 Excel
+          <ExcelIcon width={26} height={26} />
         </button>
         {latestDate && (
           <span className="user-chart-update">Letztes Update: {latestDate}, in EUR</span>

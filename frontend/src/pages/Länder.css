@@ -15,6 +15,7 @@
   background: transparent;
   padding: 0 1.5rem;
   flex-wrap: wrap;
+  margin-bottom: 1rem;
 }
 
 .tab-button {
@@ -42,6 +43,5 @@
 }
 
 .tab-content {
-  padding: 1.5rem;
   min-height: 500px;
 }

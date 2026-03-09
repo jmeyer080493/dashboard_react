@@ -17,6 +17,7 @@ from typing import Optional, List, Dict, Any
 logger = logging.getLogger(__name__)
 
 from utils.database import DatabaseGateway
+from config.settings import USE_SYNTHETIC_DATA
 
 db = DatabaseGateway()
 
@@ -136,8 +137,24 @@ def _format_currency(value) -> str:
 # HOLDINGS DATA
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _generate_synthetic_portfolio_names() -> List[str]:
+    """
+    Generate synthetic portfolio names for testing/demo purposes.
+    Returns a list of realistic portfolio names from FUND_NAME_MAPPING.
+    """
+    # Use the first realname for each fund as synthetic data
+    portfolio_names = [names[0] for names in FUND_NAME_MAPPING.values() if names]
+    logger.info("Generated %d synthetic portfolio names", len(portfolio_names))
+    return portfolio_names
+
+
 def _get_all_portfolio_names() -> List[str]:
     """Fetch all active portfolio names from AMS database."""
+    # Use synthetic data if flag is set
+    if USE_SYNTHETIC_DATA:
+        logger.info("USE_SYNTHETIC_DATA is True – generating synthetic portfolio names")
+        return _generate_synthetic_portfolio_names()
+    
     engine = db.ams_holdings_engine
     if engine is None:
         logger.warning("AMS engine not available, returning empty portfolio list")
@@ -161,11 +178,153 @@ def _get_all_portfolio_names() -> List[str]:
         return []
 
 
+def _generate_synthetic_holdings_data(portfolio_names: List[str]) -> pd.DataFrame:
+    """
+    Generate synthetic holdings data for testing/demo purposes.
+    Returns a DataFrame with columns matching the SQL query from _get_current_holdings().
+    """
+    if not portfolio_names:
+        return pd.DataFrame()
+    
+    # Define realistic holdings universe
+    equities = [
+        ("Apple Inc", "AAPL US Equity", "US", "Information Technology"),
+        ("Microsoft Corp", "MSFT US Equity", "US", "Information Technology"),
+        ("Nestle AG", "NSRGY US Equity", "CH", "Consumer Staples"),
+        ("Siemens AG", "SIE GY Equity", "DE", "Industrials"),
+        ("LVMH Moet Hennessy", "MC FP Equity", "FR", "Consumer Discretionary"),
+        ("Roche Holdings", "RHHBY US Equity", "CH", "Healthcare"),
+        ("SAP SE", "SAP GY Equity", "DE", "Information Technology"),
+        ("Unilever PLC", "UL US Equity", "GB", "Consumer Staples"),
+    ]
+    
+    bonds = [
+        ("German Bund 2031", "DE0001135275 Corp", "DE"),
+        ("US Treasury 10Y", "USGG10YR Corp", "US"),
+        ("French OAT 2030", "FR0000570046 Govt", "FR"),
+        ("Corporate Bond AAA", "CORP1000 Corp", "US"),
+        ("EM Bond 2028", "EMBOND001 Corp", "MX"),
+    ]
+    
+    countries = ["US", "DE", "FR", "CH", "GB", "IT", "ES", "NL"]
+    
+    rows = []
+    today = datetime.today().date()
+    
+    for portfolio in portfolio_names:
+        # Generate deterministic seed from portfolio name hash, independent of list order
+        # This ensures same portfolio always gets same seed even when called with different lists
+        portfolio_seed = 42 + (hash(portfolio) % 1000)
+        np.random.seed(portfolio_seed)
+        
+        # 8-15 equity holdings per portfolio
+        num_equities = np.random.randint(8, 16)
+        equity_indices = np.random.choice(len(equities), min(num_equities, len(equities)), replace=False)
+        
+        for idx in equity_indices:
+            name, bb_code, country, sector = equities[idx]
+            quantity = np.random.uniform(100, 5000)
+            price = np.random.uniform(20, 300)
+            
+            rows.append({
+                "portfolio": portfolio,
+                "name": name,
+                "Asset Type": "Equity",
+                "bb_code": bb_code,
+                "last_bb_date": today - timedelta(days=np.random.randint(0, 2)),
+                "kvg_qty": quantity,
+                "qty": quantity,
+                "curr": "EUR",
+                "Country": country,
+                "Sector": sector,
+                "unit": 1,
+                "ams_price": price,
+                "fx_rate": 1.0,
+                "Maturity": None,
+                "Security Type": "Equity",
+            })
+        
+        # 3-8 fixed income holdings per portfolio
+        num_bonds = np.random.randint(3, 9)
+        bond_indices = np.random.choice(len(bonds), min(num_bonds, len(bonds)), replace=False)
+        
+        for idx in bond_indices:
+            name, bb_code, bond_country = bonds[idx]
+            quantity = np.random.uniform(10000, 100000)
+            price = np.random.uniform(95, 105)  # Bond price as % of par
+            
+            sec_type = "Government" if "Govt" in bb_code else "Corporate"
+            maturity_offset = np.random.randint(180, 1825)  # 6 months to 5 years
+            maturity_date = today + timedelta(days=maturity_offset)
+            
+            rows.append({
+                "portfolio": portfolio,
+                "name": name,
+                "Asset Type": "Fixed Income",
+                "bb_code": bb_code,
+                "last_bb_date": today - timedelta(days=np.random.randint(0, 2)),
+                "kvg_qty": quantity,
+                "qty": quantity,
+                "curr": np.random.choice(["EUR", "USD", "GBP"]),
+                "Country": bond_country,
+                "Sector": None,
+                "unit": 100,  # Bond face value
+                "ams_price": price / 100,  # Convert to decimal
+                "fx_rate": np.random.uniform(0.95, 1.05),
+                "Maturity": maturity_date,
+                "Security Type": sec_type,
+            })
+        
+        # 1-2 cash positions per portfolio
+        num_cash = np.random.randint(1, 3)
+        for i in range(num_cash):
+            amount = np.random.uniform(100000, 2000000)
+            
+            rows.append({
+                "portfolio": portfolio,
+                "name": "EUR Currency" if i == 0 else "USD Currency",
+                "Asset Type": "Cash and Other",
+                "bb_code": None,
+                "last_bb_date": today,
+                "kvg_qty": amount,
+                "qty": amount,
+                "curr": "EUR" if i == 0 else "USD",
+                "Country": None,
+                "Sector": None,
+                "unit": 1,
+                "ams_price": 1.0,
+                "fx_rate": 1.0 if i == 0 else np.random.uniform(0.85, 1.10),
+                "Maturity": None,
+                "Security Type": "Cash and Other",
+            })
+    
+    df = pd.DataFrame(rows)
+    
+    # Calculate ams_value (market value) and weights per portfolio
+    df["ams_value"] = df["qty"] * df["ams_price"] * df["fx_rate"]
+    
+    for port in df["portfolio"].unique():
+        mask = df["portfolio"] == port
+        total = df.loc[mask, "ams_value"].sum()
+        if total and total != 0:
+            df.loc[mask, "Weight"] = df.loc[mask, "ams_value"] / total
+        else:
+            df.loc[mask, "Weight"] = 0.0
+    
+    logger.info("Generated %d synthetic holdings rows for %d portfolios", len(df), len(portfolio_names))
+    return df
+
+
 def _get_current_holdings(portfolio_names: List[str]) -> pd.DataFrame:
     """
     Retrieve current holdings for the given portfolios from AMS.
     Mirrors data/get_data.py::get_current_holdings().
     """
+    # Use synthetic data if flag is set
+    if USE_SYNTHETIC_DATA:
+        logger.info("USE_SYNTHETIC_DATA is True – generating synthetic holdings data")
+        return _generate_synthetic_holdings_data(portfolio_names)
+    
     engine = db.ams_holdings_engine
     if engine is None or not portfolio_names:
         return pd.DataFrame()
@@ -353,7 +512,54 @@ def _get_aum_by_portfolio(holdings: pd.DataFrame) -> pd.DataFrame:
 # LIQUIDITY DATA
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _generate_synthetic_cash_data() -> pd.DataFrame:
+    """
+    Generate synthetic cash position data for testing/demo purposes.
+    Returns a DataFrame with columns: kvg_qty, ISO, PortName
+    """
+    # Get synthetic portfolio names
+    portfolios = _generate_synthetic_portfolio_names()
+    
+    # Realistic currencies and amounts
+    currencies = ["EUR", "USD", "GBP", "CHF"]
+    
+    # Generate base amounts per portfolio (seeded for consistency)
+    np.random.seed(42)
+    rows = []
+    
+    for portfolio in portfolios:
+        for curr in currencies:
+            # Generate realistic cash amounts (mostly EUR, less of other currencies)
+            if curr == "EUR":
+                # EUR is main currency - larger amounts
+                amount = np.random.uniform(500000, 5000000)
+            else:
+                # Other currencies - smaller amounts with 60% probability
+                if np.random.random() < 0.6:
+                    amount = np.random.uniform(100000, 1000000)
+                else:
+                    continue  # Skip this currency
+            
+            rows.append({
+                "kvg_qty": round(amount, 2),
+                "ISO": curr,
+                "PortName": portfolio,
+            })
+    
+    if not rows:
+        return pd.DataFrame(columns=["kvg_qty", "ISO", "PortName"])
+    
+    df = pd.DataFrame(rows)
+    logger.info("Generated %d synthetic cash position rows for %d portfolios", len(df), len(portfolios))
+    return df
+
+
 def _load_cash_data() -> pd.DataFrame:
+    # Use synthetic data if flag is set
+    if USE_SYNTHETIC_DATA:
+        logger.info("USE_SYNTHETIC_DATA is True – generating synthetic cash data")
+        return _generate_synthetic_cash_data()
+    
     engine = db.ams_holdings_engine
     if engine is None:
         return pd.DataFrame()
@@ -386,7 +592,84 @@ def _load_cash_data() -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def _generate_synthetic_orders_data() -> pd.DataFrame:
+    """
+    Generate synthetic order data for testing/demo purposes.
+    Returns a DataFrame with columns matching the SQL query from _load_orders_data().
+    """
+    np.random.seed(42)
+    portfolios = _generate_synthetic_portfolio_names()
+    
+    asset_types = ["Equity", "FixedIncome"]
+    currencies = ["EUR", "USD", "GBP", "CHF"]
+    statuses = ["Executed", "Settled", "Partial"]
+    execution_statuses = ["FullyExecuted", "PartiallyExecuted"]
+    order_types = ["Market", "Limit", "Stop"]
+    
+    rows = []
+    today = datetime.today().date()
+    
+    # Generate 3-5 orders per portfolio
+    for portfolio in portfolios:
+        num_orders = np.random.randint(3, 6)
+        for i in range(num_orders):
+            # Trade date within last 7 days
+            trade_offset = np.random.randint(0, 7)
+            trade_date = today - timedelta(days=trade_offset)
+            
+            # For weekends, shift to Friday
+            while trade_date.weekday() > 4:
+                trade_date -= timedelta(days=1)
+            
+            asset_type = np.random.choice(asset_types)
+            currency = np.random.choice(currencies)
+            
+            # Realistic quantities and prices
+            if asset_type == "Equity":
+                quantity = np.random.uniform(100, 1000)
+                price = np.random.uniform(50, 500)
+            else:  # FixedIncome
+                quantity = np.random.uniform(10000, 100000)  # Bonds in face value
+                price = np.random.uniform(95, 105)  # Percentage of par
+            
+            executed_qty = quantity * np.random.uniform(0.7, 1.0)  # 70-100% executed
+            price_in_eur = price * (1 + np.random.uniform(-0.05, 0.05))  # FX adjustment
+            
+            order_valid_until = today + timedelta(days=np.random.randint(1, 5))
+            valid_from = trade_date
+            
+            rows.append({
+                "Name": portfolio,
+                "TradableAssetName": f"Asset_{i}_{portfolio[:3].upper()}",
+                "AssetTypeName": asset_type,
+                "TradableAssetCurrencyIso": currency,
+                "BeforeOrderQuantity": quantity * np.random.uniform(0.9, 1.1),
+                "Quantity": quantity,
+                "ExecutedQuantity": executed_qty,
+                "OrderValidUntil": order_valid_until,
+                "ValidFrom": valid_from,
+                "ValidTo": None,
+                "TradeDate": trade_date,
+                "Settlement": np.random.choice([2, 3]),  # 2-3 days settlement
+                "PriceAtOrderTime": price,
+                "PriceAtOrderTimeInEuro": price_in_eur,
+                "TradingStatus": np.random.choice(statuses),
+                "ExecutionStatus": np.random.choice(execution_statuses),
+                "OrderValidType": np.random.choice(order_types),
+                "Comment": "Synthetic order for testing" if i % 3 == 0 else None,
+            })
+    
+    df = pd.DataFrame(rows)
+    logger.info("Generated %d synthetic order rows for %d portfolios", len(df), len(portfolios))
+    return df
+
+
 def _load_orders_data() -> pd.DataFrame:
+    # Use synthetic data if flag is set
+    if USE_SYNTHETIC_DATA:
+        logger.info("USE_SYNTHETIC_DATA is True – generating synthetic orders data")
+        return _generate_synthetic_orders_data()
+    
     engine = db.ams_holdings_engine
     if engine is None:
         return pd.DataFrame()
@@ -428,7 +711,75 @@ def _load_orders_data() -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def _generate_synthetic_maturities_data() -> pd.DataFrame:
+    """
+    Generate synthetic maturity data for testing/demo purposes.
+    Returns a DataFrame with columns matching the SQL query from _load_maturities_data().
+    Simulates upcoming fixed income instrument maturities within next 10 days.
+    """
+    np.random.seed(42)
+    portfolios = _generate_synthetic_portfolio_names()
+    
+    bond_names = [
+        "German Bund 2026", "US Treasury 2026", "Italian BTP 2026",
+        "French OAT 2026", "Spanish Bonos 2026", "Corporate Bond AAA",
+        "Corporate Bond AA", "Emerging Market Bond", "Swiss Bond 2026",
+        "UK Gilt 2026", "Belgian Bond 2026", "Austrian Bond 2026",
+    ]
+    
+    currencies = ["EUR", "USD", "GBP", "CHF"]
+    
+    rows = []
+    today = datetime.today().date()
+    
+    # Generate 1-3 maturity events per portfolio within next 10 days
+    for portfolio in portfolios:
+        num_maturities = np.random.randint(1, 4)
+        for i in range(num_maturities):
+            # Maturity date within next 10 days
+            maturity_offset = np.random.randint(1, 11)
+            maturity_date = today + timedelta(days=maturity_offset)
+            
+            # Skip weekends
+            while maturity_date.weekday() > 4:
+                maturity_date += timedelta(days=1)
+            
+            bond_name = np.random.choice(bond_names)
+            currency = np.random.choice(currencies)
+            
+            # Realistic quantity (face value in thousands)
+            quantity = np.random.uniform(500, 5000)
+            
+            # Generate Bloomberg code for bonds
+            isin_prefix = np.random.choice(["DE", "US", "IT", "FR", "ES", "GB", "CH"])
+            isin = f"{isin_prefix}{np.random.randint(100000000, 999999999)}"
+            bb_code = f"{isin} Corp" if "Corporate" in bond_name else f"{isin} Govt"
+            
+            rows.append({
+                "PortfolioName": portfolio,
+                "TradableAssetsName": bond_name,
+                "BloombergCode": bb_code,
+                "TradableAssetsMaturity": maturity_date,
+                "KvgQuantity": round(quantity, 2),
+                "CurrenciesName": currency,
+            })
+    
+    if not rows:
+        return pd.DataFrame(columns=["PortfolioName", "TradableAssetsName", "BloombergCode", 
+                                      "TradableAssetsMaturity", "KvgQuantity", "CurrenciesName"])
+    
+    df = pd.DataFrame(rows)
+    df = df.sort_values(["TradableAssetsMaturity", "PortfolioName"]).reset_index(drop=True)
+    logger.info("Generated %d synthetic maturity rows for %d portfolios", len(df), len(portfolios))
+    return df
+
+
 def _load_maturities_data() -> pd.DataFrame:
+    # Use synthetic data if flag is set
+    if USE_SYNTHETIC_DATA:
+        logger.info("USE_SYNTHETIC_DATA is True – generating synthetic maturities data")
+        return _generate_synthetic_maturities_data()
+    
     engine = db.ams_holdings_engine
     if engine is None:
         return pd.DataFrame()

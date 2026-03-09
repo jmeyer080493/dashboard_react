@@ -25,9 +25,10 @@ Graph dictionary (mirrors C:/Projekte/dashboard/sectors/layout.py):
 
 import pandas as pd
 import numpy as np
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import logging
 from typing import Optional
+from config.settings import USE_SYNTHETIC_DATA
 
 logger = logging.getLogger(__name__)
 
@@ -92,11 +93,71 @@ def _get_engine():
     return DatabaseGateway().get_prod_engine()
 
 
+def _generate_synthetic_sector_data(start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Generate synthetic sector PE ratio data for testing/demo purposes.
+
+    Returns DataFrame with columns: Date, Sector, Field, CountryName, Value
+    """
+    start = datetime.strptime(start_date, "%Y-%m-%d").date()
+    end = datetime.strptime(end_date, "%Y-%m-%d").date()
+    
+    rows = []
+    current = start
+    
+    sectors = list(SECTOR_DE.keys())  # English sector names
+    countries = ["US", "Europe"]
+    fields = ["PE Ratio", "Forward PE Ratio"]
+    
+    # Generate base PE values per sector/country (seed for consistency)
+    np.random.seed(42)
+    base_pets = {}
+    for sector in sectors:
+        for country in countries:
+            base_pe = np.random.uniform(12, 28)  # Realistic PE range
+            base_pets[(sector, country)] = base_pe
+    
+    while current <= end:
+        # Skip weekends
+        if current.weekday() < 5:  # Monday=0, Friday=4
+            for sector in sectors:
+                for country in countries:
+                    for field in fields:
+                        # Generate synthetic PE value with realistic drift
+                        base = base_pets[(sector, country)]
+                        pe_multiplier = 1.0 if field == "PE Ratio" else 0.95  # Forward PE slightly lower
+                        daily_drift = np.random.normal(0, 0.02)  # ~2% volatility
+                        value = base * pe_multiplier * (1 + daily_drift)
+                        
+                        rows.append({
+                            "Date": current,
+                            "Sector": sector,
+                            "Field": field,
+                            "CountryName": country,
+                            "Value": round(max(value, 5.0), 2),  # Ensure positive, realistic
+                        })
+        
+        current = current + timedelta(days=1)
+    
+    if not rows:
+        return pd.DataFrame(columns=["Date", "Sector", "Field", "CountryName", "Value"])
+    
+    df = pd.DataFrame(rows)
+    df["Date"] = pd.to_datetime(df["Date"])
+    logger.info("Generated %d synthetic sector PE rows", len(df))
+    return df
+
+
 def _load_raw(start_date: str, end_date: str) -> pd.DataFrame:
     """
     Pull all non-null sector PE ratio rows for the requested date window.
     Returns columns: Date (datetime), Sector (str), Field (str), CountryName (str), Value (float)
     """
+    # Use synthetic data if flag is set
+    if USE_SYNTHETIC_DATA:
+        logger.info("USE_SYNTHETIC_DATA is True – generating synthetic sector PE data")
+        return _generate_synthetic_sector_data(start_date, end_date)
+    
     engine = _get_engine()
     query = f"""
         SELECT

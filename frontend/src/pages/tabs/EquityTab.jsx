@@ -12,6 +12,7 @@ import {
 import { MetricsTable } from '../../components/MetricsTable'
 import { getMetricLabel, getYAxisLabel, isEquityMetricCurrencyAffected, EQUITY_METRICS_CATEGORIES } from '../../config/metricsConfig'
 import { useExport } from '../../context/ExportContext'
+import { ExcelIcon, PowerPointIcon } from '../../icons/MicrosoftIcons'
 import './TabStyles.css'
 
 // Colour palette – one colour per region
@@ -246,8 +247,8 @@ function EquityLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabe
         </LineChart>
       </ResponsiveContainer>
       <div className="chart-export-buttons">
-        <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen">📊 PPTX</button>
-        <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen">📗 Excel</button>
+        <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={26} height={26} /></button>
+        <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={26} height={26} /></button>
       </div>
     </div>
   )
