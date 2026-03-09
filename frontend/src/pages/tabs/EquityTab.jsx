@@ -10,7 +10,7 @@ import {
   ReferenceLine,
 } from 'recharts'
 import { MetricsTable } from '../../components/MetricsTable'
-import { getMetricLabel, getYAxisLabel, isEquityMetricCurrencyAffected, EQUITY_METRICS_CATEGORIES } from '../../config/metricsConfig'
+import { getMetricLabel, getYAxisLabel, isEquityMetricCurrencyAffected, getEquityMetricUnit, getSmartDateFormat, EQUITY_METRICS_CATEGORIES } from '../../config/metricsConfig'
 import { useExport } from '../../context/ExportContext'
 import './TabStyles.css'
 
@@ -56,18 +56,10 @@ function pivotDataForChart(records, metricKey, regions) {
   )
 }
 
-/** Short date label for chart axes - smart formatting */
-function fmtDate(isoStr, isLongTimeseries = false) {
-  if (!isoStr) return ''
-  const d = new Date(isoStr)
-  if (isNaN(d)) return isoStr.slice(0, 10)
-  if (isLongTimeseries) {
-    // For long series (>6 months): "Mrz. 25" format
-    return d.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' })
-  } else {
-    // For short series: "31. Mrz" (month-end format)
-    return d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short' })
-  }
+/** Short date label for chart axes - smart formatting based on time span */
+function fmtDate(isoStr, smartDateFmt) {
+  if (!isoStr || !smartDateFmt) return ''
+  return smartDateFmt(isoStr)
 }
 
 /** Format y-axis label: 0 decimals */
@@ -124,17 +116,19 @@ function getColumnTitle(columnName) {
   return extras[columnName] || columnName
 }
 
-/** Format a value for legend display: 0 decimals, German locale */
-function fmtLegendValue(val) {
+/** Format a value for legend display: 1 decimal, German locale */
+function fmtLegendValue(val, unit = '') {
   if (val === null || val === undefined || typeof val !== 'number') return null
-  return Math.round(val).toLocaleString('de-DE')
+  const formatted = val.toFixed(1).toLocaleString('de-DE')
+  return unit ? `${formatted}\u00a0${unit}` : formatted
 }
 
 /**
  * Multi-Region Line Chart for a single equity metric.
  */
-function EquityLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel = '', currency = 'EUR', height = 300 }) {
+function EquityLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel = '', unit = '', currency = 'EUR', height = 300 }) {
   const { addToPptx, addToXlsx } = useExport()
+  const { formatter: smartDateFormatter, interval: smartInterval } = getSmartDateFormat(chartData)
 
   if (!chartData || chartData.length === 0) {
     return (
@@ -183,6 +177,8 @@ function EquityLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabe
     title: fullTitle,
     pptx_title: metricLabel,
     subheading,
+    yAxisLabel,
+    source: 'Quelle: Bloomberg Finance L.P.',
     tab: 'Aktien',
     chartData,
     regions: activeRegions,
@@ -198,8 +194,8 @@ function EquityLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabe
           <XAxis
             dataKey="DatePoint"
             tick={{ fontSize: 11 }}
-            tickFormatter={(isoStr) => fmtDate(isoStr, isLongSeries)}
-            interval="preserveStartEnd"
+            tickFormatter={(isoStr) => fmtDate(isoStr, smartDateFormatter)}
+            interval={smartInterval}
           />
           <YAxis 
             tick={{ fontSize: 11 }}
@@ -211,7 +207,7 @@ function EquityLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabe
           <Tooltip
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', fontSize: 12 }}
             formatter={(value) => typeof value === 'number' ? value.toFixed(2) : value}
-            labelFormatter={fmtDate}
+            labelFormatter={(label) => fmtDate(label, smartDateFormatter)}
           />
           <Legend />
           <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="4 2" />
@@ -227,7 +223,7 @@ function EquityLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabe
               return (lastRow[b] ?? -Infinity) - (lastRow[a] ?? -Infinity)
             })
             .map((region) => {
-            const latest = fmtLegendValue(chartData[chartData.length - 1]?.[region])
+            const latest = fmtLegendValue(chartData[chartData.length - 1]?.[region], unit)
             const legendName = latest !== null ? `${region} (${latest})` : region
             return (
               <Line
@@ -325,6 +321,7 @@ function EquityTab({
               metricLabel={getColumnTitle(column)}
               metricKey={column}
               yAxisLabel={getYAxisLabel(column)}
+              unit={getEquityMetricUnit(column)}
               currency={currency}
               height={chartHeight}
             />

@@ -23,6 +23,7 @@ import {
   Area,
 } from 'recharts'
 import { useExport } from '../context/ExportContext'
+import { getSmartDateFormat } from '../config/metricsConfig'
 import './Charts.css'
 import './FaktorenChart.css'
 
@@ -46,26 +47,26 @@ const DIFF_COLOR  = '#1a1a1a'
 /**
  * Build a value-formatter function based on the yUnit prop.
  *   'pct'  → "12.34 %"
- *   'M'    → "34.1M"
+ *   'M'    → "34.12M"
  *   'B'    → "1.23B"
  *   'raw'  → "42.00"
  */
 function buildFmt(yUnit) {
   switch (yUnit) {
-    case 'M':   return v => (v == null ? '—' : `${(v / 1e6).toFixed(1)}M`)
+    case 'M':   return v => (v == null ? '—' : `${(v / 1e6).toFixed(2)}M`)
     case 'B':   return v => (v == null ? '—' : `${(v / 1e9).toFixed(2)}B`)
     case 'raw': return v => (v == null ? '—' : typeof v === 'number' ? v.toFixed(2) : String(v))
     default:    return v => (v == null ? '—' : `${v.toFixed(2)} %`)  // 'pct'
   }
 }
 
-/** Same as buildFmt but rounds to 0 decimals – used for legend labels. */
+/** Same as buildFmt but rounds to 1 decimal – used for legend labels. */
 function buildLegendFmt(yUnit) {
   switch (yUnit) {
-    case 'M':   return v => (v == null ? '—' : `${(v / 1e6).toFixed(0)}M`)
-    case 'B':   return v => (v == null ? '—' : `${(v / 1e9).toFixed(0)}B`)
-    case 'raw': return v => (v == null ? '—' : typeof v === 'number' ? v.toFixed(0) : String(v))
-    default:    return v => (v == null ? '—' : `${v.toFixed(0)} %`)  // 'pct'
+    case 'M':   return v => (v == null ? '—' : `${(v / 1e6).toFixed(1)}M`)
+    case 'B':   return v => (v == null ? '—' : `${(v / 1e9).toFixed(1)}B`)
+    case 'raw': return v => (v == null ? '—' : typeof v === 'number' ? v.toFixed(1) : String(v))
+    default:    return v => (v == null ? '—' : `${v.toFixed(1)} %`)  // 'pct'
   }
 }
 
@@ -130,8 +131,13 @@ export default function FaktorenChart({
   yUnit = 'pct',
   /** When true the Y-axis auto-scales to the data range instead of starting at 0 */
   yDomainAuto = false,
+  /** Currency to append to subheading, e.g. 'EUR' or 'USD' */
+  currency = null,
+  /** Y-axis label for export, e.g. '%' */
+  yAxisLabel = '%',
 }) {
   const { addToPptx, addToXlsx } = useExport()
+  const { formatter: smartDateFormatter, interval: smartInterval } = getSmartDateFormat(data)
 
   if (!data || data.length === 0) {
     return (
@@ -150,11 +156,17 @@ export default function FaktorenChart({
 
   // Export: include all columns (the consumer will flatten them)
   const fullTitle   = tab ? `${tab} – ${title}` : title
+  const dateRange   = getDateRange(data)
+  const subheading  = currency
+    ? (dateRange ? `${dateRange}, in ${currency}` : `in ${currency}`)
+    : dateRange
   const exportItem  = {
     id:         makeId(fullTitle),
     title:      fullTitle,
     pptx_title: title,
-    subheading: getDateRange(data),
+    subheading,
+    yAxisLabel,
+    source:     'Quelle: Bloomberg Finance L.P.',
     tab,
     chartData:  data,
     regions:    mainSeries,
@@ -200,11 +212,8 @@ export default function FaktorenChart({
           <XAxis
             dataKey="DatePoint"
             tick={{ fontSize: 11 }}
-            tickFormatter={d => {
-              try { return new Date(d).toLocaleDateString('de-DE', { month: '2-digit', year: '2-digit' }) }
-              catch { return d }
-            }}
-            minTickGap={40}
+            tickFormatter={smartDateFormatter}
+            interval={smartInterval}
           />
           <YAxis
             tick={{ fontSize: 11 }}
@@ -246,11 +255,8 @@ export default function FaktorenChart({
               <XAxis
                 dataKey="DatePoint"
                 tick={{ fontSize: 10 }}
-                tickFormatter={d => {
-                  try { return new Date(d).toLocaleDateString('de-DE', { month: '2-digit', year: '2-digit' }) }
-                  catch { return d }
-                }}
-                minTickGap={40}
+                tickFormatter={smartDateFormatter}
+                interval={smartInterval}
               />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v.toFixed(0)}`} width={42} />
               <Tooltip content={<DiffTooltip />} />

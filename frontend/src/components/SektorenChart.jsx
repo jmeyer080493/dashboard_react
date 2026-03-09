@@ -24,6 +24,7 @@ import {
   ReferenceLine,
 } from 'recharts'
 import { useExport } from '../context/ExportContext'
+import { getSmartDateFormat } from '../config/metricsConfig'
 import './Charts.css'
 import './SektorenChart.css'
 
@@ -116,8 +117,11 @@ export default function SektorenChart({
   height = 500,
   tab = 'Sektoren',
   isComparison = false,   // true for "U.S. vs. Europa" view → grouped US/EU bar chart
+  /** Y-axis label for export, e.g. 'Wert' */
+  yAxisLabel = 'Wert',
 }) {
   const { addToPptx, addToXlsx } = useExport()
+  const { formatter: smartDateFormatter, interval: smartInterval } = getSmartDateFormat(data)
 
   // Export item shared between PPTX / XLSX
   const exportItem = useMemo(() => ({
@@ -125,12 +129,13 @@ export default function SektorenChart({
     title,
     pptx_title: title,
     subheading: getDateRange(data),
-    source:     'Bloomberg Finance L.P.',
+    yAxisLabel,
+    source:     'Quelle: Bloomberg Finance L.P.',
     tab,
     chartData:  data,
     regions:    series,
     xKey:       'DatePoint',
-  }), [title, data, series, tab])
+  }), [title, data, series, tab, yAxisLabel])
 
   // ── Bar chart data preparation ───────────────────────────────────────────
   const barData = useMemo(() => {
@@ -222,11 +227,8 @@ export default function SektorenChart({
       <XAxis
         dataKey="DatePoint"
         tick={{ fontSize: 11 }}
-        tickFormatter={v => {
-          try { return new Date(v).toLocaleDateString('de-DE', { month: '2-digit', year: '2-digit' }) }
-          catch { return v }
-        }}
-        minTickGap={40}
+        tickFormatter={smartDateFormatter}
+        interval={smartInterval}
       />
       <YAxis
         tick={{ fontSize: 11 }}
@@ -249,7 +251,7 @@ export default function SektorenChart({
         iconSize={16}
         formatter={name => {
           const lastVal = data[data.length - 1]?.[name]
-          return `${name} (${lastVal != null ? Math.round(lastVal) : '—'})`
+          return `${name} (${lastVal != null ? lastVal.toFixed(1) : '—'})`
         }}
       />
       {sortedSeriesForLine.map(({ name, i }) => (

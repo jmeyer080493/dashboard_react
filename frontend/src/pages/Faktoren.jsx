@@ -264,6 +264,8 @@ export default function Faktoren({ graphSettings }) {
                 hasDifference={g.has_difference}
                 height={chartHeight}
                 tab="Faktoren"
+                currency={currency}
+                yAxisLabel="%"
               />
             )
           })}

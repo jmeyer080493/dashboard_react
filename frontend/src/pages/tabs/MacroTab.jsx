@@ -13,6 +13,8 @@ import { MetricsTable } from '../../components/MetricsTable'
 import {
   getMacroMetricLabel,
   getMacroYAxisLabel,
+  getMacroMetricUnit,
+  getSmartDateFormat,
   MACRO_STANDARD_DEFAULTS,
   MACRO_METRICS_CATEGORIES,
 } from '../../config/metricsConfig'
@@ -48,6 +50,8 @@ function getMonthSamplingFactor(lookback) {
       return 6  // Every 6th month
     case '3Y':
       return 3  // Every 3rd month
+    case 'YtD':
+    case '1Y':
     default:
       return 1  // All months
   }
@@ -78,16 +82,10 @@ function pivotDataForChart(records, metricKey, regions) {
   )
 }
 
-/** Short date label for chart axes */
-function fmtDate(isoStr, isLongTimeseries = false) {
-  if (!isoStr) return ''
-  const d = new Date(isoStr)
-  if (isNaN(d)) return isoStr.slice(0, 10)
-  if (isLongTimeseries) {
-    return d.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' })
-  } else {
-    return d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short' })
-  }
+/** Short date label for chart axes - smart formatting based on time span */
+function fmtDate(isoStr, smartDateFmt) {
+  if (!isoStr || !smartDateFmt) return ''
+  return smartDateFmt(isoStr)
 }
 
 /** Compute smart y-axis domain from data with padding */
@@ -148,10 +146,10 @@ function isLongTimeseries(chartData) {
   return monthsDiff > 6
 }
 
-/** Format a value for legend display: 0 decimals, German locale */
+/** Format a value for legend display: 1 decimal, German locale */
 function fmtLegendValue(val, unit = '') {
   if (val === null || val === undefined || typeof val !== 'number') return null
-  const formatted = Math.round(val).toLocaleString('de-DE')
+  const formatted = val.toFixed(1).toLocaleString('de-DE')
   return unit ? `${formatted}\u00a0${unit}` : formatted
 }
 
@@ -161,6 +159,7 @@ function fmtLegendValue(val, unit = '') {
  */
 function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel = '', unit = '', height = 300 }) {
   const { addToPptx, addToXlsx } = useExport()
+  const { formatter: smartDateFormatter, interval: smartInterval } = getSmartDateFormat(chartData)
 
   if (!chartData || chartData.length === 0) {
     return (
@@ -206,7 +205,7 @@ function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel
   const subheading = dateRange
 
   const fullTitle = `Makro – ${metricLabel}`
-  const exportItem = { id: makeId(fullTitle), title: fullTitle, pptx_title: metricLabel, subheading, tab: 'Makro', chartData, regions: activeRegions, xKey: 'DatePoint' }
+  const exportItem = { id: makeId(fullTitle), title: fullTitle, pptx_title: metricLabel, subheading, yAxisLabel, source: 'Quelle: Bloomberg Finance L.P.', tab: 'Makro', chartData, regions: activeRegions, xKey: 'DatePoint' }
 
   return (
     <div className="chart-container">
@@ -217,8 +216,8 @@ function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel
           <XAxis
             dataKey="DatePoint"
             tick={{ fontSize: 11 }}
-            tickFormatter={(isoStr) => fmtDate(isoStr, isLongSeries)}
-            interval="preserveStartEnd"
+            tickFormatter={(isoStr) => fmtDate(isoStr, smartDateFormatter)}
+            interval={smartInterval}
           />
           <YAxis 
             tick={{ fontSize: 11 }}
@@ -230,7 +229,7 @@ function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel
           <Tooltip
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', fontSize: 12 }}
             formatter={formatter}
-            labelFormatter={fmtDate}
+            labelFormatter={(label) => fmtDate(label, smartDateFormatter)}
           />
           <Legend />
           {/* Zero baseline for all charts */}
@@ -369,7 +368,7 @@ function MacroTab({
               metricLabel={getMacroMetricLabel(metric)}
               metricKey={metric}
               yAxisLabel={getMacroYAxisLabel(metric)}
-              unit={getUnit(metric)}
+              unit={getMacroMetricUnit(metric)}
               height={chartHeight}
             />
           ))

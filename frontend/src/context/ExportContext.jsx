@@ -10,7 +10,8 @@ import { createContext, useContext, useState, useCallback } from 'react'
  *   id: string,
  *   title: string,
  *   pptx_title: string,    // short title for slide header
- *   subheading: string,    // date range / unit for PPTX subtitle
+ *   subheading: string,    // date range + optional currency, e.g. "01.01.2025 – 09.03.2026, in EUR"
+ *   yAxisLabel: string,    // e.g. '%', 'Wert', 'Index' – used for PPTX y-axis title & Excel unit row
  *   source: string,        // data source text
  *   tab: string,
  *   group: number,         // same group = same sheet / slide

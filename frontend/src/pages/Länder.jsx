@@ -4,7 +4,7 @@ import GlobalControls from '../components/GlobalControls'
 import EquityTab from './tabs/EquityTab'
 import FixedIncomeTab from './tabs/FixedIncomeTab'
 import MacroTab from './tabs/MacroTab'
-import { STANDARD_DEFAULTS, FI_STANDARD_DEFAULTS, MACRO_STANDARD_DEFAULTS } from '../config/metricsConfig'
+import { STANDARD_DEFAULTS, FI_STANDARD_DEFAULTS, MACRO_STANDARD_DEFAULTS, ALL_MACRO_TABLE_METRICS, ALL_MACRO_GRAPH_METRICS } from '../config/metricsConfig'
 
 /**
  * Länder (Countries) Page
@@ -76,10 +76,12 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
   // ── Macro metrics filter state ───────────────────────────────────────────
   const [masterMacroColumns, setMasterMacroColumns] = useState([])
   const [selectedMacroMetricsTable, setSelectedMacroMetricsTable] = useState(() => {
-    return loadMetricsFromStorage('macroMetricsFilter_table') || []
+    const stored = loadMetricsFromStorage('macroMetricsFilter_table') || []
+    return stored.filter(k => ALL_MACRO_TABLE_METRICS.includes(k))
   })
   const [selectedMacroMetricsGraph, setSelectedMacroMetricsGraph] = useState(() => {
-    return loadMetricsFromStorage('macroMetricsFilter_graph') || []
+    const stored = loadMetricsFromStorage('macroMetricsFilter_graph') || []
+    return stored.filter(k => ALL_MACRO_GRAPH_METRICS.includes(k))
   })
 
   // Build API params from filters

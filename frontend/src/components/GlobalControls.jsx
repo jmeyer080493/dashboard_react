@@ -87,7 +87,7 @@ function GlobalControls({
     ? (m) => { if (onMacroMetricsChange) onMacroMetricsChange({ graphMetrics: m }) }
     : (m) => { if (onMetricsChange)      onMetricsChange({ graphMetrics: m }) }
 
-  const LOOKBACK_OPTIONS = ['1Y', '3Y', '5Y', 'All']
+  const LOOKBACK_OPTIONS = ['YtD', '1Y', '3Y', '5Y', 'All']
 
   // Regions excluded per tab
   const EXCLUDED_FI    = new Set(['China', 'India', 'EM'])
@@ -110,7 +110,11 @@ function GlobalControls({
   const handleDateQuickSelect = (days, label) => {
     const endDate = new Date()
     const startDate = new Date()
-    startDate.setDate(startDate.getDate() - days)
+    if (label === 'YtD') {
+      startDate.setMonth(0, 1) // January 1st of current year
+    } else {
+      startDate.setDate(startDate.getDate() - days)
+    }
     
     setActiveDateRange(label)
     onFiltersChange({
@@ -142,7 +146,7 @@ function GlobalControls({
       <div className="control-section">
         <span className="ctrl-label">📊 Zeitraum</span>
         <div className="control-group">
-          {[['1Y', 365], ['3Y', 365 * 3], ['5Y', 365 * 5], ['All', 365 * 10]].map(([label, days]) => (
+          {[['YtD', 0], ['1Y', 365], ['3Y', 365 * 3], ['5Y', 365 * 5], ['All', 365 * 10]].map(([label, days]) => (
             <button
               key={label}
               className={`lookback-btn ${activeDateRange === label ? 'active' : ''}`}

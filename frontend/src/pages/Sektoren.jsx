@@ -336,6 +336,7 @@ export default function Sektoren({ graphSettings }) {
                   isComparison={isComparison}
                   height={chartHeight}
                   tab="Sektoren"
+                  yAxisLabel="Wert"
                 />
               )
             })}

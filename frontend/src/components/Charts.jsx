@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useExport } from '../context/ExportContext'
+import { getSmartDateFormat } from '../config/metricsConfig'
 import './Charts.css'
 
 /** Produce a stable string ID from a chart title */
@@ -39,6 +40,7 @@ export function PerformanceChart({ data, title = 'Market Performance', tab = 'Ak
 
   // Determine date key (could be 'date' or 'DatePoint')
   const dateKey = data[0]?.DatePoint ? 'DatePoint' : 'date'
+  const { formatter: smartDateFormatter, interval: smartInterval } = getSmartDateFormat(data, dateKey)
   
   // Get unique region names from first data point, sorted by latest value (high to low)
   const regions = data[0] ? Object.keys(data[0])
@@ -59,7 +61,7 @@ export function PerformanceChart({ data, title = 'Market Performance', tab = 'Ak
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-          <XAxis dataKey={dateKey} tick={{ fontSize: 12 }} />
+          <XAxis dataKey={dateKey} tick={{ fontSize: 12 }} tickFormatter={(val) => smartDateFormatter(val)} interval={smartInterval} />
           <YAxis tick={{ fontSize: 12 }} tickFormatter={v => typeof v === 'number' ? Math.round(v) : v} />
           <Tooltip 
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
@@ -68,7 +70,7 @@ export function PerformanceChart({ data, title = 'Market Performance', tab = 'Ak
           <Legend
             formatter={(name, entry) => {
               const lastVal = data[data.length - 1]?.[entry.dataKey]
-              return `${name} (${lastVal != null ? Math.round(lastVal) : '—'})`
+              return `${name} (${lastVal != null ? lastVal.toFixed(1) : '—'})`
             }}
           />
           {regions.map((region, idx) => (
@@ -99,6 +101,7 @@ export function PerformanceChart({ data, title = 'Market Performance', tab = 'Ak
  */
 export function MetricChart({ data, dataKey, title, yAxisLabel = '', tab = 'Aktien', height = 300 }) {
   const { addToPptx, addToXlsx } = useExport()
+  const { formatter: smartDateFormatter, interval: smartInterval } = getSmartDateFormat(data, 'DatePoint')
 
   if (!data || data.length === 0) {
     return <div className="chart-empty">Keine Daten verfügbar</div>
@@ -140,7 +143,7 @@ export function MetricChart({ data, dataKey, title, yAxisLabel = '', tab = 'Akti
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-          <XAxis dataKey="DatePoint" tick={{ fontSize: 12 }} />
+          <XAxis dataKey="DatePoint" tick={{ fontSize: 12 }} tickFormatter={(val) => smartDateFormatter(val)} interval={smartInterval} />
           <YAxis tick={{ fontSize: 12 }} label={{ value: yAxisLabel, angle: -90, position: 'insideLeft' }} tickFormatter={v => typeof v === 'number' ? Math.round(v) : v} />
           <Tooltip 
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
@@ -149,7 +152,7 @@ export function MetricChart({ data, dataKey, title, yAxisLabel = '', tab = 'Akti
           <Legend
             formatter={(name, entry) => {
               const lastVal = data[data.length - 1]?.[entry.dataKey]
-              return `${name} (${lastVal != null ? Math.round(lastVal) : '—'})`
+              return `${name} (${lastVal != null ? lastVal.toFixed(1) : '—'})`
             }}
           />
           {metricColumns.length > 0 ? (
@@ -199,6 +202,7 @@ export function MetricChart({ data, dataKey, title, yAxisLabel = '', tab = 'Akti
  */
 export function ComparisonChart({ data, metrics, title, tab = '', height = 300 }) {
   const { addToPptx, addToXlsx } = useExport()
+  const { formatter: smartDateFormatter, interval: smartInterval } = getSmartDateFormat(data, 'date')
 
   if (!data || data.length === 0) {
     return <div className="chart-empty">Keine Daten verfügbar</div>
@@ -221,7 +225,7 @@ export function ComparisonChart({ data, metrics, title, tab = '', height = 300 }
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-          <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+          <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={(val) => smartDateFormatter(val)} interval={smartInterval} />
           <YAxis tick={{ fontSize: 12 }} tickFormatter={v => typeof v === 'number' ? Math.round(v) : v} />
           <Tooltip 
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
@@ -230,7 +234,7 @@ export function ComparisonChart({ data, metrics, title, tab = '', height = 300 }
           <Legend
             formatter={(name, entry) => {
               const lastVal = data[data.length - 1]?.[entry.dataKey]
-              return `${name} (${lastVal != null ? Math.round(lastVal) : '—'})`
+              return `${name} (${lastVal != null ? lastVal.toFixed(1) : '—'})`
             }}
           />
           {sortedMetrics.map((metric, idx) => (

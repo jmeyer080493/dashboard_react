@@ -141,9 +141,16 @@ def build_excel(items: list) -> bytes:
                     series.append(pd.Series(tr.get("y", []), name=nm))
                 df = pd.concat(series, axis=1)
 
-                # Write to sheet: title in row 0, optional subheading in row 1, data below
+                # Write to sheet: title in row 0, optional subheading in row 1,
+                # optional y-axis label in row 2, data below
                 subheading = it.get("subheading", "")
-                data_start_row = 2 if subheading else 1
+                y_axis_label = it.get("yAxisLabel", "")
+                # Calculate data start row based on optional rows
+                data_start_row = 1
+                if subheading:
+                    data_start_row += 1
+                if y_axis_label:
+                    data_start_row += 1
                 df.to_excel(
                     writer,
                     sheet_name=sheet_name,
@@ -153,8 +160,12 @@ def build_excel(items: list) -> bytes:
                 )
                 worksheet = writer.sheets[sheet_name]
                 worksheet.write(0, startcol, it["title"])
+                next_row = 1
                 if subheading:
-                    worksheet.write(1, startcol, subheading)
+                    worksheet.write(next_row, startcol, subheading)
+                    next_row += 1
+                if y_axis_label:
+                    worksheet.write(next_row, startcol, f"Einheit: {y_axis_label}")
 
                 startcol += df.shape[1] + 1  # advance for next chart
 
@@ -217,6 +228,78 @@ def _SubElement(parent, tagname: str, **kwargs):
     element.attrib.update(kwargs)
     parent.append(element)
     return element
+
+
+def _set_value_axis_title(chart, title_text: str):
+    """Inject a y-axis title by parsing the exact XML structure from chart1.xml.
+
+    chart1.xml has the title between <c:majorGridlines> and <c:numFmt>:
+      <c:title>
+        <c:tx><c:rich>
+          <a:bodyPr/><a:lstStyle/>
+          <a:p>
+            <a:pPr><a:defRPr sz="1200" b="0"/></a:pPr>
+            <a:r><a:rPr lang="de-DE" sz="1200" b="0" dirty="0"/><a:t>Wert</a:t></a:r>
+          </a:p>
+        </c:rich></c:tx>
+        <c:overlay val="0"/>
+      </c:title>
+    chart2.xml has no <c:title> element at all.
+    """
+    if not title_text:
+        return
+    try:
+        val_ax_xml = chart.value_axis._element
+    except Exception:
+        return
+
+    c_ns = "http://schemas.openxmlformats.org/drawingml/2006/chart"
+
+    # Remove any existing title so we never duplicate it
+    existing = val_ax_xml.find(f"{{{c_ns}}}title")
+    if existing is not None:
+        val_ax_xml.remove(existing)
+
+    # Build the exact XML string matching chart1.xml and parse it with lxml.
+    # Including explicit namespace declarations on the root element guarantees
+    # lxml serialises with the correct c: / a: prefixes when inserted into the tree.
+    safe_text = (
+        title_text
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+    xml_str = (
+        '<c:title'
+        ' xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"'
+        ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        '<c:tx><c:rich>'
+        '<a:bodyPr/>'
+        '<a:lstStyle/>'
+        '<a:p>'
+        '<a:pPr><a:defRPr sz="1200" b="0"/></a:pPr>'
+        '<a:r>'
+        '<a:rPr lang="de-DE" sz="1200" b="0" dirty="0"/>'
+        f'<a:t>{safe_text}</a:t>'
+        '</a:r>'
+        '</a:p>'
+        '</c:rich></c:tx>'
+        '<c:overlay val="0"/>'
+        '</c:title>'
+    )
+    title_el = etree.fromstring(xml_str)
+
+    # Insert after c:majorGridlines (if present), else before c:numFmt, else at end
+    children  = list(val_ax_xml)
+    gridlines = val_ax_xml.find(f"{{{c_ns}}}majorGridlines")
+    num_fmt   = val_ax_xml.find(f"{{{c_ns}}}numFmt")
+    if gridlines is not None:
+        idx = children.index(gridlines) + 1
+    elif num_fmt is not None:
+        idx = children.index(num_fmt)
+    else:
+        idx = len(children)
+    val_ax_xml.insert(idx, title_el)
 
 
 def _set_cross_between(chart, value: str = "midCat"):
@@ -309,17 +392,21 @@ def _add_scatter_chart(traces: list, item: dict, chart_pl) -> bool:
         pass
 
     sub = item.get("subheading", "")
+    y_axis_label = item.get("yAxisLabel", "")
     try:
         all_vals2 = df.values.flatten()
         all_vals2 = [v for v in all_vals2 if v is not None and not (isinstance(v, float) and math.isnan(v))]
         distance = max(abs(min(all_vals2)), abs(max(all_vals2))) if all_vals2 else 100
     except Exception:
         distance = 100
-    if "Prozent" in sub:
+    if y_axis_label == "%" or "Prozent" in sub:
         fmt = "#,##0" if distance > 20 else "#,##0.0"
     else:
         fmt = "#,##0.0" if distance < 20 else "#,##0"
     _set_value_format(chart, fmt)
+
+    # Set y-axis title from metricsConfig yAxisLabel
+    _set_value_axis_title(chart, y_axis_label)
 
     chart.category_axis.tick_label_position = XL_TICK_LABEL_POSITION.LOW
     if df.index is not None and len(df.index) > 1:

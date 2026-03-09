@@ -37,7 +37,7 @@ export const EQUITY_METRICS_CATEGORIES = [
     key: 'Technisch',
     label: 'TECHNISCH',
     fields: [
-      { key: 'Rolling Volatility', label: 'Volatilität',  tableEnabled: true,  graphEnabled: true, higherBetter: false, unit: '%', yAxisLabel: '%',     currencyAffected: false },
+      { key: 'Rolling Volatility', label: 'Volatilität (6M Roll.)',  tableEnabled: true,  graphEnabled: true, higherBetter: false, unit: '%', yAxisLabel: '%',     currencyAffected: false },
       { key: 'MA_50_Diff',         label: 'MA50 Distanz', tableEnabled: false, graphEnabled: true, higherBetter: false, unit: '%', yAxisLabel: '%',     currencyAffected: false },
       { key: 'RSI',                label: 'RSI',          tableEnabled: true,  graphEnabled: true, higherBetter: true,  unit: '',  yAxisLabel: 'Index', currencyAffected: false },
       { key: 'MACD',               label: 'MACD',         tableEnabled: true,  graphEnabled: true, higherBetter: true,  unit: '',  yAxisLabel: 'Wert',  currencyAffected: false },
@@ -105,6 +105,12 @@ export function getYAxisLabel(key) {
 export function isEquityMetricCurrencyAffected(key) {
   const config = getFieldConfig(key)
   return config?.currencyAffected ?? false
+}
+
+/** Get unit for an equity metric key (e.g., '%', '', etc.) */
+export function getEquityMetricUnit(key) {
+  const config = getFieldConfig(key)
+  return config?.unit ?? ''
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -187,6 +193,12 @@ export function getFIYAxisLabel(key) {
   return config?.yAxisLabel ?? ''
 }
 
+/** Get unit for an FI metric key (e.g., '%', 'bp', '') */
+export function getFIMetricUnit(key) {
+  const config = getFIFieldConfig(key)
+  return config?.unit ?? ''
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MACRO METRICS CONFIGURATION
 // Mirrors COLS_MACRO from C:\Projekte\dashboard\countries\mapping.py
@@ -199,10 +211,8 @@ export const MACRO_METRICS_CATEGORIES = [
     fields: [
       { key: 'GDP',                      label: 'BIP',                   tableEnabled: true,  graphEnabled: true,  higherBetter: true,  unit: '%', yAxisLabel: '%'     },
       { key: 'Economic Surprise',        label: 'Überraschungsindex',    tableEnabled: true,  graphEnabled: true,  higherBetter: true,  unit: '',  yAxisLabel: 'Index' },
-      { key: 'Industrial Production',    label: 'Industrieproduktion',   tableEnabled: true,  graphEnabled: true,  higherBetter: true,  unit: '%', yAxisLabel: '%'     },
-      { key: 'Retail Sales',             label: 'Einzelhandelsumsätze',  tableEnabled: true,  graphEnabled: true,  higherBetter: true,  unit: '%', yAxisLabel: '%'     },
-      { key: 'Trade Policy Uncertainty', label: 'Handelspol. Unsich.',   tableEnabled: true,  graphEnabled: true,  higherBetter: false, unit: '',  yAxisLabel: 'Index' },
-      { key: 'New Orders',               label: 'Auftragseingang',       tableEnabled: true,  graphEnabled: true,  higherBetter: true,  unit: '%', yAxisLabel: '%'     },
+      { key: 'Industrial Production',    label: 'Industrie',   tableEnabled: true,  graphEnabled: true,  higherBetter: true,  unit: '%', yAxisLabel: '%'     },
+      { key: 'Retail Sales',             label: 'Einzelhandel',  tableEnabled: true,  graphEnabled: true,  higherBetter: true,  unit: '%', yAxisLabel: '%'     },
     ],
   },
   {
@@ -210,8 +220,8 @@ export const MACRO_METRICS_CATEGORIES = [
     label: 'FUNDAMENTAL',
     fields: [
       { key: 'Inflation',    label: 'Inflation',       tableEnabled: true, graphEnabled: true, higherBetter: null,  unit: '%', yAxisLabel: '%'     },
-      { key: 'Unemployment', label: 'Arbeitslosigk.',  tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '%', yAxisLabel: '%'     },
-      { key: 'Misery',       label: 'Misery-Index',    tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '',  yAxisLabel: 'Index' },
+      { key: 'Unemployment', label: 'Arbeitslosigkeit',  tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '%', yAxisLabel: '%'     },
+      { key: 'Misery',       label: 'Misery',    tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '%',  yAxisLabel: '%' },
     ],
   },
   {
@@ -228,8 +238,6 @@ export const MACRO_METRICS_CATEGORIES = [
     key: 'Außenhandel',
     label: 'AUSSENHANDEL',
     fields: [
-      { key: 'Trade Balance',   label: 'Handelsbilanz',   tableEnabled: true,  graphEnabled: true, higherBetter: true,  unit: '%', yAxisLabel: '%' },
-      { key: 'Current Account', label: 'Leistungsbilanz', tableEnabled: true,  graphEnabled: true, higherBetter: true,  unit: '%', yAxisLabel: '%' },
       { key: 'Exports',         label: 'Exporte (YoY %)', tableEnabled: true,  graphEnabled: true, higherBetter: true,  unit: '%', yAxisLabel: '%' },
       { key: 'Imports',         label: 'Importe (YoY %)', tableEnabled: true,  graphEnabled: true, higherBetter: null,  unit: '%', yAxisLabel: '%' },
     ],
@@ -238,8 +246,7 @@ export const MACRO_METRICS_CATEGORIES = [
     key: 'Fiskal',
     label: 'FISKAL',
     fields: [
-      { key: 'Government Debt', label: 'Staatsverschuldung', tableEnabled: true,  graphEnabled: true, higherBetter: false, unit: '%', yAxisLabel: '%' },
-      { key: 'Budget Balance',  label: 'Haushaltssaldo',     tableEnabled: true,  graphEnabled: true, higherBetter: true,  unit: '%', yAxisLabel: '%' },
+      { key: 'Government Debt', label: 'Verschuldung', tableEnabled: true,  graphEnabled: true, higherBetter: false, unit: '%', yAxisLabel: '%' },
     ],
   },
   {
@@ -263,8 +270,8 @@ export const ALL_MACRO_GRAPH_METRICS = MACRO_METRICS_CATEGORIES.flatMap(cat =>
 
 /** Standard (factory) defaults for Macro tab */
 export const MACRO_STANDARD_DEFAULTS = {
-  table: ['GDP', 'Inflation', 'Unemployment', 'Composite PMI', 'Trade Balance', 'Government Debt', 'Interest Rate'],
-  graph: ['GDP', 'Inflation', 'Unemployment', 'Composite PMI', 'Manufacturing PMI', 'Trade Balance', 'Interest Rate'],
+  table: ['GDP', 'Inflation', 'Unemployment', 'Composite PMI', 'Government Debt', 'Interest Rate'],
+  graph: ['GDP', 'Inflation', 'Unemployment', 'Composite PMI', 'Manufacturing PMI', 'Interest Rate'],
 }
 
 /** Get Macro field config by key */
@@ -287,3 +294,81 @@ export function getMacroYAxisLabel(key) {
   const config = getMacroFieldConfig(key)
   return config?.yAxisLabel ?? ''
 }
+
+/** Get unit for a Macro metric key (e.g., '%', '') */
+export function getMacroMetricUnit(key) {
+  const config = getMacroFieldConfig(key)
+  return config?.unit ?? ''
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATE FORMATTING UTILITIES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Analyzes chart data and returns smart date formatting configuration.
+ * Returns a Recharts integer `interval` (show every nth data point as a tick)
+ * so the number of visible labels is always capped at 12.
+ *
+ * Label formats by time span:
+ *   < 13 months  → "Dez"   (abbreviated month name)
+ *   >= 13 months → "3.25"  (month.YY)
+ *
+ * @param {Array}  chartData - Array of chart rows
+ * @param {string} dateKey   - Key for the date field (default: 'DatePoint')
+ * @returns {{ formatter: Function, interval: number }}
+ */
+export function getSmartDateFormat(chartData, dateKey = 'DatePoint') {
+  const fallback = (isoStr) => {
+    if (!isoStr) return ''
+    const d = new Date(isoStr)
+    return isNaN(d) ? isoStr.slice(0, 10) : d.toLocaleDateString('de-DE', { month: 'short' })
+  }
+
+  if (!chartData || chartData.length < 2) {
+    return { formatter: fallback, interval: 0 }
+  }
+
+  const dates = chartData
+    .map(r => r[dateKey])
+    .filter(d => d && !isNaN(new Date(d)))
+    .sort()
+
+  if (dates.length < 2) {
+    return { formatter: fallback, interval: 0 }
+  }
+
+  const n = dates.length
+  const firstDate  = new Date(dates[0])
+  const lastDate   = new Date(dates[n - 1])
+  const monthsDiff = (lastDate.getFullYear() - firstDate.getFullYear()) * 12 +
+                     (lastDate.getMonth() - firstDate.getMonth())
+
+  if (monthsDiff < 13) {
+    // Ensure at least 1 full month between ticks so the same month name
+    // never repeats. approxPointsPerMonth gives the step size needed.
+    const approxPointsPerMonth = monthsDiff > 0 ? n / monthsDiff : n
+    const interval = Math.max(1, Math.ceil(approxPointsPerMonth))
+    return {
+      formatter: (isoStr) => {
+        if (!isoStr) return ''
+        const d = new Date(isoStr)
+        return isNaN(d) ? isoStr.slice(0, 10) : d.toLocaleDateString('de-DE', { month: 'short' })
+      },
+      interval,
+    }
+  }
+
+  // For longer periods cap at 12 labels
+  const interval = Math.max(1, Math.ceil(n / 12))
+  return {
+    formatter: (isoStr) => {
+      if (!isoStr) return ''
+      const d = new Date(isoStr)
+      if (isNaN(d)) return isoStr.slice(0, 10)
+      return `${d.getMonth() + 1}.${d.getFullYear().toString().slice(-2)}`
+    },
+    interval,
+  }
+}
+
