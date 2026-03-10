@@ -23,6 +23,22 @@ WORLD_REGIONS = [
     'UK'
 ]
 
+# Countries that are ONLY available in the Fixed Income (Anleihen) subtab
+# These new countries have yields data but no equity/macro data
+FI_ONLY_REGIONS = [
+    'Australia',
+    'Belgium',
+    'Latvia',
+    'Lithuania',
+    'Mexico',
+    'Netherlands',
+    'New Zealand',
+    'Norway',
+    'Poland',
+    'Portugal',
+    'Sweden',
+]
+
 # All available regions - EXACT list from original dashboard config
 # Original: ['U.S.', 'Europe', 'Germany', 'France', 'Italy', 'UK', 'Japan', 'Spain', 'China', 'India', 'EM']
 ALL_REGIONS = [
@@ -51,7 +67,19 @@ REGION_TRANSLATIONS = {
     'Spain': 'Spanien',
     'China': 'China',
     'India': 'Indien',
-    'EM': 'Emerging Markets'
+    'EM': 'Emerging Markets',
+    # FI-only countries
+    'Australia': 'Australien',
+    'Belgium': 'Belgien',
+    'Latvia': 'Lettland',
+    'Lithuania': 'Litauen',
+    'Mexico': 'Mexiko',
+    'Netherlands': 'Niederlande',
+    'New Zealand': 'Neuseeland',
+    'Norway': 'Norwegen',
+    'Poland': 'Polen',
+    'Portugal': 'Portugal',
+    'Sweden': 'Schweden',
 }
 
 # Mapping of alternative names to standard names (for normalization)

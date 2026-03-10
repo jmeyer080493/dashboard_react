@@ -341,6 +341,15 @@ async def get_fi_columns_master():
     except Exception as e:
         return {"status": "error", "columns": [], "error": str(e)}
 
+@app.get("/api/countries/fixed-income/ratings")
+async def get_fi_ratings():
+    """Get latest S&P credit ratings for all countries - PUBLIC ENDPOINT"""
+    try:
+        result = LänderDataService.get_ratings()
+        return result
+    except Exception as e:
+        return {"status": "error", "data": [], "error": str(e)}
+
 @app.get("/api/countries/macro")
 async def get_macro_data(
     regions: str = Query("Germany", description="Comma-separated list of regions"),

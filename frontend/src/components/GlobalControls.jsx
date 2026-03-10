@@ -3,6 +3,7 @@ import './GlobalControls.css'
 import MetricsFilterModal from './MetricsFilterModal'
 import {
   ALL_REGIONS,
+  FI_ONLY_REGIONS,
   REGION_PRESETS,
   EUROPEAN_COUNTRIES,
   WORLD_REGIONS,
@@ -95,8 +96,9 @@ function GlobalControls({
   // Regions excluded per tab
   const EXCLUDED_FI    = new Set(['China', 'India', 'EM'])
   const EXCLUDED_MACRO = new Set(['EM'])
+  // For the FI tab: base regions minus excluded, PLUS the FI-only countries (yields-only)
   const AVAILABLE_REGIONS = isFITab
-    ? ALL_REGIONS.filter(r => !EXCLUDED_FI.has(r))
+    ? [...ALL_REGIONS.filter(r => !EXCLUDED_FI.has(r)), ...FI_ONLY_REGIONS]
     : isMacroTab
     ? ALL_REGIONS.filter(r => !EXCLUDED_MACRO.has(r))
     : ALL_REGIONS

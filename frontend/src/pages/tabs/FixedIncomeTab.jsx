@@ -337,6 +337,129 @@ function FILineChart({ chartData, regions, metricLabel, yAxisLabel = '', unit = 
     </div>
   )
 }
+// Yield curve column order (maturity periods available in v3 FI data)
+const YIELD_CURVE_PERIODS = [
+  { col: '2Y Yields',  label: '2J' },
+  { col: '5Y Yields',  label: '5J' },
+  { col: '10Y Yields', label: '10J' },
+  { col: '20Y Yields', label: '20J' },
+  { col: '30Y Yields', label: '30J' },
+]
+
+/**
+ * Yield Curve chart — cross-sectional snapshot for the latest date,
+ * one line per selected region, X = maturity period, Y = yield in %.
+ */
+function KurveChart({ regions, allRecords, height = 300 }) {
+  const { addToPptx, addToXlsx } = useExport()
+
+  if (!allRecords || allRecords.length === 0) {
+    return (
+      <div className="chart-container">
+        <h3>Zinskurve</h3>
+        <div className="chart-empty">Keine Daten verfügbar</div>
+      </div>
+    )
+  }
+
+  // Find the latest DatePoint that has yield data
+  const latestByRegion = {}
+  for (const row of allRecords) {
+    if (!row.DatePoint || !regions.includes(row.Regions)) continue
+    const hasYields = YIELD_CURVE_PERIODS.some(p => row[p.col] != null)
+    if (!hasYields) continue
+    if (!latestByRegion[row.Regions] || row.DatePoint > latestByRegion[row.Regions].DatePoint) {
+      latestByRegion[row.Regions] = row
+    }
+  }
+
+  // Build chart-friendly data: one object per period with region keys
+  const chartData = YIELD_CURVE_PERIODS.map(({ col, label }) => {
+    const point = { period: label }
+    for (const region of regions) {
+      const row = latestByRegion[region]
+      if (row && row[col] != null) point[region] = row[col]
+    }
+    return point
+  })
+
+  // Only include regions that have at least one yield value
+  const activeRegions = regions.filter(r =>
+    chartData.some(d => d[r] !== undefined && d[r] !== null)
+  )
+
+  if (activeRegions.length === 0) {
+    return (
+      <div className="chart-container">
+        <h3>Zinskurve</h3>
+        <div className="chart-empty">Keine Renditedaten für die ausgewählten Länder</div>
+      </div>
+    )
+  }
+
+  const latestDateStr = Object.values(latestByRegion)
+    .map(r => r.DatePoint)
+    .sort()
+    .pop()
+  const latestDateFmt = latestDateStr
+    ? new Date(latestDateStr).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : ''
+
+  const exportItem = {
+    id: 'yield-curve',
+    title: 'Anleihen – Zinskurve',
+    pptx_title: 'Zinskurve',
+    subheading: latestDateFmt,
+    yAxisLabel: '%',
+    source: 'Quelle: Bloomberg Finance L.P.',
+    tab: 'Anleihen',
+    chartData,
+    regions: activeRegions,
+    xKey: 'period',
+  }
+
+  return (
+    <div className="chart-container">
+      <h3>Zinskurve</h3>
+      <ResponsiveContainer width="100%" height={height}>
+        <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+          <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+          <YAxis
+            tick={{ fontSize: 11 }}
+            tickFormatter={v => `${v.toFixed(1)}`}
+            width={44}
+            label={{ value: '%', angle: -90, position: 'insideLeft', offset: 12, style: { textAnchor: 'middle', fontSize: 11, fill: '#6b7280' } }}
+          />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', fontSize: 12 }}
+            formatter={(value, name) => [`${value?.toFixed(2)} %`, name]}
+          />
+          <Legend />
+          {activeRegions.map((region) => (
+            <Line
+              key={region}
+              type="monotone"
+              dataKey={region}
+              stroke={REGION_COLORS[regions.indexOf(region) % REGION_COLORS.length]}
+              strokeWidth={2.5}
+              dot={{ r: 4 }}
+              isAnimationActive={false}
+              connectNulls
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+      <div className="chart-export-buttons">
+        <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={26} height={26} /></button>
+        <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={26} height={26} /></button>
+        {latestDateFmt && (
+          <span className="chart-export-date">Letztes Datum: {latestDateStr?.split('T')[0]}</span>
+        )}
+      </div>
+    </div>
+  )
+}
 
 /**
  * Fixed Income Tab Component
@@ -357,6 +480,7 @@ function FixedIncomeTab({
   chartsPerRow = 2,
   chartHeight = 300,
   chartType = 'Line',
+  ratingsData = [],
 }) {
   if (loading) {
     return <div className="tab-loading">📊 Laden…</div>
@@ -369,7 +493,13 @@ function FixedIncomeTab({
   }
 
   const regions = filters.regions || []
-  const allRecords = data.data
+  // Inject SP rating into every record so MetricsTable can display it.
+  // We always inject (null when not found) so the column is stable even before
+  // ratingsData has loaded – it will show '–' and fill in once data arrives.
+  const spByRegion = Object.fromEntries(
+    ratingsData.filter(r => r.Regions).map(r => [r.Regions, r.SP ?? null])
+  )
+  const allRecords = (data.data || []).map(r => ({ ...r, SP: spByRegion[r.Regions] ?? null }))
 
   // Apply date-range filter for charts
   const filteredRecords = allRecords.filter((r) => {
@@ -388,6 +518,9 @@ function FixedIncomeTab({
         )
       : []
 
+  // Special metrics rendered by dedicated components (not dependent on availableMetrics)
+  const SPECIAL_METRICS = new Set(['Kurve'])
+
   // Use selections if provided, otherwise fall back to standard defaults
   const tableColumns = (selectedMetricsTable.length > 0
     ? selectedMetricsTable
@@ -397,7 +530,7 @@ function FixedIncomeTab({
   const graphMetrics = (selectedMetricsGraph.length > 0
     ? selectedMetricsGraph
     : FI_STANDARD_DEFAULTS.graph
-  ).filter((m) => availableMetrics.includes(m))
+  ).filter((m) => SPECIAL_METRICS.has(m) || availableMetrics.includes(m))
 
   return (
     <div className="fixed-income-tab">
@@ -421,18 +554,30 @@ function FixedIncomeTab({
             Keine Grafik-Metriken ausgewählt – bitte nutzen Sie „🔧 Datenfelder Filtern“.
           </div>
         ) : (
-          graphMetrics.map((metric) => (
-            <FILineChart
-              key={metric}
-              chartData={pivotDataForChart(filteredRecords, metric, regions)}
-              regions={regions}
-              metricLabel={getFIMetricLabel(metric)}
-              yAxisLabel={getFIYAxisLabel(metric)}
-              unit={getFIMetricUnit(metric)}
-              height={chartHeight}
-              chartType={chartType}
-            />
-          ))
+          graphMetrics.map((metric) => {
+            if (metric === 'Kurve') {
+              return (
+                <KurveChart
+                  key="Kurve"
+                  regions={regions}
+                  allRecords={allRecords}
+                  height={chartHeight}
+                />
+              )
+            }
+            return (
+              <FILineChart
+                key={metric}
+                chartData={pivotDataForChart(filteredRecords, metric, regions)}
+                regions={regions}
+                metricLabel={getFIMetricLabel(metric)}
+                yAxisLabel={getFIYAxisLabel(metric)}
+                unit={getFIMetricUnit(metric)}
+                height={chartHeight}
+                chartType={chartType}
+              />
+            )
+          })
         )}
       </div>
     </div>

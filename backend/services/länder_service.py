@@ -948,10 +948,8 @@ class LänderDataService:
 
     @classmethod
     def _load_fi_ticker_mapping(cls) -> pd.DataFrame:
-        """Load FI ticker mapping from ticker_master table, cached."""
-        if cls._fi_cache_initialized and cls._fi_ticker_mapping_cache is not None:
-            return cls._fi_ticker_mapping_cache
-
+        """Load FI ticker mapping from ticker_master table (no persistent cache so
+        newly-added tickers/regions are always picked up without a server restart)."""
         try:
             db = DatabaseGateway()
             engine = db.get_duoplus_engine()
@@ -968,14 +966,11 @@ class LänderDataService:
                 """,
                 engine,
             )
-            cls._fi_ticker_mapping_cache = df
-            cls._fi_cache_initialized = True
-            logger.info(f"✓ Loaded {len(df)} FI ticker mappings from ticker_master")
+            logger.info(f"✓ Loaded {len(df)} FI ticker mappings from ticker_master "
+                        f"(regions: {sorted(df['Regions'].dropna().unique().tolist())})")
             return df
         except Exception as e:
             logger.error(f"✗ Failed to load FI ticker mapping: {e}", exc_info=True)
-            cls._fi_cache_initialized = True
-            cls._fi_ticker_mapping_cache = pd.DataFrame()
             return pd.DataFrame()
 
     @staticmethod
@@ -1391,7 +1386,66 @@ class LänderDataService:
             "5Y Inflation Expectations",
             "10Y Breakevens",
             "10Y Inflation Expectations",
+            # Spezial / special chart types (graph-only)
+            "SP",     # S&P credit rating bar chart
+            "Kurve",  # Yield curve cross-sectional chart
         ]
+
+    @staticmethod
+    def get_ratings() -> Dict[str, Any]:
+        """
+        Return the latest S&P credit ratings from the ratings table.
+        Returns: {status, data: [{Regions, SP}]}
+        """
+        try:
+            db_gw = DatabaseGateway()
+            engine = db_gw.get_jm_engine()
+            if engine is None:
+                raise ValueError("JM (ApoAsset_JM) database not available")
+
+            query = """
+                SELECT *
+                FROM ratings
+                WHERE TRY_CONVERT(DATETIME, DatePoint) = (
+                    SELECT MAX(TRY_CONVERT(DATETIME, DatePoint))
+                    FROM ratings
+                    WHERE TRY_CONVERT(DATETIME, DatePoint) >= DATEADD(day, -14, GETDATE())
+                )
+            """
+            df = pd.read_sql_query(query, engine)
+            logger.info(f"ratings table columns: {df.columns.tolist()}")
+            logger.info(f"ratings table rows: {len(df)}")
+
+            if df.empty:
+                logger.warning("ratings table returned no rows")
+                return {"status": "ok", "data": []}
+
+            # Standardise region column name
+            if "Countries" in df.columns:
+                df = df.rename(columns={"Countries": "Regions"})
+
+            logger.info(f"ratings sample regions: {df['Regions'].unique()[:10].tolist() if 'Regions' in df.columns else 'NO REGIONS COLUMN'}")
+            logger.info(f"ratings sample SP: {df['SP'].unique()[:10].tolist() if 'SP' in df.columns else 'NO SP COLUMN'}")
+
+            if "Regions" not in df.columns:
+                raise ValueError(f"No 'Countries'/'Regions' column found. Got: {df.columns.tolist()}")
+            if "SP" not in df.columns:
+                raise ValueError(f"No 'SP' column found. Got: {df.columns.tolist()}")
+
+            # Normalize region names to match the FI data (e.g. "United States" → "U.S.")
+            df["Regions"] = df["Regions"].apply(
+                lambda r: LänderDataService._normalize_region_name(str(r)) if pd.notna(r) else r
+            )
+
+            df = df[["Regions", "SP"]].dropna(subset=["Regions"])
+
+            records = df.to_dict("records")
+            logger.info(f"✅ get_ratings: {len(records)} country ratings returned: {[(r['Regions'], r['SP']) for r in records[:5]]}")
+            return {"status": "ok", "data": records}
+
+        except Exception as e:
+            logger.error(f"❌ get_ratings FAILED: {e}", exc_info=True)
+            return {"status": "error", "data": [], "metadata": {"error": str(e)}}
 
     # ═══════════════════════════════════════════════════════════════════════
     # MACRO DATA METHODS

@@ -132,6 +132,14 @@ export function getEquityMetricUnit(key) {
 
 export const FI_METRICS_CATEGORIES = [
   {
+    key: 'Spezial',
+    label: 'SPEZIAL',
+    graphOnly: true,
+    fields: [
+      { key: 'Kurve',  label: 'Zinskurve',  tableEnabled: false, graphEnabled: true, higherBetter: null, unit: '%',  yAxisLabel: '%'  },
+    ],
+  },
+  {
     key: 'Zinsen',
     label: 'ZINSEN',
     fields: [
@@ -149,6 +157,7 @@ export const FI_METRICS_CATEGORIES = [
     key: 'Kreditqualität',
     label: 'KREDITQUALITÄT',
     fields: [
+      { key: 'SP',     label: 'S&P Rating', tableEnabled: true,  graphEnabled: false, higherBetter: null, unit: '',   yAxisLabel: ''  },
       { key: '3 CDS',  label: '3J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Basispunkte' },
       { key: '5 CDS',  label: '5J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Basispunkte' },
       { key: '7 CDS',  label: '7J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Basispunkte' },
@@ -180,8 +189,8 @@ export const ALL_FI_GRAPH_METRICS = FI_METRICS_CATEGORIES.flatMap(cat =>
 
 /** Standard (factory) defaults for FI tab */
 export const FI_STANDARD_DEFAULTS = {
-  table: ['2Y Yields', '10Y Yields', 'Steepness', 'Spreads to Bunds', '5 CDS', '10Y Breakevens'],
-  graph: ['2Y Yields', '10Y Yields', 'Steepness', 'Spreads to Bunds', '5 CDS', '10Y Breakevens'],
+  table: ['SP', '2Y Yields', '10Y Yields', 'Steepness', 'Spreads to Bunds', '5 CDS', '10Y Breakevens'],
+  graph: ['Kurve', '10Y Yields', 'Steepness', 'Spreads to Bunds', '5 CDS'],
 }
 
 /** Get FI field config by key */
@@ -233,7 +242,7 @@ export const MACRO_METRICS_CATEGORIES = [
     fields: [
       { key: 'Inflation',    label: 'Inflation',       tableEnabled: true, graphEnabled: true, higherBetter: false,  unit: '%', yAxisLabel: '%'     },
       { key: 'Unemployment', label: 'Arbeitslosigkeit',  tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '%', yAxisLabel: '%'     },
-      { key: 'Misery',       label: 'Misery',    tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '%',  yAxisLabel: '%' },
+      { key: 'Misery',       label: 'Inflation + Arbeitslosigkeit',    tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '%',  yAxisLabel: '%' },
     ],
   },
   {
@@ -282,7 +291,7 @@ export const ALL_MACRO_GRAPH_METRICS = MACRO_METRICS_CATEGORIES.flatMap(cat =>
 
 /** Standard (factory) defaults for Macro tab */
 export const MACRO_STANDARD_DEFAULTS = {
-  table: ['GDP', 'Economic Surprise', 'Industrial Production', 'Retail Sales', 'Inflation', 'Unemployment', 'Composite PMI', 'Services PMI', 'Consumer Confidence', 'Government Debt', 'Interest Rate'],
+  table: ['GDP', 'Economic Surprise', 'Industrial Production', 'Retail Sales', 'Inflation', 'Unemployment', 'Composite PMI', 'Services PMI', 'Consumer Confidence', 'Government Debt'],
   graph: ['GDP', 'Economic Surprise', 'Misery', 'Composite PMI'],
 }
 

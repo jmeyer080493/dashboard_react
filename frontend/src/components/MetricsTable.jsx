@@ -16,6 +16,18 @@ const REGION_FLAGS = {
   'India': '🇮🇳', 'Indien': '🇮🇳',
   'EM': '🌏', 'Emerging Markets': '🌏',
   'Switzerland': '🇨🇭', 'Schweiz': '🇨🇭',
+  // FI-only countries (Anleihen subtab)
+  'Australia': '🇦🇺', 'Australien': '🇦🇺',
+  'Belgium': '🇧🇪', 'Belgien': '🇧🇪',
+  'Latvia': '🇱🇻', 'Lettland': '🇱🇻',
+  'Lithuania': '🇱🇹', 'Litauen': '🇱🇹',
+  'Mexico': '🇲🇽', 'Mexiko': '🇲🇽',
+  'Netherlands': '🇳🇱', 'Niederlande': '🇳🇱',
+  'New Zealand': '🇳🇿', 'Neuseeland': '🇳🇿',
+  'Norway': '🇳🇴', 'Norwegen': '🇳🇴',
+  'Poland': '🇵🇱', 'Polen': '🇵🇱',
+  'Portugal': '🇵🇹',
+  'Sweden': '🇸🇪', 'Schweden': '🇸🇪',
 }
 
 // ─── Region display name map ────────────────────────────────────────────────
@@ -31,26 +43,34 @@ const REGION_TRANSLATIONS = {
   'China': 'China',
   'India': 'Indien',
   'EM': 'EM',
+  // FI-only countries (Anleihen subtab)
+  'Australia': 'Australien',
+  'Belgium': 'Belgien',
+  'Latvia': 'Lettland',
+  'Lithuania': 'Litauen',
+  'Mexico': 'Mexiko',
+  'Netherlands': 'Niederlande',
+  'New Zealand': 'Neuseeland',
+  'Norway': 'Norwegen',
+  'Poland': 'Polen',
+  'Portugal': 'Portugal',
+  'Sweden': 'Schweden',
 }
 
 /**
- * Compute the cross-region percentile rank of `value` for a given metric.
- * `latestValues` is a map of { region: latestValue } for ALL regions in the
- * dataset (not just the currently selected ones).
- * Returns null if fewer than 2 regions have data for that metric.
+ * Cross-region percentile: where does this region's latest value rank
+ * against ALL other regions' latest values for the same metric?
+ * `latestValues` is a map of { region: record } for ALL regions in the
+ * dataset (not just the currently selected ones), so the colour scale is
+ * stable regardless of which regions the user has filtered to.
+ * Returns 0-100 or null if fewer than 2 regions have data.
  */
-/**
- * Historical (time-series) percentile: where does the current value rank
- * within all historical values for that specific region in the lookback window?
- * Returns 0-100 or null if insufficient data.
- */
-function computeHistoricalPercentile(allData, metricKey, region, currentValue) {
-  if (currentValue === null || currentValue === undefined || isNaN(currentValue)) return null
+function computeCrossRegionPercentile(latestValues, metricKey, value) {
+  if (value === null || value === undefined || isNaN(value)) return null
 
   const vals = []
-  for (const record of allData) {
-    if (record.Regions !== region) continue
-    const v = record[metricKey]
+  for (const regionRecord of Object.values(latestValues)) {
+    const v = regionRecord?.[metricKey]
     if (v !== null && v !== undefined && !isNaN(v)) vals.push(v)
   }
 
@@ -59,7 +79,7 @@ function computeHistoricalPercentile(allData, metricKey, region, currentValue) {
   vals.sort((a, b) => a - b)
   let rank = 0
   for (const v of vals) {
-    if (v <= currentValue) rank++
+    if (v <= value) rank++
   }
   return (rank / vals.length) * 100
 }
@@ -159,6 +179,20 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
     return map
   }, [data, regions])
 
+  // ── Latest value per region for ALL regions in the dataset ───────────────
+  // Used for cross-region percentile ranking so that filtering the visible
+  // regions never changes the colour scale.
+  const latestDataAllRegions = useMemo(() => {
+    if (!data || data.length === 0) return {}
+    const map = {}
+    for (const record of data) {
+      const r = record.Regions
+      if (!r) continue
+      if (!map[r] || record.DatePoint > map[r].DatePoint) map[r] = record
+    }
+    return map
+  }, [data])
+
   // ── Determine which metrics to show ─────────────────────────────────────
   const metricsToDisplay = useMemo(() => {
     if (!data || data.length === 0) return []
@@ -241,20 +275,22 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
     )
   }
 
-  // ── Pre-compute all percentiles (historical time-series ranking) ───────────
-  // Each cell shows where the region's latest value ranks within its own
-  // historical data for the active lookback window.
+  // ── Pre-compute all percentiles (cross-region ranking) ─────────────────────
+  // Each cell is coloured by how that region's latest value ranks against ALL
+  // other regions' latest values for the same metric.
+  // `latestDataAllRegions` (all regions, not just the selected ones) is used
+  // so that the colour scale remains stable regardless of the region filter.
   const percentiles = useMemo(() => {
     if (!data || data.length === 0) return {}
     const result = {}
     for (const metric of metricsToDisplay) {
       for (const region of regions) {
         const value = latestDataPerRegion[region]?.[metric]
-        result[`${region}::${metric}`] = computeHistoricalPercentile(data, metric, region, value)
+        result[`${region}::${metric}`] = computeCrossRegionPercentile(latestDataAllRegions, metric, value)
       }
     }
     return result
-  }, [data, regions, metricsToDisplay, latestDataPerRegion])
+  }, [data, regions, metricsToDisplay, latestDataPerRegion, latestDataAllRegions])
 
   // ── Sorted regions ─────────────────────────────────────────────────────
   const sortedRegions = useMemo(() => {

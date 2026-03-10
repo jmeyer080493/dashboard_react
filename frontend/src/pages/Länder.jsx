@@ -42,6 +42,9 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
   const [fixedIncomeLoading, setFixedIncomeLoading] = useState(false)
   const [fixedIncomeError, setFixedIncomeError] = useState(null)
 
+  // S&P credit ratings – fetched once on mount, independent of region selection
+  const [ratingsData, setRatingsData] = useState([])
+
   const [macroData, setMacroData] = useState(null)
   const [macroLoading, setMacroLoading] = useState(false)
   const [macroError, setMacroError] = useState(null)
@@ -297,6 +300,22 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
         }
       })
       .catch(err => console.error('[DEBUG] INIT MACRO COLUMNS: Fetch error:', err))
+
+    // Fetch S&P credit ratings - ONCE (ratings are quasi-static, no region param needed)
+    const token = localStorage.getItem('auth_token')
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {}
+    fetch('/api/countries/fixed-income/ratings', { headers: authHeaders })
+      .then(r => r.json())
+      .then(result => {
+        console.log('[RATINGS] API response:', result)
+        if (result.status === 'ok') {
+          console.log('[RATINGS] data sample:', result.data?.slice(0, 5))
+          setRatingsData(result.data || [])
+        } else {
+          console.warn('[RATINGS] non-ok status:', result)
+        }
+      })
+      .catch(err => console.error('[RATINGS] Fetch error:', err))
   }, []) // Only run once on mount
 
   // Helper: fetch equity data + columns together
@@ -430,6 +449,7 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
               chartsPerRow={gs.fi?.chartsPerRow ?? 2}
               chartHeight={gs.fi?.chartHeight ?? 300}
               chartType={chartType}
+              ratingsData={ratingsData}
             />
           )}
           {activeTab === 'macro' && (
