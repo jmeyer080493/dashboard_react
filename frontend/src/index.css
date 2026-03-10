@@ -26,11 +26,11 @@ body {
   color-scheme: light;
 
   /* Backgrounds */
-  --bg-main:       #f5f5f5;
+  --bg-main:       #ffffff;
   --bg-page:       linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  --bg-card:       #ffffff;
+  --bg-card:       #f8f9fa;
   --bg-surface:    #f8f9fa;
-  --bg-controls:   linear-gradient(135deg, #f5f5f5 0%, #ececec 100%);
+  --bg-controls:   #f8f9fa;
   --bg-tabbar:     #f9f9f9;
   --bg-input:      #ffffff;
   --bg-hover:      #f0f0f0;
@@ -70,7 +70,7 @@ body {
   --api-chk-border: #ffeeba;
 
   /* Chart area */
-  --chart-bg:     #ffffff;
+  --chart-bg:     #f8f9fa;
   --chart-border: #dddddd;
 
   /* Chart export buttons */
@@ -84,7 +84,7 @@ body {
   --tab-error-text: #856404;
 
   /* Modals – Light Mode */
-  --modal-bg:               #ffffff;
+  --modal-bg:               #f8f9fa;
   --modal-border:           #e5e7eb;
   --modal-header-border:    #e5e7eb;
   --modal-title:            #6d28d9;
@@ -140,7 +140,7 @@ body {
   --mfm-inner-border:#2e2e50;
 
   /* Feedback Modal – Light Mode */
-  --feedback-bg:             #ffffff;
+  --feedback-bg:             #f8f9fa;
   --feedback-border:         #e5e7eb;
   --feedback-header-border:  #6d28d9;
   --feedback-title-color:    #6d28d9;
@@ -174,7 +174,7 @@ body {
   --export-modal-close-hover-text: #333333;
 
   /* Sidebar (Light Mode) */
-  --sidebar-bg:             linear-gradient(135deg, #f5f5f5 0%, #ececec 100%);
+  --sidebar-bg:             #f8f9fa;
   --sidebar-text:           #333333;
   --sidebar-text-muted:     #666666;
   --sidebar-border:         #e0e0e0;
@@ -187,7 +187,7 @@ body {
   --sidebar-scrollbar-hover:rgba(201, 160, 220, 0.4);
 
   /* Missing alias variables – used by Portfolios, Sektoren, DuoPlus */
-  --card-bg:               #ffffff;
+  --card-bg:               #f8f9fa;
   --card-shadow:           0 1px 4px rgba(0, 0, 0, 0.08);
   --input-bg:              #ffffff;
   --border-color:          #e5e7eb;
@@ -205,11 +205,11 @@ body {
   color-scheme: dark;
 
   /* Backgrounds */
-  --bg-main:       #0f0e1a;
+  --bg-main:       #1f1f35;
   --bg-page:       linear-gradient(135deg, #0f0e1a 0%, #1a1832 100%);
-  --bg-card:       #1e1b3a;
-  --bg-surface:    #161430;
-  --bg-controls:   linear-gradient(135deg, #1a1832 0%, #161430 100%);
+  --bg-card:       #26263a;
+  --bg-surface:    #26263a;
+  --bg-controls:   #26263a;
   --bg-tabbar:     #161430;
   --bg-input:      rgba(255, 255, 255, 0.06);
   --bg-hover:      rgba(255, 255, 255, 0.05);
@@ -247,7 +247,7 @@ body {
   --api-chk-border: rgba(133, 100, 4, 0.4);
 
   /* Chart area */
-  --chart-bg:     #1e1b3a;
+  --chart-bg:     #26263a;
   --chart-border: rgba(255, 255, 255, 0.1);
 
   /* Chart export buttons */
@@ -277,7 +277,7 @@ body {
   --export-modal-close-hover-text: #e0e0e0;
 
   /* Sidebar (Dark Mode) */
-  --sidebar-bg:             linear-gradient(135deg, #2a2847 0%, #1a1832 100%);
+  --sidebar-bg:             #26263a;
   --sidebar-text:           #e0e0e0;
   --sidebar-text-muted:     #a0a0b0;
   --sidebar-border:         rgba(255, 255, 255, 0.1);
@@ -288,6 +288,8 @@ body {
   --sidebar-accent:         #c9a0dc;
   --sidebar-scrollbar:      rgba(201, 160, 220, 0.3);
   --sidebar-scrollbar-hover:rgba(201, 160, 220, 0.5);
+  --sidebar-btn-border-left:#646cff;
+
 
   /* Modals – Dark Mode overrides (dark purple) */
   --modal-bg:               #1e1b3a;
@@ -363,7 +365,7 @@ body {
   --feedback-submit-text:    #000000;
 
   /* Missing alias variables – Dark Mode */
-  --card-bg:               #1e1b3a;
+  --card-bg:               #26263a;
   --card-shadow:           0 1px 8px rgba(0, 0, 0, 0.4);
   --input-bg:              rgba(255, 255, 255, 0.06);
   --border-color:          rgba(255, 255, 255, 0.1);

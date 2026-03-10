@@ -17,8 +17,12 @@
   gap: 0;
   padding: 0.6rem 1.25rem;
   background: var(--bg-controls, var(--card-bg, #f9fafc));
-  border-bottom: 1px solid var(--border, var(--border-color, #e5e7eb));
+  border: 1px solid var(--border, var(--border-color, #e5e7eb));
+  border-radius: 8px;
   transition: background 0.25s ease, border-color 0.25s ease;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .alternativ-control-section {

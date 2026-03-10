@@ -237,13 +237,13 @@ function AppShell() {
           />
         <main className="main-content">
           <div className="content-wrapper">
-            {/* API Status Indicator */}
-            <div className={`api-indicator ${apiStatus}`}>
+            {/* API Status Indicator – hidden */}
+            {/* <div className={`api-indicator ${apiStatus}`}>
               <span className="indicator-dot"></span>
               <span className="indicator-text">
                 Backend: {apiStatus === 'connected' ? '✓ Connected' : '✗ Disconnected'}
               </span>
-            </div>
+            </div> */}
 
             {/* Page Content */}
             {renderPage()}
