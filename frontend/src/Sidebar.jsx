@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useExport } from './context/ExportContext'
 import { useAuth } from './context/AuthContext'
-import { ExcelIcon, PowerPointIcon } from './icons/MicrosoftIcons'
+import { ExcelIcon, PowerPointIcon, ScanDeleteIcon } from './icons/MicrosoftIcons'
 import './Sidebar.css'
 
 /**
@@ -90,7 +90,7 @@ function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback, 
             <div className="bottom-button-row">
               <button
                 className="bottom-button"
-                style={{ backgroundColor: '#c0392b', flex: 1, margin: '0.3rem', marginLeft: '0' }}
+                style={{ backgroundColor: 'var(--export-pptx-text)', flex: 1, margin: '0.3rem', marginLeft: '0' }}
                 onClick={() => setPptxModalOpen(true)}
               >
                 <span className="button-icon">
@@ -99,13 +99,15 @@ function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback, 
                 <span className="button-label">PPTX ({pptxItems.length})</span>
               </button>
               {pptxItems.length > 0 && (
-                <button className="bottom-button-clear" onClick={clearPptx} title="Liste leeren">✕</button>
+                <button className="bottom-button-clear" onClick={clearPptx} title="Liste leeren">
+                  <ScanDeleteIcon width={20} height={20} />
+                </button>
               )}
             </div>
             <div className="bottom-button-row">
               <button
                 className="bottom-button"
-                style={{ backgroundColor: '#198754', flex: 1, margin: '0.3rem', marginLeft: '0' }}
+                style={{ backgroundColor: 'var(--export-xlsx-text)', flex: 1, margin: '0.3rem', marginLeft: '0' }}
                 onClick={() => setXlsxModalOpen(true)}
               >
                 <span className="button-icon">
@@ -114,7 +116,9 @@ function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback, 
                 <span className="button-label">Excel ({xlsxItems.length})</span>
               </button>
               {xlsxItems.length > 0 && (
-                <button className="bottom-button-clear" onClick={clearXlsx} title="Liste leeren">✕</button>
+                <button className="bottom-button-clear" onClick={clearXlsx} title="Liste leeren">
+                  <ScanDeleteIcon width={20} height={20} />
+                </button>
               )}
             </div>
           </div>

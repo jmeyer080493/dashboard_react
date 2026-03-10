@@ -418,10 +418,12 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
                 const indicator = isSorted
                   ? (sortConfig.direction === 'asc' ? ' ↑' : ' ↓')
                   : ' ⇅'
+                const catLabel = metricMeta[metric]?.categoryLabel
+                const subCatClass = catLabel ? ` sub-cat-${catLabel.toLowerCase().replace(/[^a-z0-9]/g, '-')}` : ''
                 return (
                   <th
                     key={metric}
-                    className={`metrics-table-metric-header sortable-col${isSorted ? ' sorted' : ''}`}
+                    className={`metrics-table-metric-header sortable-col${isSorted ? ' sorted' : ''}${subCatClass}`}
                     onClick={() => handleSortClick(metric)}
                     title="Klicken zum Sortieren"
                   >

@@ -37,14 +37,16 @@ body {
   --bg-hover-alt:  #e8e8e8;
   --bg-row-even:   #fafbfc;
   --bg-tag:        #e3d9f0;
+  --bg-btn-active: #0a58ca;
+
 
   /* Text */
   --text-primary:   #333333;
   --text-secondary: #666666;
   --text-muted:     #999999;
-  --text-heading:   #2c3e50;
+  --text-heading:   #0a58ca;
   --text-value:     #555555;
-  --text-tag:       #333333;
+  --text-tag:       #0a58ca;
   --text-tag-remove:#666666;
 
   /* Borders */
@@ -178,9 +180,9 @@ body {
   --sidebar-text:           #333333;
   --sidebar-text-muted:     #666666;
   --sidebar-border:         #e0e0e0;
-  --sidebar-header-title:   #7a4d9e;
+  --sidebar-header-title:   #0a58ca;
   --sidebar-hover-bg:       #f0f0f0;
-  --sidebar-active-bg:      #c9a0dc;
+  --sidebar-active-bg:      #0a58ca;
   --sidebar-active-text:    #ffffff;
   --sidebar-accent:         #c9a0dc;
   --sidebar-scrollbar:      rgba(201, 160, 220, 0.2);
@@ -198,6 +200,54 @@ body {
   --table-header-bg:       #f9fafb;
   --bg-table-header:       #f4f4f4;
   --bg-table-header-hover: #ebebeb;
+
+  /* General Error/Success color */
+  --error-bg:     rgb(255, 50, 50);
+  --error-color:  rgba(255, 71, 71, 0.8);
+  --success-color:#0a58ca;
+
+  /* Metrics table category header tints – dark mode (slightly brighter) */
+  --cat-trend:              linear-gradient(135deg, #cce5ff 0%, #99ccff 100%);
+  --cat-bewertung:          linear-gradient(135deg, #ffe0e0 0%, #ffb3b3 100%);
+  --cat-technisch:          linear-gradient(135deg, #fff5e0 0%, #ffe0b3 100%);
+  --cat-zinsen:             linear-gradient(135deg, #c6dbef 0%, #9ecae1 100%);
+  --cat-kreditqualit-t:     linear-gradient(135deg, #c7e9c0 0%, #a1d99b 100%);
+  --cat-inflationserwartungen: linear-gradient(135deg, #fc9272 0%, #fb6a4a 100%);
+  --cat-konjunktur:         linear-gradient(135deg, #c7e9c0 0%, #a1d99b 100%);
+  --cat-fundamental:        linear-gradient(135deg, #fc9272 0%, #fb6a4a 100%);
+  --cat-gesch-ftsklima:     linear-gradient(135deg, #c6dbef 0%, #9ecae1 100%);
+  --cat-aussenhandel:        linear-gradient(135deg, #dfc9e8 0%, #d0bfff 100%);
+  --cat-fiskal:             linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  --cat-andere:             linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+
+  /* Metrics table category border colors */
+  --cat-trend-bc:              rgba(153, 204, 255, 0.8);
+  --cat-bewertung-bc:          rgba(255, 179, 179, 0.8);
+  --cat-technisch-bc:          rgba(255, 224, 179, 0.8);
+  --cat-zinsen-bc:             rgba(158, 202, 225, 0.8);
+  --cat-kreditqualit-t-bc:     rgba(161, 217, 155, 0.8);
+  --cat-inflationserwartungen-bc: rgba(251, 106,  74, 0.8);
+  --cat-konjunktur-bc:         rgba(161, 217, 155, 0.8);
+  --cat-fundamental-bc:        rgba(251, 106,  74, 0.8);
+  --cat-gesch-ftsklima-bc:     rgba(158, 202, 225, 0.8);
+  --cat-aussenhandel-bc:        rgba(208, 191, 255, 0.8);
+  --cat-fiskal-bc:             rgba(221, 214, 254, 0.8);
+  --cat-andere-bc:             rgba(203, 213, 225, 0.8);
+
+  /* Metrics table category text colors – dark mode (lighter/vivid) */
+  --cat-trend-tc:              #0c5aa0;
+  --cat-bewertung-tc:          #a60000;
+  --cat-technisch-tc:          #b37a00;
+  --cat-zinsen-tc:             #08519c;
+  --cat-kreditqualit-t-tc:     #238b45;
+  --cat-inflationserwartungen-tc: #a50f15;
+  --cat-konjunktur-tc:         #238b45;
+  --cat-fundamental-tc:        #a50f15;
+  --cat-gesch-ftsklima-tc:     #08519c;
+  --cat-aussenhandel-tc:        #5f3dc4;
+  --cat-fiskal-tc:             #6d28d9;
+  --cat-andere-tc:             #475569;
+
 }
 
 /* ── Dark Mode ─────────────────────────────────────────────────────────── */
@@ -216,14 +266,15 @@ body {
   --bg-hover-alt:  rgba(255, 255, 255, 0.08);
   --bg-row-even:   rgba(255, 255, 255, 0.02);
   --bg-tag:        rgba(201, 160, 220, 0.15);
+  --bg-btn-active: #d46fef;
 
   /* Text */
   --text-primary:   #e0e0e0;
   --text-secondary: rgba(255, 255, 255, 0.6);
   --text-muted:     rgba(255, 255, 255, 0.35);
-  --text-heading:   #c9a0dc;
+  --text-heading:   #d46fef;
   --text-value:     rgba(255, 255, 255, 0.7);
-  --text-tag:       #c9a0dc;
+  --text-tag:       #d46fef;
   --text-tag-remove:rgba(255, 255, 255, 0.5);
 
   /* Borders */
@@ -252,9 +303,9 @@ body {
 
   /* Chart export buttons */
   --export-pptx-bg:   rgba(192, 57, 43, 0.15);
-  --export-pptx-text: #fca5a5;
+  --export-pptx-text: #ff6b6b ;
   --export-xlsx-bg:   rgba(25, 135, 84, 0.15);
-  --export-xlsx-text: #6ee7b7;
+  --export-xlsx-text: #51cf66 ;
 
   /* Tab error state */
   --tab-error-bg:   rgba(133, 100, 4, 0.2);
@@ -281,9 +332,9 @@ body {
   --sidebar-text:           #e0e0e0;
   --sidebar-text-muted:     #a0a0b0;
   --sidebar-border:         rgba(255, 255, 255, 0.1);
-  --sidebar-header-title:   #c9a0dc;
+  --sidebar-header-title:   #d46fef;
   --sidebar-hover-bg:       rgba(201, 160, 220, 0.1);
-  --sidebar-active-bg:      #c9a0dc;
+  --sidebar-active-bg:      #d46fef;
   --sidebar-active-text:    #2a2847;
   --sidebar-accent:         #c9a0dc;
   --sidebar-scrollbar:      rgba(201, 160, 220, 0.3);
@@ -376,8 +427,56 @@ body {
   --table-header-bg:       #161430;
   --bg-table-header:       rgba(255, 255, 255, 0.05);
   --bg-table-header-hover: rgba(255, 255, 255, 0.08);
-}
 
+  /* General Error/Succes color */
+  --error-bg:     rgba(255, 71, 71, 0.8);
+  --error-color:  rgba(255, 71, 71, 0.8);
+  --success-color:#d46fef;
+
+  /* Metrics table category header tints */
+  --cat-trend:              linear-gradient(135deg, rgba(96, 165, 250, 0.25) 0%, rgba(96, 165, 250, 0.15) 100%);
+  --cat-bewertung:          linear-gradient(135deg, rgba(248, 113, 113, 0.25) 0%, rgba(248, 113, 113, 0.15) 100%);
+  --cat-technisch:          linear-gradient(135deg, rgba(251, 191, 36, 0.25) 0%, rgba(251, 191, 36, 0.15) 100%);
+  --cat-zinsen:             linear-gradient(135deg, rgba(74, 222, 128, 0.25) 0%, rgba(74, 222, 128, 0.15) 100%);
+  --cat-kreditqualit-t:     linear-gradient(135deg, rgba(96, 165, 250, 0.25) 0%, rgba(96, 165, 250, 0.15) 100%);
+  --cat-inflationserwartungen: linear-gradient(135deg, rgba(248, 113, 113, 0.25) 0%, rgba(248, 113, 113, 0.15) 100%);
+  --cat-konjunktur:         linear-gradient(135deg, rgba(74, 222, 128, 0.25) 0%, rgba(74, 222, 128, 0.15) 100%);
+  --cat-fundamental:        linear-gradient(135deg, rgba(248, 113, 113, 0.25) 0%, rgba(248, 113, 113, 0.15) 100%);
+  --cat-gesch-ftsklima:     linear-gradient(135deg, rgba(96, 165, 250, 0.25) 0%, rgba(96, 165, 250, 0.15) 100%);
+  --cat-aussenhandel:        linear-gradient(135deg, rgba(168, 85, 247, 0.25) 0%, rgba(168, 85, 247, 0.15) 100%);
+  --cat-fiskal:             linear-gradient(135deg, rgba(167, 139, 250, 0.25) 0%, rgba(167, 139, 250, 0.15) 100%);
+  --cat-andere:             linear-gradient(135deg, rgba(148, 163, 184, 0.25) 0%, rgba(148, 163, 184, 0.15) 100%);
+
+  /* Metrics table category border colors */
+  --cat-trend-bc:              rgba(96, 165, 250, 0.5);
+  --cat-bewertung-bc:          rgba(248, 113, 113, 0.5);
+  --cat-technisch-bc:          rgba(251, 191, 36, 0.5);
+  --cat-zinsen-bc:             rgba(74, 222, 128, 0.5);
+  --cat-kreditqualit-t-bc:     rgba(96, 165, 250, 0.5);
+  --cat-inflationserwartungen-bc: rgba(248, 113, 113, 0.5);
+  --cat-konjunktur-bc:         rgba(74, 222, 128, 0.5);
+  --cat-fundamental-bc:       rgba(248, 113, 113, 0.5);
+  --cat-gesch-ftsklima-bc:     rgba(96, 165, 250, 0.5);
+  --cat-aussenhandel-bc:        rgba(168, 85, 247, 0.5);
+  --cat-fiskal-bc:             rgba(167, 139, 250, 0.5);
+  --cat-andere-bc:             rgba(148, 163, 184, 0.5);
+
+  /* Metrics table category text colors */
+  --cat-trend-tc:              #60a5fa;
+  --cat-bewertung-tc:          #f87171;
+  --cat-technisch-tc:          #fbbf24;
+  --cat-zinsen-tc:             #86efac;
+  --cat-kreditqualit-t-tc:     #93c5fd;
+  --cat-inflationserwartungen-tc: #fca5a5;
+  --cat-konjunktur-tc:         #86efac;
+  --cat-fundamental-tc:        #fca5a5;
+  --cat-gesch-ftsklima-tc:     #93c5fd;
+  --cat-aussenhandel-tc:        #d8b4fe;
+  --cat-fiskal-tc:             #a78bfa;
+  --cat-andere-tc:             #94a3b8;
+
+}
+  
 a {
   font-weight: 500;
   color: #646cff;

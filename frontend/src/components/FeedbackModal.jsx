@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
 import { useAuth } from '../context/AuthContext'
 import './FeedbackModal.css'
@@ -29,7 +29,10 @@ const MAX_CHARS = 2000
 
 export default function FeedbackModal({ isOpen, onClose, currentPage }) {
   const { permissions } = useAuth()
-  const visiblePageOptions = PAGE_OPTIONS.filter(p => !p.permission || permissions.includes(p.permission))
+  const visiblePageOptions = useMemo(
+    () => PAGE_OPTIONS.filter(p => !p.permission || permissions.includes(p.permission)),
+    [permissions]
+  )
   
   const [page, setPage]           = useState('')
   const [feedbackType, setType]   = useState('')
