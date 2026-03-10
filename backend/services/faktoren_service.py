@@ -280,15 +280,21 @@ def _compute_lookback_dates(lookback: str) -> tuple:
 # ---------------------------------------------------------------------------
 
 def _compute_cumulative_return(series: pd.Series) -> pd.Series:
-    """Cumulative return indexed to 0 at the first valid point (in %)."""
+    """Cumulative return indexed to 0 at the first valid point (in %).
+
+    Uses direct price normalisation (price[i] / price[0] - 1) so that the
+    first data point is always included and always equals 0 %.  The old
+    pct_change() approach created a NaN at row-0 that was dropped, causing
+    each series to silently skip its first date and land on different
+    starting dates in the chart.
+    """
     series = series.dropna()
     if series.empty:
         return series
-    cum = series.pct_change().add(1).cumprod().sub(1).mul(100)
-    cum = cum.dropna()
-    if not cum.empty:
-        cum = cum - cum.iloc[0]
-    return cum
+    base = series.iloc[0]
+    if base == 0:
+        return pd.Series(dtype=float)
+    return (series / base - 1) * 100
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +306,7 @@ def _build_graph_data(
     ticker_map: dict,
     view: str,
     graph_number: str,
+    display_start_date: Optional[str] = None,
 ) -> dict:
     """
     Build wide-format chart data for one graph.
@@ -345,6 +352,9 @@ def _build_graph_data(
     traces = []   # list of (label, {date_str: cumulative_value})
     latest_date = None
 
+    # ── Step 1: collect raw per-series DataFrames ──────────────────────────
+    series_data_list = []   # list of (label, sub_df)
+
     if len(unique_db_regions) == 1:
         # Single region – one series per factor
         region = unique_db_regions[0]
@@ -352,16 +362,9 @@ def _build_graph_data(
             sub = df[(df["Regions"] == region) & (df["FactorName"] == factor)].sort_values("DatePoint")
             if sub.empty:
                 continue
+            series_data_list.append((factor, sub))
             if latest_date is None or sub["DatePoint"].max() > latest_date:
                 latest_date = sub["DatePoint"].max()
-            cum = _compute_cumulative_return(sub["Value"].reset_index(drop=True))
-            if cum.empty:
-                continue
-            dates_indexed = sub["DatePoint"].reset_index(drop=True).iloc[cum.index]
-            d = {dt.strftime("%Y-%m-%d"): round(float(v), 4)
-                 for dt, v in zip(dates_indexed, cum)
-                 if not (isinstance(v, float) and np.isnan(v))}
-            traces.append((factor, d))
     else:
         # Multiple regions – one series per region, single factor
         factor = factors[0]
@@ -369,18 +372,76 @@ def _build_graph_data(
             sub = df[(df["Regions"] == region) & (df["FactorName"] == factor)].sort_values("DatePoint")
             if sub.empty:
                 continue
-            if latest_date is None or sub["DatePoint"].max() > latest_date:
-                latest_date = sub["DatePoint"].max()
-            cum = _compute_cumulative_return(sub["Value"].reset_index(drop=True))
-            if cum.empty:
-                continue
-            dates_indexed = sub["DatePoint"].reset_index(drop=True).iloc[cum.index]
             # Use the original short alias as the series label when available
             label = next((k for k, v in REGION_ALIAS.items() if v == region), region)
-            d = {dt.strftime("%Y-%m-%d"): round(float(v), 4)
-                 for dt, v in zip(dates_indexed, cum)
-                 if not (isinstance(v, float) and np.isnan(v))}
-            traces.append((label, d))
+            series_data_list.append((label, sub))
+            if latest_date is None or sub["DatePoint"].max() > latest_date:
+                latest_date = sub["DatePoint"].max()
+
+    # ── Step 2: resolve base prices and the common display-start date ───────
+    #
+    # For each series we want:
+    #   base_price = last available price ON OR BEFORE display_start_date
+    #
+    # This mirrors the standard finance convention for period-return charts:
+    # YtD uses the last price of the previous year (Dec 31 or earlier if that
+    # day has no data), 1Y uses the last price from exactly one year ago, etc.
+    # All series are then expressed as % change from that anchor, so they are
+    # correctly comparable even when markets have different holiday calendars.
+    #
+    # The common display-start date is the LATEST of each series' first
+    # available date >= display_start_date, so all lines begin on the same
+    # calendar date on the left edge of the chart.
+
+    display_start_ts = pd.Timestamp(display_start_date) if display_start_date else None
+
+    base_price_map: dict = {}   # label -> base price (float)
+    first_display_dates = []
+
+    for label, sub_df in series_data_list:
+        valid = sub_df.dropna(subset=["Value"])
+        if valid.empty:
+            continue
+        if display_start_ts is not None:
+            # Last price on or before the anchor date
+            pre = valid[valid["DatePoint"] <= display_start_ts]
+            if pre.empty:
+                # No price before anchor – fall back to the very first available price
+                pre = valid
+            base_price_map[label] = float(pre["Value"].iloc[-1])
+            # First date that will actually be displayed
+            post = sub_df[sub_df["DatePoint"] > display_start_ts]
+            if post.empty:
+                post = sub_df[sub_df["DatePoint"] >= display_start_ts]
+            if not post.empty:
+                first_display_dates.append(post["DatePoint"].min())
+        else:
+            base_price_map[label] = float(valid["Value"].iloc[0])
+            first_display_dates.append(sub_df["DatePoint"].min())
+
+    # Common start: the latest "first display date" so every series has data
+    common_display_start = max(first_display_dates) if first_display_dates else display_start_ts
+
+    # ── Step 3: compute cumulative returns ──────────────────────────────────
+    for label, sub_df in series_data_list:
+        base_price = base_price_map.get(label)
+        if base_price is None or base_price == 0:
+            continue
+        # Only show dates from the common display start onward
+        if common_display_start is not None:
+            display_sub = sub_df[sub_df["DatePoint"] >= common_display_start].copy()
+        else:
+            display_sub = sub_df.copy()
+        if display_sub.empty:
+            continue
+        display_sub = display_sub.sort_values("DatePoint").reset_index(drop=True)
+        ret_series = (display_sub["Value"] / base_price - 1) * 100
+        d = {
+            dt.strftime("%Y-%m-%d"): round(float(v), 4)
+            for dt, v in zip(display_sub["DatePoint"], ret_series)
+            if not (isinstance(v, float) and np.isnan(v))
+        }
+        traces.append((label, d))
 
     # Build title
     if len(unique_db_regions) == 1:
@@ -480,20 +541,29 @@ class FaktorenService:
                 view, cfg_db_regions, len(needed_tickers),
             )
 
-            # 3. Fetch prices from Bloomberg
-            prices_df = _fetch_bloomberg_prices(needed_tickers, sd, ed, currency)
+            # 3. Fetch prices from Bloomberg.
+            # Fetch up to 14 calendar days BEFORE sd so that each series can
+            # find its last available price on or before the anchor date (sd)
+            # even when sd itself is a holiday or weekend.
+            from datetime import date as _date_cls, timedelta as _td
+            sd_date   = _date_cls.fromisoformat(sd)
+            sd_buffer = (sd_date - _td(days=14)).isoformat()
+
+            prices_df = _fetch_bloomberg_prices(needed_tickers, sd_buffer, ed, currency)
 
             # Fallback to USD when no EUR data is available
             if prices_df.empty and currency != "USD":
                 logger.warning(
                     "No data returned for currency=%s; retrying with USD", currency
                 )
-                prices_df = _fetch_bloomberg_prices(needed_tickers, sd, ed, "USD")
+                prices_df = _fetch_bloomberg_prices(needed_tickers, sd_buffer, ed, "USD")
 
-            # 4. Build all 6 graphs
+            # 4. Build all 6 graphs, passing the original sd as display anchor
             graphs = {}
             for gn in GRAPH_NAMES:
-                graphs[gn] = _build_graph_data(prices_df, ticker_map, view, gn)
+                graphs[gn] = _build_graph_data(
+                    prices_df, ticker_map, view, gn, display_start_date=sd
+                )
 
             return {
                 "status":     "ok",

@@ -477,12 +477,15 @@ class ExportItem(BaseModel):
     title: str
     pptx_title: Optional[str] = None   # short title for PPTX slide header
     subheading: str = ""               # unit / date range (PPTX subtitle)
+    yAxisLabel: str = ""               # y-axis label / unit for PPTX & Excel
     source: str = ""                   # data source (PPTX footer)
     tab: str = ""
     group: int = 1                     # same group = same sheet / slide
     chartData: list
     regions: List[str] = []
     xKey: str = "DatePoint"
+    chartType: Optional[str] = None    # 'Line' | 'Bar' – drives Balken vs. line export
+    balkenData: Optional[list] = None  # pre-computed range-bar items for Balken charts
 
 class ExportRequest(BaseModel):
     items: List[ExportItem]

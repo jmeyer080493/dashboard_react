@@ -110,6 +110,45 @@ def build_excel(items: list) -> bytes:
             startcol = 0
 
             for it in grouped[gnum]:
+                subheading   = it.get("subheading", "")
+                y_axis_label = it.get("yAxisLabel", "")
+
+                # ── Balken chart: write a summary statistics table ─────────
+                if it.get("chartType") == "Bar" and it.get("balkenData"):
+                    balken_items = it["balkenData"]
+                    df = pd.DataFrame([
+                        {
+                            "Name":    d.get("name", ""),
+                            "Min":     d.get("min"),
+                            "Max":     d.get("max"),
+                            "Aktuell": d.get("current"),
+                        }
+                        for d in balken_items
+                    ])
+                    data_start_row = 1
+                    if subheading:
+                        data_start_row += 1
+                    if y_axis_label:
+                        data_start_row += 1
+                    df.to_excel(
+                        writer,
+                        sheet_name=sheet_name,
+                        startrow=data_start_row,
+                        startcol=startcol,
+                        index=False,
+                    )
+                    worksheet = writer.sheets[sheet_name]
+                    worksheet.write(0, startcol, it["title"])
+                    next_row = 1
+                    if subheading:
+                        worksheet.write(next_row, startcol, subheading)
+                        next_row += 1
+                    if y_axis_label:
+                        worksheet.write(next_row, startcol, f"Einheit: {y_axis_label}")
+                    startcol += df.shape[1] + 1
+                    continue
+
+                # ── Standard time-series chart ─────────────────────────────
                 chart_data = it.get("chartData") or []
                 regions = it.get("regions") or []
                 x_key = it.get("xKey") or "DatePoint"
@@ -143,9 +182,6 @@ def build_excel(items: list) -> bytes:
 
                 # Write to sheet: title in row 0, optional subheading in row 1,
                 # optional y-axis label in row 2, data below
-                subheading = it.get("subheading", "")
-                y_axis_label = it.get("yAxisLabel", "")
-                # Calculate data start row based on optional rows
                 data_start_row = 1
                 if subheading:
                     data_start_row += 1
@@ -313,6 +349,365 @@ def _set_cross_between(chart, value: str = "midCat"):
             val=value,
         )
         val_axis_xml.append(cross)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Balken (mixed bar + scatter) chart helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _hex_to_pptx_hex(hex_color: str) -> str:
+    """Convert '#8b5cf6' → '8B5CF6' for OOXML srgbClr val attribute."""
+    c = hex_color.strip().lstrip('#')
+    if len(c) == 3:
+        c = ''.join(ch * 2 for ch in c)
+    return c.upper()[:6]
+
+
+def _xml_esc(text: str) -> str:
+    """Escape XML-special characters in text content."""
+    return (
+        str(text)
+        .replace('&', '&amp;')
+        .replace('<', '&lt;')
+        .replace('>', '&gt;')
+    )
+
+
+def _add_balken_chart(bar_items: list, item: dict, chart_pl) -> bool:
+    """
+    Insert a mixed stacked-bar + scatter (Balken) chart into a PPTX placeholder.
+
+    Uses chart1.xml as the structural template: a barChart (stacked columns for
+    the historical min→max range) overlaid with a scatterChart (current-value dots).
+
+    bar_items: list of dicts with keys:
+        name     – category label for the X axis (series / country name)
+        spacer   – transparent base (the historical minimum value)
+        range    – visible bar height (historical max – min)
+        current  – current value shown as a scatter dot
+        color    – hex colour string, e.g. '#8b5cf6'
+    """
+    if not bar_items:
+        return False
+
+    C_NS = "http://schemas.openxmlformats.org/drawingml/2006/chart"
+    A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+    names      = [_xml_esc(d.get('name', ''))            for d in bar_items]
+    spacers    = [float(d.get('spacer')  or 0)            for d in bar_items]
+    ranges_    = [float(d.get('range')   or 0)            for d in bar_items]
+    currents   = [d.get('current')                        for d in bar_items]
+    medians    = [d.get('median')                         for d in bar_items]
+    hex_colors = [_hex_to_pptx_hex(d.get('color', '#4472C4')) for d in bar_items]
+    n          = len(bar_items)
+
+    # Axis IDs – match chart1.xml values so shared axes work correctly
+    CAT_AX_ID = "636977375"
+    VAL_AX_ID = "636974975"
+
+    # ── XML fragment builders ────────────────────────────────────────────────
+
+    def _num_pt(idx: int, val) -> str:
+        if val is None or (isinstance(val, float) and (math.isnan(val) or math.isinf(val))):
+            return ''
+        return f'<c:pt idx="{idx}"><c:v>{val}</c:v></c:pt>'
+
+    def _str_pt(idx: int, val: str) -> str:
+        return f'<c:pt idx="{idx}"><c:v>{val}</c:v></c:pt>'
+
+    # Shared category cache (sector / country names on the X axis)
+    cat_pts  = ''.join(_str_pt(i, name) for i, name in enumerate(names))
+    cat_ref  = (
+        f'<c:strRef>'
+        f'<c:f>Sheet1!$A$2:$A${n + 1}</c:f>'
+        f'<c:strCache>'
+        f'<c:ptCount val="{n}"/>'
+        f'{cat_pts}'
+        f'</c:strCache>'
+        f'</c:strRef>'
+    )
+
+    def _num_ref(values: list, fmt: str = "General") -> str:
+        pts = ''.join(_num_pt(i, v) for i, v in enumerate(values))
+        return (
+            f'<c:numRef><c:f/>'
+            f'<c:numCache>'
+            f'<c:formatCode>{fmt}</c:formatCode>'
+            f'<c:ptCount val="{n}"/>'
+            f'{pts}'
+            f'</c:numCache>'
+            f'</c:numRef>'
+        )
+
+    # Fixed palette: all bars one colour, all dots another, all median ticks a third
+    BAR_COLOR    = '4472C4'   # blue
+    DOT_COLOR    = 'ED7D31'   # orange
+    MEDIAN_COLOR = 'FFC000'   # gold
+
+    # Y-axis number format: fewer decimals for large values
+    all_vals = spacers + ranges_ + [v for v in currents if v is not None]
+    maxabs   = max((abs(v) for v in all_vals), default=1)
+    num_fmt  = "#,##0" if maxabs > 20 else "#,##0.0"
+
+    # ── Full <c:chart> XML (mirrors chart1.xml structure) ───────────────────
+    chart_xml_head = (
+        f'<c:chart'
+        f' xmlns:c="{C_NS}"'
+        f' xmlns:a="{A_NS}">'  
+
+        f'<c:autoTitleDeleted val="1"/>'
+        f'<c:plotArea>'
+        f'<c:layout/>'
+
+        # ── barChart: two stacked series (spacer transparent + range coloured) ──
+        f'<c:barChart>'
+        f'<c:barDir val="col"/>'
+        f'<c:grouping val="stacked"/>'
+        f'<c:varyColors val="0"/>'
+
+        # Series 0 – transparent spacer (0 → min)
+        f'<c:ser>'
+        f'<c:idx val="0"/><c:order val="0"/>'
+        f'<c:spPr>'
+        f'<a:noFill/>'
+        f'<a:ln><a:noFill/></a:ln>'
+        f'<a:effectLst/>'
+        f'</c:spPr>'
+        f'<c:invertIfNegative val="0"/>'
+        f'<c:cat>{cat_ref}</c:cat>'
+        f'<c:val>{_num_ref(spacers)}</c:val>'
+        f'</c:ser>'
+
+        # Series 1 – coloured range (min → max), uniform colour for all bars
+        f'<c:ser>'
+        f'<c:idx val="1"/><c:order val="1"/>'
+        f'<c:spPr>'
+        f'<a:solidFill><a:srgbClr val="{BAR_COLOR}"/></a:solidFill>'
+        f'<a:ln><a:noFill/></a:ln>'
+        f'<a:effectLst/>'
+        f'</c:spPr>'
+        f'<c:invertIfNegative val="0"/>'
+        f'<c:cat>{cat_ref}</c:cat>'
+        f'<c:val>{_num_ref(ranges_)}</c:val>'
+        f'</c:ser>'
+
+        f'<c:dLbls>'
+        f'<c:showLegendKey val="0"/><c:showVal val="0"/>'
+        f'<c:showCatName val="0"/><c:showSerName val="0"/>'
+        f'<c:showPercent val="0"/><c:showBubbleSize val="0"/>'
+        f'</c:dLbls>'
+        f'<c:gapWidth val="150"/>'
+        f'<c:overlap val="100"/>'
+        f'<c:axId val="{CAT_AX_ID}"/>'
+        f'<c:axId val="{VAL_AX_ID}"/>'
+        f'</c:barChart>'
+
+        # ── scatterChart: current-value dots with per-point coloured markers ─
+        f'<c:scatterChart>'
+        f'<c:scatterStyle val="lineMarker"/>'
+        f'<c:varyColors val="0"/>'
+        f'<c:ser>'
+        f'<c:idx val="2"/><c:order val="2"/>'
+        f'<c:spPr>'
+        f'<a:ln w="25400" cap="rnd"><a:noFill/><a:round/></a:ln>'
+        f'<a:effectLst/>'
+        f'</c:spPr>'
+        # Single uniform marker for all current-value dots
+        f'<c:marker>'
+        f'<c:symbol val="circle"/>'
+        f'<c:size val="8"/>'
+        f'<c:spPr>'
+        f'<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>'
+        f'<a:ln w="19050">'
+        f'<a:solidFill><a:srgbClr val="{DOT_COLOR}"/></a:solidFill>'
+        f'</a:ln>'
+        f'<a:effectLst/>'
+        f'</c:spPr>'
+        f'</c:marker>'
+        f'<c:xVal>{cat_ref}</c:xVal>'
+        f'<c:yVal>{_num_ref(currents)}</c:yVal>'
+        f'<c:smooth val="0"/>'
+        f'</c:ser>'
+
+        f'<c:dLbls>'
+        f'<c:showLegendKey val="0"/><c:showVal val="0"/>'
+        f'<c:showCatName val="0"/><c:showSerName val="0"/>'
+        f'<c:showPercent val="0"/><c:showBubbleSize val="0"/>'
+        f'</c:dLbls>'
+        f'<c:axId val="{CAT_AX_ID}"/>'
+        f'<c:axId val="{VAL_AX_ID}"/>'
+        f'</c:scatterChart>'
+    )
+
+    # ── Single median scatter series with uniform X-direction error bars (gold) ─
+    valid_medians = [
+        m if (m is not None and not (isinstance(m, float) and (math.isnan(m) or math.isinf(m))))
+        else None
+        for m in medians
+    ]
+    if any(v is not None for v in valid_medians):
+        chart_xml_median = (
+            f'<c:scatterChart>'
+            f'<c:scatterStyle val="lineMarker"/>'
+            f'<c:varyColors val="0"/>'
+            f'<c:ser>'
+            f'<c:idx val="3"/><c:order val="3"/>'
+            f'<c:spPr>'
+            f'<a:ln w="25400" cap="rnd"><a:noFill/><a:round/></a:ln>'
+            f'<a:effectLst/>'
+            f'</c:spPr>'
+            f'<c:marker><c:symbol val="none"/></c:marker>'
+            f'<c:errBars>'
+            f'<c:errDir val="x"/>'
+            f'<c:errBarType val="both"/>'
+            f'<c:errValType val="fixedVal"/>'
+            f'<c:noEndCap val="1"/>'
+            f'<c:val val="0.1"/>'
+            f'<c:spPr>'
+            f'<a:noFill/>'
+            f'<a:ln w="28575" cap="flat" cmpd="sng" algn="ctr">'
+            f'<a:solidFill>'
+            f'<a:srgbClr val="{MEDIAN_COLOR}">'
+            f'<a:alpha val="80000"/>'
+            f'</a:srgbClr>'
+            f'</a:solidFill>'
+            f'<a:round/>'
+            f'</a:ln>'
+            f'<a:effectLst/>'
+            f'</c:spPr>'
+            f'</c:errBars>'
+            f'<c:xVal>{cat_ref}</c:xVal>'
+            f'<c:yVal>{_num_ref(valid_medians)}</c:yVal>'
+            f'<c:smooth val="0"/>'
+            f'</c:ser>'
+            f'<c:dLbls>'
+            f'<c:showLegendKey val="0"/><c:showVal val="0"/>'
+            f'<c:showCatName val="0"/><c:showSerName val="0"/>'
+            f'<c:showPercent val="0"/><c:showBubbleSize val="0"/>'
+            f'</c:dLbls>'
+            f'<c:axId val="{CAT_AX_ID}"/>'
+            f'<c:axId val="{VAL_AX_ID}"/>'
+            f'</c:scatterChart>'
+        )
+    else:
+        chart_xml_median = ''
+
+    # ── Axes + chart closing ─────────────────────────────────────────────────
+    chart_xml_tail = (
+        # ── Category axis (shared by both chart types) ──────────────────────
+        f'<c:catAx>'
+        f'<c:axId val="{CAT_AX_ID}"/>'
+        f'<c:scaling><c:orientation val="minMax"/></c:scaling>'
+        f'<c:delete val="0"/>'
+        f'<c:axPos val="b"/>'
+        f'<c:numFmt formatCode="General" sourceLinked="1"/>'
+        f'<c:majorTickMark val="none"/>'
+        f'<c:minorTickMark val="none"/>'
+        f'<c:tickLblPos val="low"/>'
+        f'<c:spPr>'
+        f'<a:noFill/>'
+        f'<a:ln w="9525" cap="flat" cmpd="sng" algn="ctr">'
+        f'<a:solidFill>'
+        f'<a:schemeClr val="tx1">'
+        f'<a:lumMod val="15000"/><a:lumOff val="85000"/>'
+        f'</a:schemeClr>'
+        f'</a:solidFill>'
+        f'<a:round/>'
+        f'</a:ln>'
+        f'<a:effectLst/>'
+        f'</c:spPr>'
+        f'<c:txPr>'
+        f'<a:bodyPr rot="-2700000" spcFirstLastPara="1" vertOverflow="ellipsis"'
+        f' vert="horz" wrap="square" anchor="ctr" anchorCtr="1"/>'
+        f'<a:lstStyle/>'
+        f'<a:p><a:pPr><a:defRPr sz="1000" b="0" i="0" u="none" strike="noStrike"'
+        f' kern="1200" baseline="0">'
+        f'<a:solidFill><a:schemeClr val="tx1">'
+        f'<a:lumMod val="65000"/><a:lumOff val="35000"/>'
+        f'</a:schemeClr></a:solidFill>'
+        f'<a:latin typeface="+mn-lt"/>'
+        f'</a:defRPr></a:pPr><a:endParaRPr lang="de-DE"/></a:p>'
+        f'</c:txPr>'
+        f'<c:crossAx val="{VAL_AX_ID}"/>'
+        f'<c:crosses val="autoZero"/>'
+        f'<c:auto val="1"/>'
+        f'<c:lblAlgn val="ctr"/>'
+        f'<c:lblOffset val="100"/>'
+        f'<c:noMultiLvlLbl val="0"/>'
+        f'</c:catAx>'
+
+        # ── Value axis ──────────────────────────────────────────────────────
+        f'<c:valAx>'
+        f'<c:axId val="{VAL_AX_ID}"/>'
+        f'<c:scaling><c:orientation val="minMax"/></c:scaling>'
+        f'<c:delete val="0"/>'
+        f'<c:axPos val="l"/>'
+        f'<c:majorGridlines>'
+        f'<c:spPr>'
+        f'<a:ln w="9525" cap="flat" cmpd="sng" algn="ctr">'
+        f'<a:solidFill>'
+        f'<a:schemeClr val="tx1">'
+        f'<a:lumMod val="15000"/><a:lumOff val="85000"/>'
+        f'</a:schemeClr>'
+        f'</a:solidFill>'
+        f'<a:round/>'
+        f'</a:ln>'
+        f'<a:effectLst/>'
+        f'</c:spPr>'
+        f'</c:majorGridlines>'
+        f'<c:numFmt formatCode="{num_fmt}" sourceLinked="0"/>'
+        f'<c:majorTickMark val="none"/>'
+        f'<c:minorTickMark val="none"/>'
+        f'<c:tickLblPos val="nextTo"/>'
+        f'<c:spPr>'
+        f'<a:noFill/><a:ln><a:noFill/></a:ln><a:effectLst/>'
+        f'</c:spPr>'
+        f'<c:txPr>'
+        f'<a:bodyPr rot="-60000000" spcFirstLastPara="1" vertOverflow="ellipsis"'
+        f' vert="horz" wrap="square" anchor="ctr" anchorCtr="1"/>'
+        f'<a:lstStyle/>'
+        f'<a:p><a:pPr><a:defRPr sz="1000" b="0" i="0" u="none" strike="noStrike"'
+        f' kern="1200" baseline="0">'
+        f'<a:solidFill><a:schemeClr val="tx1">'
+        f'<a:lumMod val="65000"/><a:lumOff val="35000"/>'
+        f'</a:schemeClr></a:solidFill>'
+        f'<a:latin typeface="+mn-lt"/>'
+        f'</a:defRPr></a:pPr><a:endParaRPr lang="de-DE"/></a:p>'
+        f'</c:txPr>'
+        f'<c:crossAx val="{CAT_AX_ID}"/>'
+        f'<c:crosses val="autoZero"/>'
+        f'<c:crossBetween val="between"/>'
+        f'</c:valAx>'
+
+        f'</c:plotArea>'
+        f'<c:plotVisOnly val="1"/>'
+        f'<c:dispBlanksAs val="gap"/>'
+        f'<c:showDLblsOverMax val="0"/>'
+        f'</c:chart>'
+    )
+    chart_xml = chart_xml_head + chart_xml_median + chart_xml_tail
+
+    # ── Insert a dummy line chart so python-pptx wires up the chart part ────
+    from pptx.chart.data import CategoryChartData as _CCD
+    dummy = _CCD()
+    dummy.categories = ['x']
+    dummy.add_series('s', [1])
+    frame = chart_pl.insert_chart(XL_CHART_TYPE.LINE_MARKERS, dummy)
+    chart = frame.chart
+
+    # Replace the <c:chart> element with our hand-crafted XML
+    chart_space = chart._element
+    c_uri = f'{{{C_NS}}}'
+    old_chart_el = chart_space.find(f'{c_uri}chart')
+    new_chart_el = etree.fromstring(chart_xml)
+    if old_chart_el is not None:
+        idx = list(chart_space).index(old_chart_el)
+        chart_space.remove(old_chart_el)
+        chart_space.insert(idx, new_chart_el)
+    else:
+        chart_space.append(new_chart_el)
+
+    return True
 
 
 def _add_scatter_chart(traces: list, item: dict, chart_pl) -> bool:
@@ -553,14 +948,20 @@ def build_pptx(items: list) -> bytes:
 
             chart_pl = placeholders[idx_chart]
 
-            # Convert our row data to Plotly-like scatter traces
-            traces = _chartdata_to_traces(
-                item.get("chartData") or [],
-                item.get("regions") or [],
-                item.get("xKey") or "DatePoint",
-            )
+            # Choose chart renderer based on chart type
+            if item.get('chartType') == 'Bar' and item.get('balkenData'):
+                # Balken chart: mixed stacked-bar + scatter (range bars + current dot)
+                _add_balken_chart(item['balkenData'], item, chart_pl)
+            else:
+                # Standard time-series line chart
+                # Convert our row data to Plotly-like scatter traces
+                traces = _chartdata_to_traces(
+                    item.get("chartData") or [],
+                    item.get("regions") or [],
+                    item.get("xKey") or "DatePoint",
+                )
 
-            _add_scatter_chart(traces, item, chart_pl)
+                _add_scatter_chart(traces, item, chart_pl)
 
     for grouping in unique_groupings:
         filtered_items = [it for it in items if it.get("group", 1) == grouping]

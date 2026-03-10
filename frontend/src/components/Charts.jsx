@@ -90,6 +90,9 @@ export function PerformanceChart({ data, title = 'Market Performance', tab = 'Ak
       <div className="chart-export-buttons">
         <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={26} height={26} /></button>
         <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={26} height={26} /></button>
+        {data[data.length - 1]?.DatePoint && (
+          <span className="chart-export-date">Letztes Datum: {data[data.length - 1].DatePoint.split('T')[0]}</span>
+        )}
       </div>
     </div>
   )
@@ -192,6 +195,9 @@ export function MetricChart({ data, dataKey, title, yAxisLabel = '', tab = 'Akti
       <div className="chart-export-buttons">
         <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={26} height={26} /></button>
         <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={26} height={26} /></button>
+        {data[data.length - 1]?.DatePoint && (
+          <span className="chart-export-date">Letztes Datum: {data[data.length - 1].DatePoint}</span>
+        )}
       </div>
     </div>
   )
@@ -254,6 +260,9 @@ export function ComparisonChart({ data, metrics, title, tab = '', height = 300 }
       <div className="chart-export-buttons">
         <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={20} height={20} /></button>
         <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={20} height={20} /></button>
+        {data[data.length - 1]?.date && (
+          <span className="chart-export-date">Letztes Datum: {data[data.length - 1].date.split('T')[0]}</span>
+        )}
       </div>
     </div>
   )

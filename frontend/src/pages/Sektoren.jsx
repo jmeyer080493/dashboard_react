@@ -150,6 +150,30 @@ export default function Sektoren({ graphSettings }) {
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
+  // Calculate combined y-axis domain for KGV and Erwartetes KGV in bar mode
+  const calculateCombinedBarDomain = (g1Data, g2Data, g1Series, g2Series) => {
+    if (!g1Data?.length || !g2Data?.length || !g1Series?.length || !g2Series?.length) return null
+    const allVals = []
+    // Collect all values from both datasets
+    for (const row of g1Data) {
+      for (const s of g1Series) {
+        const v = row[s]
+        if (v != null && !Number.isNaN(v)) allVals.push(v)
+      }
+    }
+    for (const row of g2Data) {
+      for (const s of g2Series) {
+        const v = row[s]
+        if (v != null && !Number.isNaN(v)) allVals.push(v)
+      }
+    }
+    if (allVals.length === 0) return null
+    const min = Math.min(...allVals)
+    const max = Math.max(...allVals)
+    const pad = (max - min) * 0.1
+    return [Math.max(0, min - pad), max + pad]
+  }
+
   const handleLookbackBtn = btn => {
     const { start, end } = computeDateRange(btn)
     setLookback(btn); setStartDate(start); setEndDate(end); setCustomMode(false)
@@ -317,6 +341,18 @@ export default function Sektoren({ graphSettings }) {
         const visibleGraphs = effectiveChartType === 'Bar'
           ? ['g1', 'g2', 'g3']
           : GRAPH_NAMES
+        
+        // Calculate combined domain for KGV and Erwartetes KGV in bar mode
+        let barDomainG1G2 = null
+        if (effectiveChartType === 'Bar' && graphsData.g1 && graphsData.g2) {
+          barDomainG1G2 = calculateCombinedBarDomain(
+            graphsData.g1.data,
+            graphsData.g2.data,
+            graphsData.g1.series,
+            graphsData.g2.series
+          )
+        }
+
         return (
           <div
             className="sektoren-chart-grid"
@@ -325,6 +361,10 @@ export default function Sektoren({ graphSettings }) {
             {visibleGraphs.map(gn => {
               const g = graphsData[gn]
               if (!g) return null
+              
+              // Use combined domain for g1 and g2 in bar mode
+              const useFixedDomain = effectiveChartType === 'Bar' && (gn === 'g1' || gn === 'g2') ? barDomainG1G2 : null
+              
               return (
                 <SektorenChart
                   key={`${gn}-${view}-${effectiveChartType}`}
@@ -337,6 +377,7 @@ export default function Sektoren({ graphSettings }) {
                   height={chartHeight}
                   tab="Sektoren"
                   yAxisLabel="Wert"
+                  fixedYDomain={useFixedDomain}
                 />
               )
             })}

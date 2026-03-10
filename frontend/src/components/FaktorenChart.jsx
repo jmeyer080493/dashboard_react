@@ -24,6 +24,7 @@ import {
 } from 'recharts'
 import { useExport } from '../context/ExportContext'
 import { getSmartDateFormat } from '../config/metricsConfig'
+import { withDataGapWarning } from '../utils/exportWarnings'
 import './Charts.css'
 import { ExcelIcon, PowerPointIcon } from '../icons/MicrosoftIcons'
 
@@ -68,6 +69,19 @@ function buildLegendFmt(yUnit) {
     case 'raw': return v => (v == null ? '—' : typeof v === 'number' ? v.toFixed(1) : String(v))
     default:    return v => (v == null ? '—' : `${v.toFixed(1)} %`)  // 'pct'
   }
+}
+
+/** Find the latest (most recent) value for a specific series across all data points */
+function getLatestValueForSeries(data, seriesName) {
+  if (!data || data.length === 0) return undefined
+  // Iterate backwards to find the most recent value for this series
+  for (let i = data.length - 1; i >= 0; i--) {
+    const value = data[i][seriesName]
+    if (value !== undefined && value !== null) {
+      return value
+    }
+  }
+  return undefined
 }
 
 /** Custom tooltip – receives a `format` prop injected by the parent */
@@ -149,10 +163,13 @@ export default function FaktorenChart({
   }
 
   // The main series = all series except "Difference", sorted by latest value (high to low)
-  const lastRow = data[data.length - 1] || {}
   const mainSeries = series
     .filter(s => s !== 'Difference')
-    .sort((a, b) => (lastRow[b] ?? -Infinity) - (lastRow[a] ?? -Infinity))
+    .sort((a, b) => {
+      const latestA = getLatestValueForSeries(data, a) ?? -Infinity
+      const latestB = getLatestValueForSeries(data, b) ?? -Infinity
+      return latestB - latestA
+    })
 
   // Export: include all columns (the consumer will flatten them)
   const fullTitle   = tab ? `${tab} – ${title}` : title
@@ -226,8 +243,8 @@ export default function FaktorenChart({
             iconType="plainline"
             wrapperStyle={{ fontSize: 12 }}
             formatter={name => {
-              const lastVal = data[data.length - 1]?.[name]
-              return `${name} (${lastVal != null ? fmtLegend(lastVal) : '—'})`
+              const latestVal = getLatestValueForSeries(data, name)
+              return `${name} (${latestVal != null ? fmtLegend(latestVal) : '—'})`
             }}
           />
           {mainSeries.map((s, idx) => (
@@ -300,18 +317,21 @@ export default function FaktorenChart({
       <div className="chart-export-buttons">
         <button
           className="chart-export-btn pptx"
-          onClick={() => addToPptx(exportItem)}
+          onClick={() => withDataGapWarning(addToPptx, data, mainSeries)(exportItem)}
           title="Zu PowerPoint hinzufügen"
         >
           <PowerPointIcon width={26} height={26} />
         </button>
         <button
           className="chart-export-btn xlsx"
-          onClick={() => addToXlsx(exportItem)}
+          onClick={() => withDataGapWarning(addToXlsx, data, mainSeries)(exportItem)}
           title="Zu Excel hinzufügen"
         >
           <ExcelIcon width={26} height={26} />
         </button>
+        {data[data.length - 1]?.DatePoint && (
+          <span className="chart-export-date">Letztes Datum: {data[data.length - 1].DatePoint.split('T')[0]}</span>
+        )}
       </div>
     </div>
   )

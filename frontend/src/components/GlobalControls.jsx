@@ -47,6 +47,9 @@ function GlobalControls({
   selectedMacroMetricsTable = [],
   selectedMacroMetricsGraph = [],
   onMacroMetricsChange,
+  // Chart type toggle
+  chartType = 'Line',
+  onChartTypeChange,
 }) {
   console.log('[DEBUG GLOBALCONTROLS] Received props:', { activeTab, availableMetricsCount: availableMetrics.length, availableMetrics })
   const [showMetricsModal, setShowMetricsModal] = useState(false)
@@ -111,7 +114,9 @@ function GlobalControls({
     const endDate = new Date()
     const startDate = new Date()
     if (label === 'YtD') {
-      startDate.setMonth(0, 1) // January 1st of current year
+      // Last trading day of previous year – use Dec 31 as the base/anchor date.
+      // The backend will look up the last available price on or before this date.
+      startDate.setFullYear(startDate.getFullYear() - 1, 11, 31) // Dec 31 of prev year
     } else {
       startDate.setDate(startDate.getDate() - days)
     }
@@ -255,6 +260,24 @@ function GlobalControls({
 
       {/* ── Spacer ───────────────────────────────────────────────── */}
       <div className="controls-spacer" />
+
+      {/* ── Charttyp ─────────────────────────────────────────────── */}
+      {onChartTypeChange && (
+        <div className="control-section">
+          <span className="ctrl-label">📊 Charttyp</span>
+          <div className="control-group">
+            {[{ id: 'Line', label: 'Standard' }, { id: 'Bar', label: 'Balken' }].map(ct => (
+              <button
+                key={ct.id}
+                className={`lookback-btn ${chartType === ct.id ? 'active' : ''}`}
+                onClick={() => onChartTypeChange(ct.id)}
+              >
+                {ct.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Währung (Equity only) ─────────────────────────────────── */}
       {activeTab === 'equity' && (

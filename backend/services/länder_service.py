@@ -737,39 +737,90 @@ class LänderDataService:
             except Exception as erp_exc:
                 logger.warning(f"⚠ ERP merge failed (non-fatal): {erp_exc}")
 
-            # Optional date range filter
-            if start_date:
-                df_final = df_final[df_final["DatePoint"] >= pd.Timestamp(start_date)]
-            if end_date:
-                df_final = df_final[df_final["DatePoint"] <= pd.Timestamp(end_date)]
-            
-            if df_final.empty:
-                logger.warning(f"⚠ No data after date filtering: start_date={start_date}, end_date={end_date}")
-                raise ValueError("No data within the specified date range")
-
-            # Rebase Performance to 0% at the start of the filtered period.
-            # Mirrors the old dashboard: pct_change().cumprod() so the chart
-            # always starts at 0% regardless of which lookback window is selected.
+            # ── Rebase Performance to 0% using last-known price before start_date ──
+            #
+            # Finance convention for period-return charts:
+            #   base_price[region] = last available price ON OR BEFORE start_date
+            #
+            # This means:
+            # • YtD (start = Dec 31): each region anchors to its last 2025 close
+            #   even if that region's exchange was closed on Dec 31 (e.g. some
+            #   European markets). We look back through the full pre-filter data.
+            # • 1Y / 3Y / etc.: same logic – last price on or before the anchor.
+            # • All series then share the same first DISPLAY date (the common
+            #   first trading day after start_date), so the chart left-edge is
+            #   visually aligned.
             if 'Performance' in df_final.columns and 'PX_LAST' in df_final.columns:
                 df_final = df_final.sort_values(['Regions', 'DatePoint']).reset_index(drop=True)
 
+                # Collect base prices BEFORE trimming the date window.
+                # df_final still contains the full Bloomberg history at this point.
+                base_prices: dict = {}
+                if start_date:
+                    start_ts = pd.Timestamp(start_date)
+                    for region_name, grp in df_final.groupby('Regions'):
+                        pre = grp[grp['DatePoint'] <= start_ts].dropna(subset=['PX_LAST'])
+                        if not pre.empty:
+                            base_prices[region_name] = float(pre['PX_LAST'].iloc[-1])
+                        else:
+                            # No price before anchor – will fall back to first price in window
+                            pass
+
+                # Apply the user-requested date window
+                if start_date:
+                    df_final = df_final[df_final['DatePoint'] >= pd.Timestamp(start_date)].copy()
+                if end_date:
+                    df_final = df_final[df_final['DatePoint'] <= pd.Timestamp(end_date)].copy()
+
+                df_final = df_final.sort_values(['Regions', 'DatePoint']).reset_index(drop=True)
+
+                # Find common display start: latest first-valid-price date across regions
+                # so every line begins on the exact same calendar date.
+                first_dates = []
+                for _, grp in df_final.groupby('Regions'):
+                    valid = grp.dropna(subset=['PX_LAST'])
+                    if not valid.empty:
+                        first_dates.append(valid['DatePoint'].min())
+                if first_dates:
+                    common_display_start = max(first_dates)
+                    df_final = df_final[df_final['DatePoint'] >= common_display_start].copy()
+                    df_final = df_final.sort_values(['Regions', 'DatePoint']).reset_index(drop=True)
+                    logger.info("✓ Common display start: %s", common_display_start)
+
                 def _rebase_performance(group):
+                    region_name = group['Regions'].iloc[0]
                     prices = group['PX_LAST'].copy()
-                    valid = prices.dropna()
-                    if valid.empty:
+                    # Use pre-window anchor price when available; otherwise fall back
+                    # to the first price inside the window.
+                    base_price = base_prices.get(region_name)
+                    if base_price is None:
+                        valid = prices.dropna()
+                        if valid.empty:
+                            group = group.copy()
+                            group['Performance'] = np.nan
+                            return group
+                        base_price = float(valid.iloc[0])
+                    if base_price == 0:
+                        group = group.copy()
                         group['Performance'] = np.nan
                         return group
-                    pct_chg = prices.pct_change()
-                    perf_ts = (1 + pct_chg).cumprod()
-                    perf_ts.iloc[0] = 1.0
-                    perf_pct = (perf_ts - 1.0) * 100
-                    perf_pct.iloc[0] = 0.0
                     group = group.copy()
-                    group['Performance'] = perf_pct
+                    group['Performance'] = (prices / base_price - 1) * 100
                     return group
 
                 df_final = df_final.groupby('Regions', group_keys=False).apply(_rebase_performance)
-                logger.info("✓ Performance rebased to 0% at start of filtered period")
+                logger.info("✓ Performance rebased to last-known price before start_date")
+
+            else:
+                # No Performance column or no PX_LAST – apply date filter directly
+                if start_date:
+                    df_final = df_final[df_final["DatePoint"] >= pd.Timestamp(start_date)]
+                if end_date:
+                    df_final = df_final[df_final["DatePoint"] <= pd.Timestamp(end_date)]
+
+            if df_final.empty:
+                logger.warning(f"⚠ No data after date filtering: start_date={start_date}, end_date={end_date}")
+                raise ValueError("No data within the specified date range")
             
             # Convert to records for JSON serialization
             records = df_final.to_dict('records')

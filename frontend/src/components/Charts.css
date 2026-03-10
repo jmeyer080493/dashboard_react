@@ -67,6 +67,14 @@
   gap: 0.4rem;
   margin-top: 0.75rem;
   justify-content: flex-start;
+  align-items: center;
+}
+
+.chart-export-date {
+  margin-left: auto;
+  font-size: 0.74rem;
+  color: var(--text-muted, #9ca3af);
+  white-space: nowrap;
 }
 
 .chart-export-btn {

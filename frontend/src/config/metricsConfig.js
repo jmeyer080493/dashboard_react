@@ -10,6 +10,15 @@
 
 export const EQUITY_METRICS_CATEGORIES = [
   {
+    key: 'Spezial',
+    label: 'SPEZIAL',
+    graphOnly: true,   // entire category is graph-only → no TABELLE column shown
+    fields: [
+      { key: 'Performance', label: 'Wertentwicklung',   tableEnabled: false, graphEnabled: true, higherBetter: true, unit: '%', yAxisLabel: '%', currencyAffected: true  },
+      { key: 'EPS_Growth',  label: 'Gewinnentwicklung', tableEnabled: false, graphEnabled: true, higherBetter: true, unit: '%', yAxisLabel: '%', currencyAffected: true  },
+    ],
+  },
+  {
     key: 'Trend',
     label: 'TREND',
     fields: [
@@ -23,14 +32,14 @@ export const EQUITY_METRICS_CATEGORIES = [
     key: 'Bewertung',
     label: 'BEWERTUNG',
     fields: [
-      { key: 'Weighted Valuation', label: 'Bewertung Agg.',      tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '',  yAxisLabel: 'Wert',  currencyAffected: false },
+      { key: 'Weighted Valuation', label: 'Bewertung Aggregiert',      tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '',  yAxisLabel: 'Wert',  currencyAffected: false },
       { key: 'Premium',            label: 'Risikoprämie',        tableEnabled: true, graphEnabled: true, higherBetter: true,  unit: '%', yAxisLabel: '%',     currencyAffected: false },
       { key: 'Div_Yld',            label: 'Dividendenrendite',   tableEnabled: true, graphEnabled: true, higherBetter: true,  unit: '%', yAxisLabel: '%',     currencyAffected: false },
       { key: 'EARN_YLD',           label: 'Ertragsrendite',      tableEnabled: true, graphEnabled: true, higherBetter: true,  unit: '%', yAxisLabel: '%',     currencyAffected: false },
       { key: 'PX_TO_SALES_RATIO',  label: 'KUV',                 tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '',  yAxisLabel: 'Wert',  currencyAffected: false },
       { key: 'PX_TO_BOOK_RATIO',   label: 'KBV',                 tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '',  yAxisLabel: 'Wert',  currencyAffected: false },
       { key: 'PE_RATIO',           label: 'KGV',                 tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '',  yAxisLabel: 'Wert',  currencyAffected: false },
-      { key: 'BEST_PE_RATIO',      label: 'KGV (Fwd.)',          tableEnabled: false, graphEnabled: true, higherBetter: false, unit: '', yAxisLabel: 'Wert',  currencyAffected: false },
+      { key: 'BEST_PE_RATIO',      label: 'KGV (Fwd.)',          tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '', yAxisLabel: 'Wert',  currencyAffected: false },
     ],
   },
   {
@@ -43,15 +52,7 @@ export const EQUITY_METRICS_CATEGORIES = [
       { key: 'MACD',               label: 'MACD',         tableEnabled: true,  graphEnabled: true, higherBetter: true,  unit: '',  yAxisLabel: 'Wert',  currencyAffected: false },
     ],
   },
-  {
-    key: 'Spezial',
-    label: 'SPEZIAL',
-    graphOnly: true,   // entire category is graph-only → no TABELLE column shown
-    fields: [
-      { key: 'Performance', label: 'Wertentwicklung',   tableEnabled: false, graphEnabled: true, higherBetter: true, unit: '%', yAxisLabel: '%', currencyAffected: true  },
-      { key: 'EPS_Growth',  label: 'Gewinnentwicklung', tableEnabled: false, graphEnabled: true, higherBetter: true, unit: '%', yAxisLabel: '%', currencyAffected: true  },
-    ],
-  },
+  
 ]
 
 /** Keys of all metrics that can appear in the table */
@@ -72,12 +73,23 @@ export const ALL_GRAPH_METRICS = EQUITY_METRICS_CATEGORIES.flatMap(cat =>
  */
 export const STANDARD_DEFAULTS = {
   table: [
-    'MOM_3', 'MOM_12', 'MOM_TS', 'Grwth_Rate',
-    'Weighted Valuation', 'Premium', 'Div_Yld', 'EARN_YLD',
-    'PX_TO_SALES_RATIO', 'PX_TO_BOOK_RATIO', 'PE_RATIO',
-    'Rolling Volatility', 'RSI', 'MACD',
+    'MOM_3', 
+    'MOM_12', 
+    'MOM_TS', 
+    'Grwth_Rate',
+    'Weighted Valuation', 
+    'Premium', 
+    'Div_Yld', 
+    'EARN_YLD',
+    // 'PX_TO_SALES_RATIO',
+    // 'PX_TO_BOOK_RATIO',
+    // 'PE_RATIO',
+    'BEST_PE_RATIO',
+    'Rolling Volatility', 
+    'RSI', 
+    'MACD',
   ],
-  graph: ['RSI', 'Performance', 'EPS_Growth'],
+  graph: ['Performance', 'Weighted Valuation', 'Rolling Volatility', 'MA_50_Diff'],
 }
 
 /** Look up a field config by key (across all categories) */
@@ -137,10 +149,10 @@ export const FI_METRICS_CATEGORIES = [
     key: 'Kreditqualität',
     label: 'KREDITQUALITÄT',
     fields: [
-      { key: '3 CDS',  label: '3J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Wert' },
-      { key: '5 CDS',  label: '5J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Wert' },
-      { key: '7 CDS',  label: '7J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Wert' },
-      { key: '10 CDS', label: '10J CDS', tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Wert' },
+      { key: '3 CDS',  label: '3J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Basispunkte' },
+      { key: '5 CDS',  label: '5J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Basispunkte' },
+      { key: '7 CDS',  label: '7J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Basispunkte' },
+      { key: '10 CDS', label: '10J CDS', tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Basispunkte' },
     ],
   },
   {
@@ -219,7 +231,7 @@ export const MACRO_METRICS_CATEGORIES = [
     key: 'Fundamental',
     label: 'FUNDAMENTAL',
     fields: [
-      { key: 'Inflation',    label: 'Inflation',       tableEnabled: true, graphEnabled: true, higherBetter: null,  unit: '%', yAxisLabel: '%'     },
+      { key: 'Inflation',    label: 'Inflation',       tableEnabled: true, graphEnabled: true, higherBetter: false,  unit: '%', yAxisLabel: '%'     },
       { key: 'Unemployment', label: 'Arbeitslosigkeit',  tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '%', yAxisLabel: '%'     },
       { key: 'Misery',       label: 'Misery',    tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '%',  yAxisLabel: '%' },
     ],
@@ -239,7 +251,7 @@ export const MACRO_METRICS_CATEGORIES = [
     label: 'AUSSENHANDEL',
     fields: [
       { key: 'Exports',         label: 'Exporte (YoY %)', tableEnabled: true,  graphEnabled: true, higherBetter: true,  unit: '%', yAxisLabel: '%' },
-      { key: 'Imports',         label: 'Importe (YoY %)', tableEnabled: true,  graphEnabled: true, higherBetter: null,  unit: '%', yAxisLabel: '%' },
+      { key: 'Imports',         label: 'Importe (YoY %)', tableEnabled: true,  graphEnabled: true, higherBetter: false,  unit: '%', yAxisLabel: '%' },
     ],
   },
   {
@@ -253,7 +265,7 @@ export const MACRO_METRICS_CATEGORIES = [
     key: 'Andere',
     label: 'ANDERE',
     fields: [
-      { key: 'Interest Rate', label: 'Leitzins', tableEnabled: true, graphEnabled: true, higherBetter: null, unit: '%', yAxisLabel: '%' },
+      { key: 'Interest Rate', label: 'Leitzins', tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '%', yAxisLabel: '%' },
     ],
   },
 ]
@@ -270,8 +282,8 @@ export const ALL_MACRO_GRAPH_METRICS = MACRO_METRICS_CATEGORIES.flatMap(cat =>
 
 /** Standard (factory) defaults for Macro tab */
 export const MACRO_STANDARD_DEFAULTS = {
-  table: ['GDP', 'Inflation', 'Unemployment', 'Composite PMI', 'Government Debt', 'Interest Rate'],
-  graph: ['GDP', 'Inflation', 'Unemployment', 'Composite PMI', 'Manufacturing PMI', 'Interest Rate'],
+  table: ['GDP', 'Economic Surprise', 'Industrial Production', 'Retail Sales', 'Inflation', 'Unemployment', 'Composite PMI', 'Services PMI', 'Consumer Confidence', 'Government Debt', 'Interest Rate'],
+  graph: ['GDP', 'Economic Surprise', 'Misery', 'Composite PMI'],
 }
 
 /** Get Macro field config by key */

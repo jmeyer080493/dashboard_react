@@ -33,36 +33,25 @@ const REGION_TRANSLATIONS = {
   'EM': 'EM',
 }
 
-/** Convert lookback string like "1Y","3Y","5Y","All" to milliseconds */
-function lookbackToMs(lookback) {
-  const map = { '3M': 90, '6M': 180, '1Y': 365, '2Y': 730, '3Y': 1095, '5Y': 1825, '10Y': 3650, 'All': Infinity }
-  const days = map[lookback]
-  if (!days || days === Infinity) return Infinity
-  return days * 86400 * 1000
-}
-
 /**
- * Compute the percentile rank of `value` within the historical values for a
- * given region + metric, filtered to the lookback period.
- * Returns null if insufficient data (< 2 points).
+ * Compute the cross-region percentile rank of `value` for a given metric.
+ * `latestValues` is a map of { region: latestValue } for ALL regions in the
+ * dataset (not just the currently selected ones).
+ * Returns null if fewer than 2 regions have data for that metric.
  */
-function computePercentile(histRecords, region, metricKey, value, lookback) {
-  if (value === null || value === undefined || isNaN(value)) return null
-
-  const cutoffMs = lookbackToMs(lookback)
-  const now = Date.now()
+/**
+ * Historical (time-series) percentile: where does the current value rank
+ * within all historical values for that specific region in the lookback window?
+ * Returns 0-100 or null if insufficient data.
+ */
+function computeHistoricalPercentile(allData, metricKey, region, currentValue) {
+  if (currentValue === null || currentValue === undefined || isNaN(currentValue)) return null
 
   const vals = []
-  for (const r of histRecords) {
-    if (r.Regions !== region) continue
-    const v = r[metricKey]
-    if (v === null || v === undefined || isNaN(v)) continue
-    // Date filter
-    if (cutoffMs !== Infinity) {
-      const t = new Date(r.DatePoint).getTime()
-      if (now - t > cutoffMs) continue
-    }
-    vals.push(v)
+  for (const record of allData) {
+    if (record.Regions !== region) continue
+    const v = record[metricKey]
+    if (v !== null && v !== undefined && !isNaN(v)) vals.push(v)
   }
 
   if (vals.length < 2) return null
@@ -70,7 +59,7 @@ function computePercentile(histRecords, region, metricKey, value, lookback) {
   vals.sort((a, b) => a - b)
   let rank = 0
   for (const v of vals) {
-    if (v <= value) rank++
+    if (v <= currentValue) rank++
   }
   return (rank / vals.length) * 100
 }
@@ -158,7 +147,7 @@ useEffect(() => {
 }, [displayMode, tabLabel])
 
 const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
-  // ── Latest value per region ──────────────────────────────────────────────
+  // ── Latest value per region (only selected regions, for display) ──────────
   const latestDataPerRegion = useMemo(() => {
     if (!data || data.length === 0 || !regions) return {}
     const map = {}
@@ -252,18 +241,20 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
     )
   }
 
-  // ── Pre-compute all percentiles ──────────────────────────────────────────
+  // ── Pre-compute all percentiles (historical time-series ranking) ───────────
+  // Each cell shows where the region's latest value ranks within its own
+  // historical data for the active lookback window.
   const percentiles = useMemo(() => {
     if (!data || data.length === 0) return {}
     const result = {}
     for (const metric of metricsToDisplay) {
       for (const region of regions) {
-        const latest = latestDataPerRegion[region]?.[metric]
-        result[`${region}::${metric}`] = computePercentile(data, region, metric, latest, lookback)
+        const value = latestDataPerRegion[region]?.[metric]
+        result[`${region}::${metric}`] = computeHistoricalPercentile(data, metric, region, value)
       }
     }
     return result
-  }, [data, regions, metricsToDisplay, latestDataPerRegion, lookback])
+  }, [data, regions, metricsToDisplay, latestDataPerRegion])
 
   // ── Sorted regions ─────────────────────────────────────────────────────
   const sortedRegions = useMemo(() => {
@@ -281,18 +272,7 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
     })
   }, [regions, sortConfig, displayMode, percentiles, latestDataPerRegion])
 
-  // ── Stale-data detection ─────────────────────────────────────────────────
-  const staleRegions = useMemo(() => {
-    const stale = {}
-    const now = Date.now()
-    const THRESHOLD_MS = 5 * 86400 * 1000
-    for (const region of regions) {
-      const latest = latestDataPerRegion[region]
-      if (!latest?.DatePoint) { stale[region] = false; continue }
-      stale[region] = now - new Date(latest.DatePoint).getTime() > THRESHOLD_MS
-    }
-    return stale
-  }, [latestDataPerRegion, regions])
+
 
   // ── Flat metrics info for CSV export ─────────────────────────────────────
   const metricsInfo = useMemo(() => metricsToDisplay.map(key => ({
@@ -420,13 +400,11 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
             {sortedRegions.map(region => {
               const flag = REGION_FLAGS[region] || ''
               const displayName = REGION_TRANSLATIONS[region] || region
-              const isStale = staleRegions[region]
               return (
                 <tr key={region} className="metric-row">
-                  <td className={`metrics-table-region-cell ${isStale ? 'stale-region' : ''}`}>
+                  <td className="metrics-table-region-cell">
                     <span className="region-flag">{flag}</span>
                     <span className="region-name">{displayName}</span>
-                    {isStale && <span className="stale-badge" title="Daten älter als 5 Tage">⚠</span>}
                   </td>
                   {metricsToDisplay.map(metric => {
                     const { text, style } = getCellContent(region, metric)
@@ -447,15 +425,7 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
         </table>
       </div>
 
-      {displayMode === 'percentile' && (
-        <div className="metrics-table-legend">
-          <span className="legend-label">Farbskala ({lookback}) –</span>
-          <span className="legend-low">0. (tief)</span>
-          <span className="legend-bar"></span>
-          <span className="legend-high">100. (hoch)</span>
-          <span className="legend-note">· Grün = günstig · Rot = ungünstig · Weiß/Grau = keine Richtung</span>
-        </div>
-      )}
+      {displayMode === 'percentile'}
     </div>
   )
 }

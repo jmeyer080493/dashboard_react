@@ -25,6 +25,7 @@ import {
 } from 'recharts'
 import { useExport } from '../context/ExportContext'
 import { getSmartDateFormat } from '../config/metricsConfig'
+import { withDataGapWarning } from '../utils/exportWarnings'
 import './Charts.css'
 import './SektorenChart.css'
 import { ExcelIcon, PowerPointIcon } from '../icons/MicrosoftIcons'
@@ -47,6 +48,19 @@ function getDateRange(data) {
   if (dates.length < 2) return ''
   const fmt = d => new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
   return `${fmt(dates[0])} – ${fmt(dates[dates.length - 1])}`
+}
+
+/** Find the latest (most recent) value for a specific series across all data points */
+function getLatestValueForSeries(data, seriesName) {
+  if (!data || data.length === 0) return undefined
+  // Iterate backwards to find the most recent value for this series
+  for (let i = data.length - 1; i >= 0; i--) {
+    const value = data[i][seriesName]
+    if (value !== undefined && value !== null) {
+      return value
+    }
+  }
+  return undefined
 }
 
 // ── Custom Tooltips ───────────────────────────────────────────────────────────
@@ -108,6 +122,7 @@ function BarTooltip({ active, payload, label }) {
  *   chartType {string}   'Line' | 'Bar'
  *   height    {number}   Total height in px
  *   tab       {string}   Tab label for export metadata
+ *   fixedYDomain {[number, number]} Optional fixed y-axis domain [min, max] for bar charts
  */
 export default function SektorenChart({
   title = '',
@@ -120,23 +135,43 @@ export default function SektorenChart({
   isComparison = false,   // true for "U.S. vs. Europa" view → grouped US/EU bar chart
   /** Y-axis label for export, e.g. 'Wert' */
   yAxisLabel = 'Wert',
+  fixedYDomain = null,    // [min, max] for fixed y-axis in bar charts
 }) {
   const { addToPptx, addToXlsx } = useExport()
   const { formatter: smartDateFormatter, interval: smartInterval } = getSmartDateFormat(data)
 
   // Export item shared between PPTX / XLSX
-  const exportItem = useMemo(() => ({
-    id:        `sektoren-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-    title,
-    pptx_title: title,
-    subheading: getDateRange(data),
-    yAxisLabel,
-    source:     'Quelle: Bloomberg Finance L.P.',
-    tab,
-    chartData:  data,
-    regions:    series,
-    xKey:       'DatePoint',
-  }), [title, data, series, tab, yAxisLabel])
+  const exportItem = useMemo(() => {
+    // Pre-compute Balken (range-bar) data for export when chartType === 'Bar'
+    let balkenData
+    if (chartType === 'Bar') {
+      balkenData = series
+        .map((name, idx) => {
+          const vals = data.map(r => r[name]).filter(v => v != null && !Number.isNaN(v))
+          if (!vals.length) return null
+          const min = Math.min(...vals)
+          const max = Math.max(...vals)
+          const current = data[data.length - 1]?.[name] ?? vals[vals.length - 1]
+          const color = resolveColor(name, colors, idx)
+          return { name, spacer: min, range: max - min, current, min, max, color }
+        })
+        .filter(Boolean)
+    }
+    return {
+      id:         `sektoren-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      title,
+      pptx_title: title,
+      subheading: getDateRange(data),
+      yAxisLabel,
+      source:     'Quelle: Bloomberg Finance L.P.',
+      tab,
+      chartData:  data,
+      regions:    series,
+      xKey:       'DatePoint',
+      chartType,
+      balkenData,
+    }
+  }, [title, data, series, tab, yAxisLabel, chartType, colors])
 
   // ── Bar chart data preparation ───────────────────────────────────────────
   const barData = useMemo(() => {
@@ -211,10 +246,13 @@ export default function SektorenChart({
   // ── Sort series by latest value (high to low) for line chart legend ──────
   const sortedSeriesForLine = useMemo(() => {
     if (!data.length || !series.length) return series.map((name, i) => ({ name, i }))
-    const lastRow = data[data.length - 1] || {}
     return series
       .map((name, i) => ({ name, i }))
-      .sort((a, b) => (lastRow[b.name] ?? -Infinity) - (lastRow[a.name] ?? -Infinity))
+      .sort((a, b) => {
+        const latestA = getLatestValueForSeries(data, a.name) ?? -Infinity
+        const latestB = getLatestValueForSeries(data, b.name) ?? -Infinity
+        return latestB - latestA
+      })
   }, [data, series])
   // (yAxisWidth removed – bar charts are now vertical so label length doesn't affect Y-axis)
 
@@ -251,8 +289,8 @@ export default function SektorenChart({
         iconType="plainline"
         iconSize={16}
         formatter={name => {
-          const lastVal = data[data.length - 1]?.[name]
-          return `${name} (${lastVal != null ? lastVal.toFixed(1) : '—'})`
+          const latestVal = getLatestValueForSeries(data, name)
+          return `${name} (${latestVal != null ? latestVal.toFixed(1) : '—'})`
         }}
       />
       {sortedSeriesForLine.map(({ name, i }) => (
@@ -290,6 +328,7 @@ export default function SektorenChart({
       <YAxis
         tick={{ fontSize: 11 }}
         width={48}
+        domain={fixedYDomain ? [fixedYDomain[0], fixedYDomain[1]] : ['auto', 'auto']}
         tickFormatter={v => typeof v === 'number' ? Math.round(v) : v}
       />
       <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
@@ -328,6 +367,32 @@ export default function SektorenChart({
         legendType="none"
         isAnimationActive={false}
       />
+
+      {/* Median value: small horizontal tick inside the bar */}
+      <Line
+        dataKey="median"
+        stroke="none"
+        strokeWidth={0}
+        dot={(dotProps) => {
+          const { cx, cy, payload } = dotProps
+          if (cx == null || cy == null) return null
+          return (
+            <rect
+              key={`med-${payload.fullName}`}
+              x={cx - 14}
+              y={cy - 2}
+              width={28}
+              height={4}
+              fill={payload.color}
+              fillOpacity={0.95}
+              rx={1}
+            />
+          )
+        }}
+        activeDot={false}
+        legendType="none"
+        isAnimationActive={false}
+      />
     </ComposedChart>
   )
 
@@ -348,17 +413,20 @@ export default function SektorenChart({
         <button
           className="chart-export-btn pptx"
           title="Zu PowerPoint hinzufügen"
-          onClick={() => addToPptx(exportItem)}
+          onClick={() => withDataGapWarning(addToPptx, data, series)(exportItem)}
         >
           <PowerPointIcon width={26} height={26} />
         </button>
         <button
           className="chart-export-btn xlsx"
           title="Zu Excel hinzufügen"
-          onClick={() => addToXlsx(exportItem)}
+          onClick={() => withDataGapWarning(addToXlsx, data, series)(exportItem)}
         >
           <ExcelIcon width={26} height={26} />
         </button>
+        {data[data.length - 1]?.DatePoint && (
+          <span className="chart-export-date">Letztes Datum: {data[data.length - 1].DatePoint.split('T')[0]}</span>
+        )}
       </div>
     </div>
   )

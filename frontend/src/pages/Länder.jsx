@@ -52,6 +52,16 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
   const activeTabRef = useRef(activeTab)
   useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
 
+  // ── Chart type (Linie / Balken) ────────────────────────────────────────
+  const [chartType, setChartType] = useState(() => {
+    try { return localStorage.getItem('laender_chartType') || 'Line' } catch { return 'Line' }
+  })
+
+  const handleChartTypeChange = (type) => {
+    setChartType(type)
+    try { localStorage.setItem('laender_chartType', type) } catch {}
+  }
+
   // ── Equity metrics filter state ──────────────────────────────────────────
   const [selectedMetricsTable, setSelectedMetricsTable] = useState(() => {
     const loaded = loadMetricsFromStorage('metricsFilter_table') || []
@@ -366,6 +376,8 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
         selectedMacroMetricsTable={selectedMacroMetricsTable}
         selectedMacroMetricsGraph={selectedMacroMetricsGraph}
         onMacroMetricsChange={handleMacroMetricsChange}
+        chartType={chartType}
+        onChartTypeChange={handleChartTypeChange}
       />
 
       {/* Tab container */}
@@ -404,6 +416,7 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
               selectedMetricsGraph={selectedMetricsGraph}
               chartsPerRow={gs.equity?.chartsPerRow ?? 2}
               chartHeight={gs.equity?.chartHeight ?? 300}
+              chartType={chartType}
             />
           )}
           {activeTab === 'fixed-income' && (
@@ -416,6 +429,7 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
               selectedMetricsGraph={selectedFIMetricsGraph}
               chartsPerRow={gs.fi?.chartsPerRow ?? 2}
               chartHeight={gs.fi?.chartHeight ?? 300}
+              chartType={chartType}
             />
           )}
           {activeTab === 'macro' && (
@@ -428,6 +442,7 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
               selectedMetricsGraph={selectedMacroMetricsGraph}
               chartsPerRow={gs.macro?.chartsPerRow ?? 2}
               chartHeight={gs.macro?.chartHeight ?? 300}
+              chartType={chartType}
             />
           )}
         </div>
