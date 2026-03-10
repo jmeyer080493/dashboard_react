@@ -82,7 +82,15 @@ function loadSavedFilters() {
   }
 }
 
-const isValidDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s)
+const isValidDate = s => /^[0-9]{4}(?:-|\/|\.)(0?[1-9]|1[0-2])(?:-|\/|\.)(0?[1-9]|[12][0-9]|3[01])$/.test(s)
+
+// Normalize flexible date format (YYYY-MM-DD, YYYY/MM/D, etc.) to YYYY-MM-DD
+function normalizeDate(dateStr) {
+  const match = dateStr.match(/^(\d{4})(?:-|\/|\.)(\d{1,2})(?:-|\/|\.)(\d{1,2})$/)
+  if (!match) return null
+  const [, year, month, day] = match
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -120,9 +128,17 @@ export default function Alternative({ graphSettings }) {
     setCustomMode(false)
   }
 
-  // ── Controlled date input handlers ────────────────────────────────────
-  const handleStartDateChange = (e) => { setStartDate(e.target.value); setCustomMode(true) }
-  const handleEndDateChange   = (e) => { setEndDate(e.target.value);   setCustomMode(true) }
+  // ── Date input commit handler ────────────────────────────────────────
+  // Uncontrolled inputs (key+defaultValue); only fires on blur/Enter
+  const commitDate = (field, value) => {
+    if (value === (field === 'start' ? startDate : endDate)) return // No change
+    const datePattern = /^[0-9]{4}(?:-|\/|\.)(0?[1-9]|1[0-2])(?:-|\/|\.)(0?[1-9]|[12][0-9]|3[01])$/
+    if (value && !datePattern.test(value)) return // Invalid format, reject silently
+    const normalized = value ? normalizeDate(value) : ''
+    if (field === 'start') setStartDate(normalized)
+    else setEndDate(normalized)
+    setCustomMode(true)
+  }
 
   // ── Fetch data ─────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -173,18 +189,24 @@ export default function Alternative({ graphSettings }) {
           </div>
           <div className="alternativ-date-inputs">
             <input
+              key={startDate}
               type="text"
               placeholder="YYYY-MM-DD"
-              value={startDate}
-              onChange={handleStartDateChange}
+              defaultValue={startDate}
+              pattern={"[0-9]{4}(-|/|\\.)(0?[1-9]|1[0-2])(-|/|\\.)(0?[1-9]|[12][0-9]|3[01])"}
+              onBlur={(e) => commitDate('start', e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitDate('start', e.target.value) }}
               className="alternativ-date-input"
             />
             <span className="alternativ-date-sep">–</span>
             <input
+              key={endDate}
               type="text"
               placeholder="YYYY-MM-DD"
-              value={endDate}
-              onChange={handleEndDateChange}
+              defaultValue={endDate}
+              pattern={"[0-9]{4}(-|/|\\.)(0?[1-9]|1[0-2])(-|/|\\.)(0?[1-9]|[12][0-9]|3[01])"}
+              onBlur={(e) => commitDate('end', e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitDate('end', e.target.value) }}
               className="alternativ-date-input"
             />
           </div>

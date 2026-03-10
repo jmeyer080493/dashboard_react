@@ -35,6 +35,7 @@
   text-transform: uppercase;
   color: var(--text-secondary);
   white-space: nowrap;
+  text-align: center;
 }
 
 /* Row of buttons / inputs inside a section */
@@ -75,9 +76,9 @@
 .preset-btn.active,
 .lookback-btn.active,
 .currency-btn.active {
-  background: #c9a0dc;
+  background: var(--bg-btn-active);
   color: #fff;
-  border-color: #c9a0dc;
+  border-color: var(--bg-btn-active);
 }
 
 .quick-btn:disabled,
@@ -94,6 +95,7 @@
   display: flex;
   gap: 0.35rem;
   align-items: center;
+  justify-content: center;
 }
 
 .date-inputs .date-sep {
@@ -119,6 +121,45 @@
   border-color: #c9a0dc;
 }
 
+.länder-date-input {
+  width: 120px;
+  height: 1.8rem;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.8rem;
+  border: 1px solid var(--border-input, var(--border-color, #d1d5db));
+  border-radius: 6px;
+  background: var(--bg-input, var(--input-bg, #fff));
+  color: var(--text-primary, #333);
+  line-height: 1;
+  text-align: center;
+  transition: border-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.länder-date-input:focus {
+  outline: none;
+  border-color: #c9a0dc;
+}
+
+.länder-date-input:not(:placeholder-shown):invalid {
+  border-color: var(--error-bg);
+  border-width: 2px;
+}
+
+.länder-date-input:not(:placeholder-shown):valid {
+  border-color: var(--success-color);
+  border-width: 2px;
+}
+
+[data-theme="dark"] .länder-date-input {
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .länder-date-input::placeholder {
+  color: var(--text-muted);
+}
 /* ── Region tags + add dropdown ── */
 .region-tags {
   display: flex;

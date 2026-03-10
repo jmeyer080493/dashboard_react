@@ -3,7 +3,7 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 .metrics-table-container {
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
   background: var(--bg-surface);
   border-radius: 8px;
   padding: 1rem 1.25rem 1.25rem;
@@ -45,7 +45,7 @@
 }
 
 .mode-btn.active {
-  background: #667eea;
+  background: var(--bg-btn-active);
   color: #fff;
 }
 
@@ -89,7 +89,6 @@
 
 /* ── Header rows ─────────────────────────────────────────────────────────── */
 .metrics-table thead {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
 }
 
@@ -116,18 +115,32 @@
 }
 
 /* Subtle category tints on group cells */
-.cat-trend              { background: rgba(99,  102, 241, 0.30); }
-.cat-bewertung          { background: rgba(16,  185, 129, 0.28); }
-.cat-technisch          { background: rgba(245, 158, 11,  0.28); }
-.cat-zinsen             { background: rgba(96,  165, 250, 0.30); }
-.cat-kreditqualit-t     { background: rgba(239, 68,  68,  0.28); }
-.cat-inflationserwartun { background: rgba(168, 85,  247, 0.28); }
-.cat-konjunktur         { background: rgba(34,  197, 94,  0.28); }
-.cat-fundamental        { background: rgba(251, 191, 36,  0.28); }
-.cat-gesch-ftsklima     { background: rgba(14,  165, 233, 0.28); }
-.cat-au-enhandel        { background: rgba(244, 114, 182, 0.28); }
-.cat-fiskal             { background: rgba(167, 139, 250, 0.28); }
-.cat-andere             { background: rgba(148, 163, 184, 0.28); }
+.cat-trend              { background: var(--cat-trend);              border-color: var(--cat-trend-bc);              color: var(--cat-trend-tc); }
+.cat-bewertung          { background: var(--cat-bewertung);          border-color: var(--cat-bewertung-bc);          color: var(--cat-bewertung-tc); }
+.cat-technisch          { background: var(--cat-technisch);          border-color: var(--cat-technisch-bc);          color: var(--cat-technisch-tc); }
+.cat-zinsen             { background: var(--cat-zinsen);             border-color: var(--cat-zinsen-bc);             color: var(--cat-zinsen-tc); }
+.cat-kreditqualit-t     { background: var(--cat-kreditqualit-t);     border-color: var(--cat-kreditqualit-t-bc);     color: var(--cat-kreditqualit-t-tc); }
+.cat-inflationserwartungen { background: var(--cat-inflationserwartungen); border-color: var(--cat-inflationserwartungen-bc); color: var(--cat-inflationserwartungen-tc); }
+.cat-konjunktur         { background: var(--cat-konjunktur);         border-color: var(--cat-konjunktur-bc);         color: var(--cat-konjunktur-tc); }
+.cat-fundamental        { background: var(--cat-fundamental);        border-color: var(--cat-fundamental-bc);        color: var(--cat-fundamental-tc); }
+.cat-gesch-ftsklima     { background: var(--cat-gesch-ftsklima);     border-color: var(--cat-gesch-ftsklima-bc);     color: var(--cat-gesch-ftsklima-tc); }
+.cat-aussenhandel        { background: var(--cat-aussenhandel);        border-color: var(--cat-aussenhandel-bc);        color: var(--cat-aussenhandel-tc); }
+.cat-fiskal             { background: var(--cat-fiskal);             border-color: var(--cat-fiskal-bc);             color: var(--cat-fiskal-tc); }
+.cat-andere             { background: var(--cat-andere);             border-color: var(--cat-andere-bc);             color: var(--cat-andere-tc); }
+
+/* Metric sub-header cells — same tint as the category header */
+.sub-cat-trend              { background: var(--cat-trend);              border-color: var(--cat-trend-bc);              color: var(--cat-trend-tc); }
+.sub-cat-bewertung          { background: var(--cat-bewertung);          border-color: var(--cat-bewertung-bc);          color: var(--cat-bewertung-tc); }
+.sub-cat-technisch          { background: var(--cat-technisch);          border-color: var(--cat-technisch-bc);          color: var(--cat-technisch-tc); }
+.sub-cat-zinsen             { background: var(--cat-zinsen);             border-color: var(--cat-zinsen-bc);             color: var(--cat-zinsen-tc); }
+.sub-cat-kreditqualit-t     { background: var(--cat-kreditqualit-t);     border-color: var(--cat-kreditqualit-t-bc);     color: var(--cat-kreditqualit-t-tc); }
+.sub-cat-inflationserwartungen { background: var(--cat-inflationserwartungen); border-color: var(--cat-inflationserwartungen-bc); color: var(--cat-inflationserwartungen-tc); }
+.sub-cat-konjunktur         { background: var(--cat-konjunktur);         border-color: var(--cat-konjunktur-bc);         color: var(--cat-konjunktur-tc); }
+.sub-cat-fundamental        { background: var(--cat-fundamental);        border-color: var(--cat-fundamental-bc);        color: var(--cat-fundamental-tc); }
+.sub-cat-gesch-ftsklima     { background: var(--cat-gesch-ftsklima);     border-color: var(--cat-gesch-ftsklima-bc);     color: var(--cat-gesch-ftsklima-tc); }
+.sub-cat-aussenhandel        { background: var(--cat-aussenhandel);        border-color: var(--cat-aussenhandel-bc);        color: var(--cat-aussenhandel-tc); }
+.sub-cat-fiskal             { background: var(--cat-fiskal);             border-color: var(--cat-fiskal-bc);             color: var(--cat-fiskal-tc); }
+.sub-cat-andere             { background: var(--cat-andere);             border-color: var(--cat-andere-bc);             color: var(--cat-andere-tc); }
 
 /* Metric name sub-header row */
 .metrics-table-metric-header,

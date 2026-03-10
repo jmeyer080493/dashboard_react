@@ -29,6 +29,14 @@ import {
  * - Currency selector (equity tab only)
  * - Metrics filtering (table and graphs)
  */
+
+// Normalize flexible date format (YYYY-MM-DD, YYYY/MM/D, etc.) to YYYY-MM-DD
+function normalizeDate(dateStr) {
+  const match = dateStr.match(/^(\d{4})(?:-|\/|\.)(\d{1,2})(?:-|\/|\.)(\d{1,2})$/)
+  if (!match) return null
+  const [, year, month, day] = match
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
 function GlobalControls({ 
   filters, 
   onFiltersChange, 
@@ -91,6 +99,17 @@ function GlobalControls({
     : (m) => { if (onMetricsChange)      onMetricsChange({ graphMetrics: m }) }
 
   const LOOKBACK_OPTIONS = ['YtD', '1Y', '3Y', '5Y', 'All']
+
+  // Commit date on blur or Enter (with validation & normalization)
+  const commitDate = (field, value) => {
+    if (value === (field === 'start' ? filters.startDate : filters.endDate)) return // No change
+    const datePattern = /^[0-9]{4}(?:-|\/|\.)(0?[1-9]|1[0-2])(?:-|\/|\.)(0?[1-9]|[12][0-9]|3[01])$/
+    if (value && !datePattern.test(value)) return // Invalid format, reject silently
+    const normalized = value ? normalizeDate(value) : ''
+    if (field === 'start') onFiltersChange({ startDate: normalized, customMode: true })
+    else onFiltersChange({ endDate: normalized, customMode: true })
+    setActiveDateRange(null)
+  }
 
   // Regions excluded per tab
   const EXCLUDED_FI    = new Set(['China', 'India', 'EM'])
@@ -169,15 +188,25 @@ function GlobalControls({
         <span className="ctrl-label">📅 Benutzerdefiniert</span>
         <div className="date-inputs">
           <input
-            type="date"
-            value={filters.startDate || ''}
-            onChange={(e) => { setActiveDateRange(null); onFiltersChange({ startDate: e.target.value, customMode: true }) }}
+            key={filters.startDate}
+            type="text"
+            placeholder="YYYY-MM-DD"
+            className="länder-date-input"
+            defaultValue={filters.startDate || ''}
+            pattern={"[0-9]{4}(-|/|\\.)(0?[1-9]|1[0-2])(-|/|\\.)(0?[1-9]|[12][0-9]|3[01])"}
+            onBlur={(e) => commitDate('start', e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') commitDate('start', e.target.value) }}
           />
           <span className="date-sep">→</span>
           <input
-            type="date"
-            value={filters.endDate || ''}
-            onChange={(e) => { setActiveDateRange(null); onFiltersChange({ endDate: e.target.value, customMode: true }) }}
+            key={filters.endDate}
+            type="text"
+            placeholder="YYYY-MM-DD"
+            className="länder-date-input"
+            defaultValue={filters.endDate || ''}
+            pattern={"[0-9]{4}(-|/|\\.)(0?[1-9]|1[0-2])(-|/|\\.)(0?[1-9]|[12][0-9]|3[01])"}
+            onBlur={(e) => commitDate('end', e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') commitDate('end', e.target.value) }}
           />
         </div>
       </div>

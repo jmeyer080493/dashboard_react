@@ -35,11 +35,13 @@
 
 .tab-button:hover {
   color: var(--text-primary, #111827);
+  border-bottom-color: var(--bg-btn-active);
+
 }
 
 .tab-button.active {
-  color: var(--primary-color, #3b82f6);
-  border-bottom-color: var(--primary-color, #3b82f6);
+  color: var(--bg-btn-active);
+  border-bottom-color: var(--bg-btn-active);
   font-weight: 600;
 }
 

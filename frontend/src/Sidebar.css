@@ -21,8 +21,9 @@
 }
 
 .sidebar-header h1 {
+  display: flex;
   margin: 0;
-  font-size: 1.3rem;
+  font-size: 3rem;
   font-weight: 300;
   letter-spacing: 1px;
   color: var(--sidebar-header-title);
@@ -31,6 +32,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  justify-content: center;
 }
 
 .divider {
@@ -74,7 +76,7 @@
 .menu-item:hover {
   background: var(--sidebar-hover-bg);
   color: var(--sidebar-text);
-  border-left-color: var(--sidebar-btn-border-left);
+  border-left-color: var(--sidebar-active-bg);
 }
 
 .menu-item.active {
@@ -142,7 +144,7 @@
   border: none;
   border-left: 5px solid transparent;
   border-radius: 8px;
-  color: var(--sidebar-text);
+  color: var(--sidebar-active-text);
   font-size: 0.9rem;
   cursor: pointer;
   display: flex;
@@ -166,21 +168,20 @@
 }
 
 .bottom-button-clear {
-  background: rgba(201, 160, 220, 0.15);
+  background: var(--sidebar-bg);
   border: none;
-  border-radius: 6px;
-  color: var(--sidebar-text);
+  color: var(--error-bg);
   cursor: pointer;
   font-size: 0.75rem;
   padding: 0.4rem 0.55rem;
   line-height: 1;
   flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
 }
 
 .bottom-button-clear:hover {
   background: rgba(255, 80, 80, 0.3);
-  color: #ff9999;
+  color: var(--error-bg);
+  opacity: 0.8;
 }
 
 .button-icon {
