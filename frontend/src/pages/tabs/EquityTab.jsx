@@ -87,17 +87,24 @@ function applyLocalPeriod(chartData, period) {
   if (!period || period === 'All') return chartData
   const allDates = chartData.map(r => r.DatePoint).filter(Boolean).sort()
   if (!allDates.length) return chartData
-  const latestDate = new Date(allDates[allDates.length - 1])
-  let cutoffDate
+  const latestStr = allDates[allDates.length - 1].slice(0, 10) // normalize to YYYY-MM-DD
+  let cutoffStr
   if (period === 'YtD') {
-    cutoffDate = new Date(latestDate.getFullYear() - 1, 11, 31)
+    const year = parseInt(latestStr.slice(0, 4), 10)
+    cutoffStr = `${year - 1}-12-31`
   } else {
     const daysMap = { '1Y': 365, '3Y': 365 * 3, '5Y': 365 * 5 }
     const days = daysMap[period] ?? 365
-    cutoffDate = new Date(latestDate.getTime() - days * 86400000)
+    const latestMs = Date.UTC(
+      parseInt(latestStr.slice(0, 4), 10),
+      parseInt(latestStr.slice(5, 7), 10) - 1,
+      parseInt(latestStr.slice(8, 10), 10)
+    )
+    const cutoffMs = latestMs - days * 86400000
+    const d = new Date(cutoffMs)
+    cutoffStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
   }
-  const cutoffStr = cutoffDate.toISOString().split('T')[0]
-  return chartData.filter(r => r.DatePoint >= cutoffStr)
+  return chartData.filter(r => r.DatePoint.slice(0, 10) >= cutoffStr)
 }
 
 /** Determine if timeseries is long (>6 months) */
@@ -211,6 +218,112 @@ function findLastRealDatePerRegion(chartData, regions) {
 }
 
 /**
+ * Rebase pivoted Performance data so every region starts at exactly 0%
+ * on the first date where ALL active regions have a value.
+ *
+ * Needed because the backend rebases each region independently to a
+ * pre-window anchor, which can differ by ±1–2 trading days across regions
+ * with different market calendars (e.g. U.S. holiday vs. Japan open).
+ * Without this, each region's line starts at a slightly different level
+ * inside the visible window.
+ *
+ * Uses MULTIPLICATIVE rebasing (not arithmetic subtraction) because
+ * Performance values are compounded %-returns from a backend anchor:
+ *   result = ((1 + v/100) / (1 + base/100) - 1) * 100
+ * Arithmetic subtraction (v - base) would give wrong compounded returns,
+ * especially noticeable when the base value is large (3Y, 5Y lookbacks).
+ */
+function rebaseToCommonStart(chartData, regions) {
+  if (!chartData || chartData.length === 0 || regions.length === 0) return chartData
+  let commonIdx = -1
+  for (let i = 0; i < chartData.length; i++) {
+    if (regions.every(r => chartData[i][r] !== null && chartData[i][r] !== undefined)) {
+      commonIdx = i
+      break
+    }
+  }
+  if (commonIdx === -1) return chartData // no common row – return as-is
+  const base = {}
+  for (const r of regions) base[r] = chartData[commonIdx][r]
+  return chartData.slice(commonIdx).map(row => {
+    const out = { ...row }
+    for (const r of regions) {
+      if (out[r] !== null && out[r] !== undefined) {
+        // Multiplicative: compound the period return from the common start date
+        out[r] = ((1 + out[r] / 100) / (1 + base[r] / 100) - 1) * 100
+      }
+    }
+    return out
+  })
+}
+
+/**
+ * Compute rebased Performance (Wertentwicklung) directly from raw PX_LAST prices
+ * for a specific local time period.
+ *
+ * The backend anchors Performance to the GLOBAL lookback anchor date. Any local
+ * period override would require working backwards through compounded returns, which
+ * introduces floating-point error and depends on the global anchor choice. Instead,
+ * we recompute from scratch using actual prices — exactly as the backend does —
+ * but using the local period's cutoff as the anchor.
+ *
+ * referenceDate (optional, "YYYY-MM-DD") – for N-year periods this is used as the
+ * "today" anchor instead of the latest data date, so the cutoff matches exactly what
+ * GlobalControls computes for its startDate (today - N days).
+ *
+ * Returns pivoted [{DatePoint, Region1: %, ...}] data, or null if period is 'All'
+ * (in which case the caller should fall back to backend data).
+ */
+function computePerfFromPrices(allRawRecords, regions, localPeriod, referenceDate = null) {
+  if (!localPeriod || localPeriod === 'All' || !allRawRecords || allRawRecords.length === 0) return null
+  const priceData = pivotDataForChart(allRawRecords, 'PX_LAST', regions)
+  if (priceData.length === 0) return null
+  const allDates = priceData.map(r => r.DatePoint).filter(Boolean).sort()
+  const latestStr = allDates[allDates.length - 1].slice(0, 10)
+  // For non-YtD periods: use referenceDate (today) so the anchor matches GlobalControls.
+  // For YtD: always derive from the latest DATA year (what year-to-date means).
+  const refStr = (localPeriod !== 'YtD' && referenceDate) ? referenceDate : latestStr
+  let cutoffStr
+  if (localPeriod === 'YtD') {
+    const year = parseInt(latestStr.slice(0, 4), 10)
+    cutoffStr = `${year - 1}-12-31`
+  } else {
+    const daysMap = { '1Y': 365, '3Y': 365 * 3, '5Y': 365 * 5 }
+    const days = daysMap[localPeriod]
+    if (!days) return null
+    const refMs = Date.UTC(
+      parseInt(refStr.slice(0, 4), 10),
+      parseInt(refStr.slice(5, 7), 10) - 1,
+      parseInt(refStr.slice(8, 10), 10)
+    )
+    const d = new Date(refMs - days * 86400000)
+    cutoffStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+  }
+  // Anchor price = last known price ON OR BEFORE cutoff (same logic as backend).
+  // DatePoints from backend include time ("2025-12-31T00:00:00"), so we slice to 10
+  // chars for all comparisons — "2025-12-31T00:00:00" > "2025-12-31" in JS string
+  // order, which would wrongly exclude that date from the anchor lookup.
+  const anchorPrices = {}
+  for (const region of regions) {
+    const preRows = priceData.filter(r => r.DatePoint.slice(0, 10) <= cutoffStr && r[region] != null)
+    if (preRows.length > 0) anchorPrices[region] = preRows[preRows.length - 1][region]
+  }
+  return priceData
+    .filter(r => r.DatePoint.slice(0, 10) >= cutoffStr)
+    .map(row => {
+      const out = { DatePoint: row.DatePoint }
+      for (const region of regions) {
+        const anchor = anchorPrices[region]
+        const price = row[region]
+        out[region] = (anchor != null && anchor !== 0 && price != null)
+          ? (price / anchor - 1) * 100
+          : null
+      }
+      return out
+    })
+}
+
+/**
  * Return a copy of chartData where each region's value is nulled out
  * for all rows after that region's last real date (removes forward-fill tail).
  */
@@ -259,7 +372,7 @@ function RangeBarTooltip({ active, payload }) {
 /**
  * Multi-Region Line Chart for a single equity metric.
  */
-function EquityLineChart({ chartData, allChartData, regions, metricLabel, metricKey, yAxisLabel = '', unit = '', currency = 'EUR', height = 300, chartType = 'Line', globalPeriod = null, lineWidth = 2 }) {
+function EquityLineChart({ chartData, allChartData, allRawRecords, regions, metricLabel, metricKey, yAxisLabel = '', unit = '', currency = 'EUR', height = 300, chartType = 'Line', globalPeriod = null, lineWidth = 2 }) {
   const { addToPptx, addToXlsx } = useExport()
 
   // ── Local period filter (persisted per chart) ──────────────────────────
@@ -312,7 +425,17 @@ function EquityLineChart({ chartData, allChartData, regions, metricLabel, metric
   // Active button: local override wins; falls back to global; null → no active btn
   const activeBtn = localPeriod ?? globalPeriod
 
-  const displayData = localPeriod ? applyLocalPeriod(allChartData ?? chartData, localPeriod) : chartData
+  // For Performance (Wertentwicklung) with a local period override: recompute from
+  // raw PX_LAST prices using the local anchor date (same method as the backend).
+  // Skip recompute when localPeriod === globalPeriod — backend data is already correctly
+  // anchored for this window. Pass today's UTC date so N-year cutoffs match GlobalControls.
+  const utcToday = (() => { const n = new Date(); return `${n.getUTCFullYear()}-${String(n.getUTCMonth()+1).padStart(2,'0')}-${String(n.getUTCDate()).padStart(2,'0')}` })()
+  const localPerfData = (metricKey === 'Performance' && localPeriod && localPeriod !== globalPeriod)
+    ? computePerfFromPrices(allRawRecords, regions, localPeriod, utcToday)
+    : null
+  const displayData = localPerfData
+    ? localPerfData
+    : localPeriod ? applyLocalPeriod(allChartData ?? chartData, localPeriod) : chartData
   const { formatter: smartDateFormatter, interval: smartInterval } = getSmartDateFormat(displayData)
 
   const chartTypeButtons = (
@@ -367,13 +490,19 @@ function EquityLineChart({ chartData, allChartData, regions, metricLabel, metric
   // Strip backend forward-fill so each region's line ends at its last real data point
   const lastRealDateByRegion = findLastRealDatePerRegion(displayData, activeRegions)
   const strippedData = stripForwardFill(displayData, lastRealDateByRegion)
-  // "Aktualität" = earliest of all regions' last real dates (every region has data up to at least this date)
+  // Note: no frontend rebasing needed. The backend correctly anchors each region's
+  // Performance to the last price on or before the window start date. The filteredRecords
+  // date filter now uses string comparisons (.slice(0,10)) so the start-date record is
+  // correctly included. Any region that was closed on the anchor date will show a tiny
+  // non-zero value on its first trading day, which is mathematically correct.
+  const chartDisplayData = strippedData
+  // "Aktualiät" = earliest of all regions' last real dates (every region has data up to at least this date)
   const letzesDatum = Object.values(lastRealDateByRegion).filter(Boolean).sort().shift() ?? null
 
   const isRSI = metricKey && metricKey.includes('RSI')
-  const [yMin, yMax] = computeSmartDomain(strippedData, activeRegions)
-  const isLongSeries = isLongTimeseries(strippedData)
-  const useLogScale = canUseLogScale(strippedData, activeRegions)
+  const [yMin, yMax] = computeSmartDomain(chartDisplayData, activeRegions)
+  const isLongSeries = isLongTimeseries(chartDisplayData)
+  const useLogScale = canUseLogScale(chartDisplayData, activeRegions)
   
   // Compute even interval spacing for y-axis (linear only; log uses 'auto')
   let yDomain = ['auto', 'auto']
@@ -392,7 +521,7 @@ function EquityLineChart({ chartData, allChartData, regions, metricLabel, metric
   }
 
   const isCurrencyAffected = isEquityMetricCurrencyAffected(metricKey)
-  const dateRange = getDateRange(strippedData, 'DatePoint')
+  const dateRange = getDateRange(chartDisplayData, 'DatePoint')
   const subheading = isCurrencyAffected
     ? (dateRange ? `${dateRange}, in ${currency}` : `in ${currency}`)
     : dateRange
@@ -408,7 +537,7 @@ function EquityLineChart({ chartData, allChartData, regions, metricLabel, metric
     yAxisLabel,
     source: 'Quelle: Bloomberg Finance L.P.',
     tab: 'Aktien',
-    chartData: strippedData,
+    chartData: chartDisplayData,
     regions: activeRegions,
     xKey: 'DatePoint',
   }
@@ -416,13 +545,13 @@ function EquityLineChart({ chartData, allChartData, regions, metricLabel, metric
   // Build range-bar data (one entry per region: min/max/median/current)
   const barData = activeRegions
     .map((region, idx) => {
-      const vals = strippedData.map(r => r[region]).filter(v => v != null && !Number.isNaN(v))
+      const vals = chartDisplayData.map(r => r[region]).filter(v => v != null && !Number.isNaN(v))
       if (!vals.length) return null
       const min = Math.min(...vals)
       const max = Math.max(...vals)
       const sorted = [...vals].sort((a, b) => a - b)
       const median = sorted[Math.floor(sorted.length / 2)]
-      const current = getLatestValueForRegion(strippedData, region)
+      const current = getLatestValueForRegion(chartDisplayData, region)
       return { name: translateRegion(region), spacer: min, range: max - min, current, median, min, max, color: REGION_COLORS[regions.indexOf(region) % REGION_COLORS.length] }
     })
     .filter(Boolean)
@@ -464,7 +593,7 @@ function EquityLineChart({ chartData, allChartData, regions, metricLabel, metric
             }} activeDot={false} legendType="none" isAnimationActive={false} />
           </ComposedChart>
         ) : (
-          <LineChart data={strippedData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+          <LineChart data={chartDisplayData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis
               dataKey="DatePoint"
@@ -518,24 +647,24 @@ function EquityLineChart({ chartData, allChartData, regions, metricLabel, metric
             {[...activeRegions]
               .sort((a, b) => {
                 if (legendMode === 'delta') {
-                  const firstA = getFirstValueForRegion(strippedData, a)
-                  const lastA  = getLatestValueForRegion(strippedData, a)
-                  const firstB = getFirstValueForRegion(strippedData, b)
-                  const lastB  = getLatestValueForRegion(strippedData, b)
+                  const firstA = getFirstValueForRegion(chartDisplayData, a)
+                  const lastA  = getLatestValueForRegion(chartDisplayData, a)
+                  const firstB = getFirstValueForRegion(chartDisplayData, b)
+                  const lastB  = getLatestValueForRegion(chartDisplayData, b)
                   const dA = (firstA != null && lastA != null) ? (lastA - firstA) : -Infinity
                   const dB = (firstB != null && lastB != null) ? (lastB - firstB) : -Infinity
                   return dB - dA
                 }
-                const latestA = getLatestValueForRegion(strippedData, a) ?? -Infinity
-                const latestB = getLatestValueForRegion(strippedData, b) ?? -Infinity
+                const latestA = getLatestValueForRegion(chartDisplayData, a) ?? -Infinity
+                const latestB = getLatestValueForRegion(chartDisplayData, b) ?? -Infinity
                 return latestB - latestA
               })
               .map((region) => {
-              const latestValue = getLatestValueForRegion(strippedData, region)
+              const latestValue = getLatestValueForRegion(chartDisplayData, region)
               const formatted = fmtLegendValue(latestValue, unit)
               let legendName
               if (legendMode === 'delta') {
-                const firstValue = getFirstValueForRegion(strippedData, region)
+                const firstValue = getFirstValueForRegion(chartDisplayData, region)
                 if (firstValue != null && latestValue != null) {
                   const delta = latestValue - firstValue
                   const arrow = delta > 0.0001 ? '▲' : delta < -0.0001 ? '▼' : '→'
@@ -565,8 +694,8 @@ function EquityLineChart({ chartData, allChartData, regions, metricLabel, metric
         )}
       </ResponsiveContainer>
       <div className="chart-export-buttons">
-        <button className="chart-export-btn pptx" onClick={() => withDataGapWarning(addToPptx, strippedData, activeRegions)(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={26} height={26} /></button>
-        <button className="chart-export-btn xlsx" onClick={() => withDataGapWarning(addToXlsx, strippedData, activeRegions)(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={26} height={26} /></button>
+        <button className="chart-export-btn pptx" onClick={() => withDataGapWarning(addToPptx, chartDisplayData, activeRegions)(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={26} height={26} /></button>
+        <button className="chart-export-btn xlsx" onClick={() => withDataGapWarning(addToXlsx, chartDisplayData, activeRegions)(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={26} height={26} /></button>
         {letzesDatum && (
           <span className="chart-export-date">Aktualität: {new Date(letzesDatum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}, Bloomberg Finance L.P.</span>
         )}
@@ -837,12 +966,17 @@ function EquityTab({
   const allRecords = data.data || []
   const globalPeriod = filters.customMode ? null : (filters.lookback || null)
 
-  // Apply date-range filter for charts
+  // Apply date-range filter for charts.
+  // Use .slice(0,10) string comparison throughout: DatePoints are "YYYY-MM-DDTHH:MM:SS"
+  // (local-time datetime). new Date() on a date-only string "YYYY-MM-DD" is parsed as
+  // UTC midnight, while the datetime string is parsed as local midnight — in UTC+1 that
+  // means March 13 local midnight < March 13 UTC midnight, so the start-date record
+  // would be wrongly excluded. Slicing to 10 chars keeps everything as plain strings.
   const filteredRecords = allRecords.filter((r) => {
     if (!r.DatePoint) return false
-    const d = new Date(r.DatePoint)
-    if (filters.startDate && d < new Date(filters.startDate)) return false
-    if (filters.endDate   && d > new Date(filters.endDate))   return false
+    const dp = r.DatePoint.slice(0, 10)
+    if (filters.startDate && dp < filters.startDate.slice(0, 10)) return false
+    if (filters.endDate   && dp > filters.endDate.slice(0, 10))   return false
     return true
   })
 
@@ -882,6 +1016,7 @@ function EquityTab({
               key={column}
               chartData={pivotDataForChart(filteredRecords, column, regions)}
               allChartData={pivotDataForChart(allRecords, column, regions)}
+              allRawRecords={column === 'Performance' ? allRecords : undefined}
               regions={regions}
               metricLabel={getColumnTitle(column)}
               metricKey={column}

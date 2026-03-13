@@ -92,18 +92,26 @@ function getPeriodCutoff(data, period) {
   if (!period || period === 'All') return null
   const allDates = data.map(r => r.DatePoint).filter(Boolean).sort()
   if (!allDates.length) return null
-  const latestDate = new Date(allDates[allDates.length - 1])
-  let cutoffDate
+  const latestStr = allDates[allDates.length - 1].slice(0, 10) // "YYYY-MM-DD", no Date() needed
+  let cutoffStr
   if (period === 'MtD') {
-    cutoffDate = new Date(latestDate.getFullYear(), latestDate.getMonth(), 1)
+    // First day of the current month
+    cutoffStr = `${latestStr.slice(0, 7)}-01`
   } else if (period === 'YtD') {
-    cutoffDate = new Date(latestDate.getFullYear() - 1, 11, 31)
+    const year = parseInt(latestStr.slice(0, 4), 10)
+    cutoffStr = `${year - 1}-12-31`
   } else {
     const daysMap = { '1Y': 365, '3Y': 365 * 3, '5Y': 365 * 5, '7Y': 365 * 7 }
     const days = daysMap[period] ?? 365
-    cutoffDate = new Date(latestDate.getTime() - days * 86400000)
+    const latestMs = Date.UTC(
+      parseInt(latestStr.slice(0, 4), 10),
+      parseInt(latestStr.slice(5, 7), 10) - 1,
+      parseInt(latestStr.slice(8, 10), 10)
+    )
+    const d = new Date(latestMs - days * 86400000)
+    cutoffStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
   }
-  return cutoffDate.toISOString().split('T')[0]
+  return cutoffStr
 }
 
 /**
@@ -122,23 +130,68 @@ function getPeriodCutoff(data, period) {
  */
 function rebaseToLocalPeriod(allData, period, seriesNames) {
   const cutoffStr = getPeriodCutoff(allData, period)
-  if (!cutoffStr) return allData          // 'All' – no rebase needed
 
-  // Last row on or before cutoffStr provides the base price for each series
+  // For 'All', cutoffStr is null because getPeriodCutoff returns null.
+  // We still need to rebase to the first available data point so the chart
+  // starts at 0 % from the earliest row instead of showing values anchored
+  // to the global period start (which would make historical rows deeply negative).
+  if (!cutoffStr) {
+    // Find the earliest date where any series has data
+    const firstDates = seriesNames
+      .map(s => { const row = allData.find(r => r[s] != null); return row ? row.DatePoint.slice(0, 10) : null })
+      .filter(Boolean)
+    if (!firstDates.length) return allData
+    const allFirstStr = firstDates.sort()[0]
+    const baseValues = {}
+    for (const s of seriesNames) {
+      const firstRow = allData.find(r => r[s] != null && r.DatePoint.slice(0, 10) === allFirstStr)
+        ?? allData.find(r => r[s] != null)
+      if (firstRow) baseValues[s] = firstRow[s]
+    }
+    return allData.map(row => {
+      const newRow = { DatePoint: row.DatePoint }
+      for (const s of seriesNames) {
+        const base = baseValues[s]
+        newRow[s] = (base == null || row[s] == null) ? null
+          : ((row[s] / 100 + 1) / (base / 100 + 1) - 1) * 100
+      }
+      if (seriesNames.length === 2) {
+        const [a, b] = seriesNames
+        if (newRow[a] != null && newRow[b] != null) newRow.Difference = newRow[a] - newRow[b]
+      }
+      return newRow
+    })
+  }
+
+  // For each series, find base price = last value on or before cutoff.
+  // If the period exceeds available history (no data before cutoff), fall back to
+  // the first available date for that series so the chart still shows full history
+  // starting at 0% rather than refusing to display.
   const baseValues = {}
+  const fallbackDates = {}   // per-series earliest-available date when pre is empty
   for (const s of seriesNames) {
-    const pre = allData.filter(r => r.DatePoint <= cutoffStr && r[s] != null)
+    const pre = allData.filter(r => r.DatePoint.slice(0, 10) <= cutoffStr && r[s] != null)
     if (pre.length) {
       baseValues[s] = pre[pre.length - 1][s]
     } else {
-      // No data before cutoff – use the first available value
-      const post = allData.find(r => r[s] != null)
-      if (post) baseValues[s] = post[s]
+      // Period exceeds data history – anchor to earliest available date
+      const firstRow = allData.find(r => r[s] != null)
+      if (firstRow) {
+        baseValues[s] = firstRow[s]
+        fallbackDates[s] = firstRow.DatePoint.slice(0, 10)
+      }
     }
   }
 
+  // Effective display start = cutoffStr, UNLESS all series fell back (period > all history),
+  // in which case use the earliest first-available date so the filter doesn't clip nothing.
+  const hasFallbacks = Object.keys(fallbackDates).length > 0
+  const effectiveCutoff = hasFallbacks
+    ? Object.values(fallbackDates).sort()[0]   // earliest fallback date
+    : cutoffStr
+
   // Filter to local window and re-normalise
-  const filtered = allData.filter(r => r.DatePoint >= cutoffStr)
+  const filtered = allData.filter(r => r.DatePoint.slice(0, 10) >= effectiveCutoff)
   return filtered.map(row => {
     const newRow = { DatePoint: row.DatePoint }
     for (const s of seriesNames) {
@@ -251,6 +304,10 @@ export default function FaktorenChart({
   allData = null,
   /** Line stroke width in pixels */
   lineWidth = 2,
+  /** Changes whenever the parent fetches new data (e.g. manual date change in custom mode).
+   *  Resetting local period when this changes ensures manual date edits always take effect,
+   *  even when a longer local period (e.g. 7Y) would otherwise override the display. */
+  dataKey = null,
 }) {
   const { addToPptx, addToXlsx } = useExport()
 
@@ -271,6 +328,14 @@ export default function FaktorenChart({
     prevGlobalPeriodRef.current = globalPeriod
     setLocalPeriod(null)
   }, [globalPeriod])
+
+  // Reset local period when the parent fetches new data due to manual date change
+  const prevDataKeyRef = useRef(dataKey)
+  useEffect(() => {
+    if (dataKey === null || prevDataKeyRef.current === dataKey) return
+    prevDataKeyRef.current = dataKey
+    setLocalPeriod(null)
+  }, [dataKey])
 
   // ── Local chart type override (persisted per chart) ────────────────────────
   const [localChartType, setLocalChartTypeRaw] = useState(() => {

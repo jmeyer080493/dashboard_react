@@ -50,12 +50,12 @@ function AppShell() {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
 
   const DEFAULT_GRAPH_SETTINGS = {
-    equity:     { chartsPerRow: 2, chartHeight: 300, lineWidth: 2 },
-    fi:         { chartsPerRow: 2, chartHeight: 300, lineWidth: 2 },
-    macro:      { chartsPerRow: 2, chartHeight: 300, lineWidth: 2 },
-    faktoren:   { chartsPerRow: 3, chartHeight: 450, lineWidth: 2 },
-    sektoren:   { chartsPerRow: 2, chartHeight: 450, lineWidth: 2 },
-    alternativ: { chartsPerRow: 2, chartHeight: 450, lineWidth: 2 },
+    equity:     { chartsPerRow: 2, chartHeight: 450, lineWidth: 3 },
+    fi:         { chartsPerRow: 2, chartHeight: 450, lineWidth: 3 },
+    macro:      { chartsPerRow: 2, chartHeight: 450, lineWidth: 3 },
+    faktoren:   { chartsPerRow: 3, chartHeight: 450, lineWidth: 3 },
+    sektoren:   { chartsPerRow: 2, chartHeight: 450, lineWidth: 3 },
+    alternativ: { chartsPerRow: 2, chartHeight: 450, lineWidth: 3 },
   }
 
   // User tab alert state – set by NordrheinTab when it loads its data
@@ -108,51 +108,10 @@ function AppShell() {
   const [länderActiveTab, setLänderActiveTab] = useState(() => {
     try { return localStorage.getItem('länder_activeTab') || 'equity' } catch { return 'equity' }
   })
-  const [länderFilters, setLänderFilters] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('länder_filters') || '{}')
-      const today = new Date()
-      const oneYearAgo = new Date()
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-      const defaultRegion = ALL_REGIONS.length > 0 ? [ALL_REGIONS[0]] : ['Germany']
-      return {
-        regions:    saved.regions    || defaultRegion,
-        startDate:  saved.startDate  || oneYearAgo.toISOString().split('T')[0],
-        endDate:    saved.endDate    || today.toISOString().split('T')[0],
-        lookback:   saved.lookback   || '1Y',
-        currency:   saved.currency   || 'EUR',
-        customMode: saved.customMode || false,
-      }
-    } catch {
-      const today = new Date()
-      const oneYearAgo = new Date()
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-      return {
-        regions:    ALL_REGIONS.length > 0 ? [ALL_REGIONS[0]] : ['Germany'],
-        startDate:  oneYearAgo.toISOString().split('T')[0],
-        endDate:    today.toISOString().split('T')[0],
-        lookback:   '1Y',
-        currency:   'EUR',
-        customMode: false,
-      }
-    }
-  })
-
   // Persist Länder state to localStorage on every change
   useEffect(() => {
     try { localStorage.setItem('länder_activeTab', länderActiveTab) } catch {}
   }, [länderActiveTab])
-
-  useEffect(() => {
-    try { localStorage.setItem('länder_filters', JSON.stringify(länderFilters)) } catch {}
-  }, [länderFilters])
-
-  const handleLänderFiltersChange = (newFilters) => {
-    setLänderFilters(prev => ({
-      ...prev,
-      ...newFilters
-    }))
-  }
 
   useEffect(() => {
     checkApiHealth()
@@ -184,8 +143,6 @@ function AppShell() {
           <Länder 
             activeTab={länderActiveTab}
             onActiveTabChange={setLänderActiveTab}
-            filters={länderFilters}
-            onFiltersChange={handleLänderFiltersChange}
             graphSettings={graphSettings}
           />
         )
@@ -220,8 +177,6 @@ function AppShell() {
           <Länder 
             activeTab={länderActiveTab}
             onActiveTabChange={setLänderActiveTab}
-            filters={länderFilters}
-            onFiltersChange={handleLänderFiltersChange}
             graphSettings={graphSettings}
           />
         )

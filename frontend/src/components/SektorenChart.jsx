@@ -336,7 +336,7 @@ export default function SektorenChart({
     return 'log'
   }, [displayData, series, effectiveChartType])
 
-  // ── Smart linear Y-domain: IQR-based clipping to suppress extreme outliers ──
+  // ── Smart linear Y-domain: percentile-based clipping to suppress extreme outliers ──
   const yDomain = useMemo(() => {
     if (yAxisScale !== 'linear' || effectiveChartType !== 'Line' || !displayData.length || !series.length) return null
     const allVals = []
@@ -346,18 +346,19 @@ export default function SektorenChart({
         if (v != null && !Number.isNaN(v)) allVals.push(v)
       }
     }
-    if (allVals.length < 8) return null
+    if (allVals.length < 20) return null
     allVals.sort((a, b) => a - b)
     const n = allVals.length
-    const q1 = allVals[Math.floor(n * 0.25)]
-    const q3 = allVals[Math.floor(n * 0.75)]
-    const iqr = q3 - q1
-    if (iqr <= 0) return null
-    const lo = q1 - 3 * iqr
-    const hi = q3 + 3 * iqr
-    // Only apply clipping when extreme outliers actually fall outside the IQR fence
+    // Use 1st / 99th percentile as the outer fence for detecting genuine extreme outliers
+    const p01 = allVals[Math.max(0, Math.floor(n * 0.01))]
+    const p99 = allVals[Math.min(n - 1, Math.floor(n * 0.99))]
+    const range = p99 - p01
+    if (range <= 0) return null
+    const lo = p01 - range * 0.1
+    const hi = p99 + range * 0.1
+    // Only apply when genuine extreme outliers actually exist beyond the fence
     if (allVals[0] >= lo && allVals[n - 1] <= hi) return null
-    const pad = (hi - lo) * 0.05
+    const pad = range * 0.05
     return [lo - pad, hi + pad]
   }, [yAxisScale, effectiveChartType, displayData, series])
   // ── Sort series by latest value (high to low) for line chart legend ──────

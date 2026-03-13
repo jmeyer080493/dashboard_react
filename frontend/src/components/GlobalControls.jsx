@@ -72,11 +72,6 @@ function GlobalControls({
   const [activeDateRange, setActiveDateRange] = useState(filters.customMode ? null : (filters.lookback ?? '1Y'))
   const [showCountryDropdown, setShowCountryDropdown] = useState(false)
   const countryDropdownRef = useRef(null)
-  // Per-tab region memory: saves the full region selection for each tab so that
-  // switching away and back restores the original selection (e.g. FI-only countries
-  // are dropped when switching to Equity, but restored when switching back to FI).
-  const prevActiveTabRef = useRef(activeTab)
-  const tabRegionsRef = useRef({})
 
   // Close country dropdown on outside click
   useEffect(() => {
@@ -125,8 +120,6 @@ function GlobalControls({
     ? (m) => { if (onMacroMetricsChange) onMacroMetricsChange({ graphMetrics: m }) }
     : (m) => { if (onMetricsChange)      onMetricsChange({ graphMetrics: m }) }
 
-  const LOOKBACK_OPTIONS = ['YtD', '1Y', '3Y', '5Y', 'All']
-
   // Commit date on blur or Enter (with validation & normalization)
   const commitDate = (field, value) => {
     if (value === (field === 'start' ? filters.startDate : filters.endDate)) return // No change
@@ -148,35 +141,6 @@ function GlobalControls({
     ? ALL_REGIONS.filter(r => !EXCLUDED_MACRO.has(r))
     : ALL_REGIONS
 
-  // When the active tab changes: save the outgoing tab's full region selection, then
-  // restore the incoming tab's previously-saved selection (or filter the current one
-  // down to what's valid for the new tab if no saved state exists yet).
-  useEffect(() => {
-    const prevTab = prevActiveTabRef.current
-    if (prevTab === activeTab) return // initial mount – nothing to do
-
-    // Persist the outgoing tab's complete region list (including tab-specific extras)
-    tabRegionsRef.current = {
-      ...tabRegionsRef.current,
-      [prevTab]: filters.regions,
-    }
-
-    const savedForNewTab = tabRegionsRef.current[activeTab]
-    if (savedForNewTab) {
-      // Restore the selection last used on this tab, clamped to what's available here
-      const valid = savedForNewTab.filter(r => AVAILABLE_REGIONS.includes(r))
-      onFiltersChange({ regions: valid })
-    } else {
-      // First visit to this tab: strip any regions that aren't available here
-      const invalid = filters.regions.filter(r => !AVAILABLE_REGIONS.includes(r))
-      if (invalid.length > 0) {
-        onFiltersChange({ regions: filters.regions.filter(r => AVAILABLE_REGIONS.includes(r)) })
-      }
-    }
-
-    prevActiveTabRef.current = activeTab
-  }, [activeTab])
-
   const handleDateQuickSelect = (days, label) => {
     const endDate = new Date()
     const startDate = new Date()
@@ -185,7 +149,17 @@ function GlobalControls({
       // The backend will look up the last available price on or before this date.
       startDate.setFullYear(startDate.getFullYear() - 1, 11, 31) // Dec 31 of prev year
     } else {
-      startDate.setDate(startDate.getDate() - days)
+      // Use calendar-year subtraction (not day counting) so that e.g. "3Y" from
+      // 2026-03-13 always resolves to 2023-03-13 instead of 2023-03-14 (which
+      // day-counting produces when a leap year falls inside the window).
+      const yearsMap = { '1Y': 1, '3Y': 3, '5Y': 5 }
+      const years = yearsMap[label]
+      if (years) {
+        startDate.setFullYear(startDate.getFullYear() - years)
+      } else {
+        // Fallback for any remaining day-based labels (e.g. 'All')
+        startDate.setDate(startDate.getDate() - days)
+      }
     }
     
     setActiveDateRange(label)
@@ -200,8 +174,8 @@ function GlobalControls({
   const handleRegionPreset = (preset) => {
     let presetRegions = getPresetRegions(preset, AVAILABLE_REGIONS)
     
-    // Add Emerging Markets to "Welt" selection on the Equity tab
-    if (preset === 'Welt' && isEquityTab && !presetRegions.includes('EM') && !presetRegions.includes('China')) {
+    // Add Emerging Markets + China to "Welt" selection on the Equity tab
+    if (preset === 'Welt' && isEquityTab && !presetRegions.includes('EM')) {
       presetRegions = [...presetRegions, 'EM', 'China']
     }
     
@@ -274,8 +248,12 @@ function GlobalControls({
             .filter(preset => preset !== 'Alle' && !(isFITab && preset === 'Welt'))
             .map(preset => {
               const presetRegions = getPresetRegions(preset, AVAILABLE_REGIONS)
-              const isActive = presetRegions.length === filters.regions.length &&
-                               presetRegions.every(r => filters.regions.includes(r))
+              // For equity-tab "Welt", EM and China are added on selection → account for them here
+              const effectivePreset = (preset === 'Welt' && isEquityTab)
+                ? [...presetRegions.filter(r => r !== 'EM' && r !== 'China'), 'EM', 'China']
+                : presetRegions
+              const isActive = effectivePreset.length === filters.regions.length &&
+                               effectivePreset.every(r => filters.regions.includes(r))
               return (
                 <button
                   key={preset}
@@ -326,7 +304,7 @@ function GlobalControls({
                   ? 'Keine'
                   : filters.regions.length === AVAILABLE_REGIONS.length
                   ? `Alle (${AVAILABLE_REGIONS.length})`
-                  : filters.regions.map(r => REGION_ABBREVIATIONS[r] || r).join(', ')}
+                  : `${filters.regions.length} Region${filters.regions.length === 1 ? '' : 'en'}`}
               </span>
               <span className="country-multiselect-arrow">{showCountryDropdown ? '▴' : '▾'}</span>
             </button>

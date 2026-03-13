@@ -30,8 +30,8 @@ const VIEW_CONFIG = [
 ]
 
 const CURRENCY_CONFIG = [
-  { id: 'USD', label: 'USD' },
   { id: 'EUR', label: 'EUR' },
+  { id: 'USD', label: 'USD' },
 ]
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ function loadSavedFilters() {
     const defaults = computeDateRange('1Y')
     return {
       view:       saved.view       || 'U.S.',
-      currency:   saved.currency   || 'USD',
+      currency:   saved.currency   || 'EUR',
       lookback:   saved.lookback   || '1Y',
       startDate:  saved.startDate  || defaults.start,
       endDate:    saved.endDate    || defaults.end,
@@ -77,7 +77,7 @@ function loadSavedFilters() {
     }
   } catch {
     const defaults = computeDateRange('1Y')
-    return { view: 'U.S.', currency: 'USD', lookback: '1Y', customMode: false, chartType: 'Line', ...defaults }
+    return { view: 'U.S.', currency: 'EUR', lookback: '1Y', customMode: false, chartType: 'Line', ...defaults }
   }
 }
 
@@ -94,6 +94,8 @@ function normalizeDate(dateStr) {
 // ── Module-level data cache (survives component unmount / tab switch) ──────────
 const _graphsCache    = {}   // cacheKey → graphs  (filtered window)
 const _allGraphsCache = {}   // cacheKey → graphs  (full history)
+const _inflight       = {}   // cacheKey → Promise  (in-flight requests – deduplicates StrictMode double-fires)
+const _allInflight    = {}   // allCacheKey → Promise
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -166,6 +168,18 @@ export default function Faktoren({ graphSettings }) {
       return
     }
 
+    // Another call for the same key is already in-flight (React StrictMode double-invoke).
+    // Await the shared promise so this instance still receives the result.
+    if (_inflight[cacheKey]) {
+      const result = await _inflight[cacheKey]
+      if (result) setGraphsData(result)
+      return
+    }
+
+    // Register a shared promise before the first await so any concurrent call can latch onto it.
+    let resolveInflight, rejectInflight
+    _inflight[cacheKey] = new Promise((res, rej) => { resolveInflight = res; rejectInflight = rej })
+
     setLoading(true)
     setError(null)
     try {
@@ -183,12 +197,15 @@ export default function Faktoren({ graphSettings }) {
       const json = await res.json()
       if (json.status === 'error') throw new Error(json.error)
       _graphsCache[cacheKey] = json.graphs
+      resolveInflight(json.graphs)
       setGraphsData(json.graphs)
     } catch (err) {
+      rejectInflight(err)
       setError(err.message)
       setGraphsData(null)
     } finally {
       setLoading(false)
+      delete _inflight[cacheKey]
     }
   }, [view, currency, startDate, endDate, lookback])
 
@@ -204,19 +221,35 @@ export default function Faktoren({ graphSettings }) {
       return
     }
 
+    if (_allInflight[allCacheKey]) {
+      const result = await _allInflight[allCacheKey]
+      if (result) setAllGraphsData(result)
+      return
+    }
+
+    let resolveInflight, rejectInflight
+    _allInflight[allCacheKey] = new Promise((res, rej) => { resolveInflight = res; rejectInflight = rej })
+
     try {
       const { start, end } = computeDateRange('All')
       const params = new URLSearchParams({ view, currency, start_date: start, end_date: end, lookback: 'All' })
       const token = localStorage.getItem('auth_token')
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
       const res = await fetch(`/api/faktoren/data?${params}`, { headers })
-      if (!res.ok) return
+      if (!res.ok) { rejectInflight(new Error(`HTTP ${res.status}`)); return }
       const json = await res.json()
       if (json.status !== 'error') {
         _allGraphsCache[allCacheKey] = json.graphs
+        resolveInflight(json.graphs)
         setAllGraphsData(json.graphs)
+      } else {
+        rejectInflight(new Error(json.error))
       }
-    } catch {}
+    } catch (err) {
+      rejectInflight(err)
+    } finally {
+      delete _allInflight[allCacheKey]
+    }
   }, [view, currency])
   useEffect(() => { fetchAllData() }, [fetchAllData])
 
@@ -348,6 +381,7 @@ export default function Faktoren({ graphSettings }) {
                 chartType={chartType}
                 allData={allGraphsData?.[gn]?.data ?? null}
                 lineWidth={lineWidth}
+                dataKey={`${startDate}|${endDate}`}
               />
             )
           })}

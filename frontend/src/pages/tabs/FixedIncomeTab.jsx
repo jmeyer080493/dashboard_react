@@ -88,17 +88,24 @@ function applyLocalPeriod(chartData, period) {
   if (!period || period === 'All') return chartData
   const allDates = chartData.map(r => r.DatePoint).filter(Boolean).sort()
   if (!allDates.length) return chartData
-  const latestDate = new Date(allDates[allDates.length - 1])
-  let cutoffDate
+  const latestStr = allDates[allDates.length - 1].slice(0, 10)
+  let cutoffStr
   if (period === 'YtD') {
-    cutoffDate = new Date(latestDate.getFullYear() - 1, 11, 31)
+    const year = parseInt(latestStr.slice(0, 4), 10)
+    cutoffStr = `${year - 1}-12-31`
   } else {
     const daysMap = { '1Y': 365, '3Y': 365 * 3, '5Y': 365 * 5 }
     const days = daysMap[period] ?? 365
-    cutoffDate = new Date(latestDate.getTime() - days * 86400000)
+    const latestMs = Date.UTC(
+      parseInt(latestStr.slice(0, 4), 10),
+      parseInt(latestStr.slice(5, 7), 10) - 1,
+      parseInt(latestStr.slice(8, 10), 10)
+    )
+    const cutoffMs = latestMs - days * 86400000
+    const d = new Date(cutoffMs)
+    cutoffStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
   }
-  const cutoffStr = cutoffDate.toISOString().split('T')[0]
-  return chartData.filter(r => r.DatePoint >= cutoffStr)
+  return chartData.filter(r => r.DatePoint.slice(0, 10) >= cutoffStr)
 }
 
 /** Compute smart y-axis domain from data with padding */
@@ -757,9 +764,9 @@ function FixedIncomeTab({
   // Apply date-range filter for charts
   const filteredRecords = allRecords.filter((r) => {
     if (!r.DatePoint) return false
-    const d = new Date(r.DatePoint)
-    if (filters.startDate && d < new Date(filters.startDate)) return false
-    if (filters.endDate   && d > new Date(filters.endDate))   return false
+    const dp = r.DatePoint.slice(0, 10)
+    if (filters.startDate && dp < filters.startDate.slice(0, 10)) return false
+    if (filters.endDate   && dp > filters.endDate.slice(0, 10))   return false
     return true
   })
 

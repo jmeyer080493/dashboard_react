@@ -99,6 +99,7 @@ export const REGION_PRESETS = {
   },
   'Welt': (availableRegions) => {
     // Select world regions: U.S., Europe, Japan, UK
+    // Note: EM and China are added on top for the Equity tab inside GlobalControls
     return ['U.S.', 'Europe', 'Japan', 'UK']
   },
   'Europa': (availableRegions) => {
