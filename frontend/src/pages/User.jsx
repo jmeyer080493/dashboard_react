@@ -221,7 +221,7 @@ function AlertBox({ alerts, alertDetails }) {
                 {d.source    && <div>Quelle: {d.source}</div>}
                 {d.fix       && <div>Lösung: {d.fix}</div>}
                 {d.status    && <div>Status: {d.status}</div>}
-                {d.latest    && <div>Letztes Datum: {d.latest}</div>}
+                {d.latest    && <div>Aktualität: {d.latest}</div>}
                 {d.url && (
                   <div>
                     <a href={d.url} target="_blank" rel="noreferrer" className="user-alert-link">

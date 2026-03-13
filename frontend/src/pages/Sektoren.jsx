@@ -3,16 +3,16 @@
  *
  * Displays 4 PE ratio charts across three views (U.S. · Europe · U.S. vs. Europe):
  *   g1: KGV (PE Ratio)
- *   g2: Erwartetes KGV (Forward PE Ratio)
- *   g3: KGV - Erwartetes KGV (PE Difference)
- *   g4: KGV vs. Erwartetes KGV (Both fields together)
+ *   g2: KGV (Fwd.) (Forward PE Ratio)
+ *   g3: KGV - KGV (Fwd.) (PE Difference)
+ *   g4: KGV vs. KGV (Fwd.) (Both fields together)
  *
  * Controls:
  *   - Quick date-range buttons (MtD, YtD, 1Y, 3Y, 7Y, All)
  *   - Manual start / end date inputs (controlled, ISO format YYYY-MM-DD)
  *   - View selector (region)
  *   - Chart type (Line / Bar)
- *   - Individual sector toggles + "Alle" shortcut
+ *   - Sector dropdown selector with multi-select, Alle/Keine buttons
  *
  * State persistence: all filter state is saved to localStorage under 'sektoren_filters'.
  * Each chart exposes PPTX + XLSX export via the shared ExportContext.
@@ -21,6 +21,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import SektorenChart from '../components/SektorenChart'
 import './Sektoren.css'
+
+// Close dropdown on outside click
+function useClickOutside(ref, callback) {
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (ref.current && !ref.current.contains(event.target)) {
+        callback()
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [ref, callback])
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -117,6 +130,10 @@ function loadSavedFilters() {
 
 const isValidDate = s => /^[0-9]{4}(?:-|\/|\.)(0?[1-9]|1[0-2])(?:-|\/|\.)(0?[1-9]|[12][0-9]|3[01])$/.test(s)
 
+// ── Module-level data cache (survives component unmount / tab switch) ──────────
+const _graphsCache    = {}   // cacheKey → graphs  (filtered window)
+const _allGraphsCache = {}   // cacheKey → graphs  (full history)
+
 // Normalize flexible date format to YYYY-MM-DD
 function normalizeDate(dateStr) {
   const match = dateStr.match(/^(\d{4})(?:-|\/|\.)(\d{1,2})(?:-|\/|\.)(\d{1,2})$/)
@@ -131,6 +148,7 @@ export default function Sektoren({ graphSettings }) {
   const gs = graphSettings ?? {}
   const chartsPerRow = gs.sektoren?.chartsPerRow ?? 2
   const chartHeight  = gs.sektoren?.chartHeight  ?? 450
+  const lineWidth    = gs.sektoren?.lineWidth    ?? 2
 
   // Seed state from localStorage once at mount
   const _initRef = useRef(null)
@@ -144,10 +162,21 @@ export default function Sektoren({ graphSettings }) {
   const [customMode,      setCustomMode]      = useState(_init.customMode)
   const [chartType,       setChartType]       = useState(_init.chartType)
   const [selectedSectors, setSelectedSectors] = useState(_init.selectedSectors)
+  const [showSectorDropdown, setShowSectorDropdown] = useState(false)
+  const sectorDropdownRef = useRef(null)
+
+  useClickOutside(sectorDropdownRef, () => setShowSectorDropdown(false))
 
   const [loading,    setLoading]    = useState(false)
   const [error,      setError]      = useState(null)
-  const [graphsData, setGraphsData] = useState(null)
+  const [graphsData, setGraphsData] = useState(() => {
+    const k = `${_init.view}|${_init.lookback}|${_init.startDate}|${_init.endDate}|${_init.selectedSectors.join(',')}`
+    return _graphsCache[k] ?? null
+  })
+  const [allGraphsData, setAllGraphsData] = useState(() => {
+    const k = `all|${_init.view}|${_init.selectedSectors.join(',')}`
+    return _allGraphsCache[k] ?? null
+  })
 
   // Persist to localStorage on every filter change
   useEffect(() => {
@@ -158,7 +187,7 @@ export default function Sektoren({ graphSettings }) {
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
-  // Calculate combined y-axis domain for KGV and Erwartetes KGV in bar mode
+  // Calculate combined y-axis domain for KGV and KGV (Fwd.) in bar mode
   const calculateCombinedBarDomain = (g1Data, g2Data, g1Series, g2Series) => {
     if (!g1Data?.length || !g2Data?.length || !g1Series?.length || !g2Series?.length) return null
     const allVals = []
@@ -206,18 +235,18 @@ export default function Sektoren({ graphSettings }) {
     )
   }
 
-  // "Alle" toggles: if all are selected → deselect all; otherwise → select all
-  const toggleAllSectors = () => {
-    setSelectedSectors(prev =>
-      prev.length === ALL_SECTORS.length ? [] : [...ALL_SECTORS]
-    )
-  }
-
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
   const fetchData = useCallback(async () => {
     if (!isValidDate(startDate) || !isValidDate(endDate)) return
     if (selectedSectors.length === 0) { setGraphsData(null); return }
+
+    const cacheKey = `${view}|${lookback}|${startDate}|${endDate}|${selectedSectors.join(',')}`
+    if (_graphsCache[cacheKey]) {
+      setGraphsData(_graphsCache[cacheKey])
+      return
+    }
+
     setLoading(true); setError(null)
     try {
       const params = new URLSearchParams({
@@ -233,6 +262,7 @@ export default function Sektoren({ graphSettings }) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       if (json.status === 'error') throw new Error(json.error)
+      _graphsCache[cacheKey] = json.graphs
       setGraphsData(json.graphs)
     } catch (err) {
       setError(err.message)
@@ -243,6 +273,32 @@ export default function Sektoren({ graphSettings }) {
   }, [view, lookback, startDate, endDate, selectedSectors])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // ── Secondary "All" fetch – full history for local per-chart period overrides ──
+  const fetchAllData = useCallback(async () => {
+    if (selectedSectors.length === 0) return
+
+    const allCacheKey = `all|${view}|${selectedSectors.join(',')}`
+    if (_allGraphsCache[allCacheKey]) {
+      setAllGraphsData(_allGraphsCache[allCacheKey])
+      return
+    }
+
+    try {
+      const { start, end } = computeDateRange('All')
+      const params = new URLSearchParams({ view, lookback: 'All', start_date: start, end_date: end, sectors: selectedSectors.join(',') })
+      const token = localStorage.getItem('auth_token')
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await fetch(`/api/sektoren/data?${params}`, { headers })
+      if (!res.ok) return
+      const json = await res.json()
+      if (json.status !== 'error') {
+        _allGraphsCache[allCacheKey] = json.graphs
+        setAllGraphsData(json.graphs)
+      }
+    } catch {}
+  }, [view, selectedSectors])
+  useEffect(() => { fetchAllData() }, [fetchAllData])
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -328,24 +384,51 @@ export default function Sektoren({ graphSettings }) {
         </div>
 
         {/* Sektoren */}
-        <div className="sektoren-control-section sektoren-sector-section">
-          <label>
-            Sektoren
+        <div className="sektoren-control-section sektoren-sector-section" ref={sectorDropdownRef}>
+          <label>Sektoren</label>
+          <div className="sektoren-sector-multiselect">
             <button
-              className={`sektoren-all-btn${selectedSectors.length === ALL_SECTORS.length ? ' active' : ''}`}
-              onClick={toggleAllSectors}
-            >Alle</button>
-          </label>
-          <div className="sektoren-sector-btns">
-            {ALL_SECTORS.map(sector => (
-              <button
-                key={sector}
-                className={`quick-btn sektoren-sector-btn${selectedSectors.includes(sector) ? ' active' : ''}`}
-                onClick={() => toggleSector(sector)}
-              >
-                {SECTOR_DE[sector] || sector}
-              </button>
-            ))}
+              className={`sektoren-sector-trigger ${showSectorDropdown ? 'open' : ''}`}
+              onClick={() => setShowSectorDropdown(v => !v)}
+              title={selectedSectors.map(s => SECTOR_DE[s] || s).join(', ') || 'Keine Sektoren ausgewählt'}
+            >
+              <span className="sektoren-sector-value">
+                {selectedSectors.length === 0
+                  ? 'Keine'
+                  : selectedSectors.length === ALL_SECTORS.length
+                  ? `Alle (${ALL_SECTORS.length})`
+                  : selectedSectors.map(s => s.split(' ').map(w => w[0]).join('')).join(', ')}
+              </span>
+              <span className="sektoren-sector-arrow">{showSectorDropdown ? '▴' : '▾'}</span>
+            </button>
+
+            {showSectorDropdown && (
+              <div className="sektoren-sector-dropdown">
+                <div className="sektoren-sector-actions">
+                  <button onClick={() => setSelectedSectors([...ALL_SECTORS])}>Alle</button>
+                  <button onClick={() => setSelectedSectors([])}>Keine</button>
+                </div>
+                <div className="sektoren-sector-list">
+                  {ALL_SECTORS.map(sector => {
+                    const checked = selectedSectors.includes(sector)
+                    return (
+                      <label
+                        key={sector}
+                        className={`sektoren-sector-option ${checked ? 'checked' : ''}`}
+                        title={sector}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleSector(sector)}
+                        />
+                        <span className="sektoren-sector-name">{SECTOR_DE[sector] || sector}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -357,14 +440,14 @@ export default function Sektoren({ graphSettings }) {
 
       {/* Chart grid */}
       {!loading && graphsData && (() => {
-        // In Bar mode, g4 (KGV vs. Erwartetes KGV) is Line-only → hide it
+        // In Bar mode, g4 (KGV vs. KGV (Fwd.)) is Line-only → hide it
         const effectiveChartType = view === 'U.S. vs. Europe' ? 'Bar' : chartType
         const isComparison = view === 'U.S. vs. Europe'
         const visibleGraphs = effectiveChartType === 'Bar'
           ? ['g1', 'g2', 'g3']
           : GRAPH_NAMES
         
-        // Calculate combined domain for KGV and Erwartetes KGV in bar mode
+        // Calculate combined domain for KGV and KGV (Fwd.) in bar mode
         let barDomainG1G2 = null
         if (effectiveChartType === 'Bar' && graphsData.g1 && graphsData.g2) {
           barDomainG1G2 = calculateCombinedBarDomain(
@@ -389,7 +472,7 @@ export default function Sektoren({ graphSettings }) {
               
               return (
                 <SektorenChart
-                  key={`${gn}-${view}-${effectiveChartType}`}
+                  key={`${gn}-${view}`}
                   title={g.title}
                   data={g.data}
                   series={g.series}
@@ -400,7 +483,8 @@ export default function Sektoren({ graphSettings }) {
                   tab="Sektoren"
                   yAxisLabel="Wert"
                   fixedYDomain={useFixedDomain}
-                />
+                  globalPeriod={lookback}
+                  allData={allGraphsData?.[gn]?.data ?? null}                lineWidth={lineWidth}                />
               )
             })}
           </div>

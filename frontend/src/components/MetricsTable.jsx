@@ -1,6 +1,21 @@
 import { useState, useEffect, useMemo } from 'react'
-import { ExcelIcon } from '../icons/MicrosoftIcons'
+import { ExcelIcon, MetricsDocIcon } from '../icons/MicrosoftIcons'
 import './MetricsTable.css'
+
+/** Download the metrics documentation Excel from the backend */
+async function downloadMetricsDocumentation() {
+  const response = await fetch('/api/countries/metrics-documentation/excel')
+  if (!response.ok) throw new Error(`Server-Fehler ${response.status}`)
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  const cd = response.headers.get('content-disposition') || ''
+  const match = cd.match(/filename="([^"]+)"/)
+  a.download = match ? match[1] : 'Metriken_Dokumentation.xlsx'
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 // ─── Region flag emoji map ──────────────────────────────────────────────────
 const REGION_FLAGS = {
@@ -102,6 +117,59 @@ function getPercentileStyle(percentile, higherBetter) {
   }
 }
 
+/**
+ * Time-series percentile coloring (neutral – no good/bad direction).
+ * Low percentile (historically low value)  → blue tint
+ * High percentile (historically high value) → amber/orange tint
+ * Mid (near 50th pct)                       → near transparent
+ */
+function getTimeseriesStyle(percentile) {
+  if (percentile === null || percentile === undefined) return {}
+  const norm = percentile / 100
+  const midDist = Math.abs(norm - 0.5) * 2  // 0 at median, 1 at extremes
+  const opacity = 0.12 + midDist * 0.38
+  if (norm < 0.5) {
+    // Blue tint – value is low relative to its own history
+    return {
+      background: `linear-gradient(to right, rgba(59,130,246,${(opacity * 0.8).toFixed(2)}), rgba(59,130,246,${opacity.toFixed(2)}))`,
+    }
+  } else {
+    // Amber/orange tint – value is high relative to its own history
+    return {
+      background: `linear-gradient(to right, rgba(245,158,11,${(opacity * 0.8).toFixed(2)}), rgba(245,158,11,${opacity.toFixed(2)}))`,
+    }
+  }
+}
+
+// ── S&P rating ordinal map ──────────────────────────────────────────────────
+// Higher rank number = better credit quality → gets a green tint.
+const SP_RATING_RANKS = {
+  'AAA': 21, 'AA+': 20, 'AA': 19, 'AA-': 18,
+  'A+': 17, 'A': 16, 'A-': 15,
+  'BBB+': 14, 'BBB': 13, 'BBB-': 12,
+  'BB+': 11, 'BB': 10, 'BB-': 9,
+  'B+': 8, 'B': 7, 'B-': 6,
+  'CCC+': 5, 'CCC': 4, 'CCC-': 3,
+  'CC': 2, 'C': 1, 'D': 0,
+}
+const SP_MAX_RANK = 21
+
+/**
+ * Red-to-green gradient for S&P credit ratings.
+ * AAA (best) → green, D (worst) → red, unknown → no colour.
+ */
+function getSPRatingStyle(ratingValue) {
+  if (!ratingValue || typeof ratingValue !== 'string') return {}
+  const rank = SP_RATING_RANKS[ratingValue.trim().toUpperCase()]
+  if (rank === undefined) return {}
+  const norm = rank / SP_MAX_RANK  // 0..1, 1 = best
+  const red = Math.round(255 * (1 - norm))
+  const green = Math.round(255 * norm)
+  return {
+    background: `linear-gradient(to right, rgba(${red},${green},0,0.28), rgba(${red},${green},0,0.48))`,
+  }
+}
+
 /** Export table data as CSV and trigger download */
 function exportTableAsCSV(regions, metricsInfo, latestValues, tabLabel = 'Tabelle') {
   const regionHeaders = regions.map(r => REGION_TRANSLATIONS[r] || r)
@@ -165,6 +233,15 @@ const [displayMode, setDisplayMode] = useState(() => {
 useEffect(() => {
   try { localStorage.setItem(`metricsTable_displayMode_${tabLabel}`, displayMode) } catch {}
 }, [displayMode, tabLabel])
+
+const [colorFormatting, setColorFormattingRaw] = useState(() => {
+  try { return localStorage.getItem(`metricsTable_colorFormatting_${tabLabel}`) !== 'false' } catch { return true }
+})
+
+// Persist colorFormatting whenever it changes
+useEffect(() => {
+  try { localStorage.setItem(`metricsTable_colorFormatting_${tabLabel}`, colorFormatting ? 'true' : 'false') } catch {}
+}, [colorFormatting, tabLabel])
 
 const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   // ── Latest value per region (only selected regions, for display) ──────────
@@ -238,6 +315,7 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
             unit: f.unit ?? '',
             category: cat.key,
             categoryLabel: cat.label,
+            colorMode: f.colorMode ?? null,
           }
         }
       }
@@ -292,6 +370,42 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
     return result
   }, [data, regions, metricsToDisplay, latestDataPerRegion, latestDataAllRegions])
 
+  // ── Pre-compute time-series percentiles ───────────────────────────────────
+  // For metrics with colorMode='timeseries': where does the latest value sit
+  // in the metric's own historical distribution for that region?
+  const timeseriesPercentiles = useMemo(() => {
+    if (!data || data.length === 0) return {}
+    const result = {}
+    for (const metric of metricsToDisplay) {
+      if (metricMeta[metric]?.colorMode !== 'timeseries') continue
+      for (const region of regions) {
+        const currentValue = latestDataPerRegion[region]?.[metric]
+        if (currentValue === null || currentValue === undefined || isNaN(currentValue)) {
+          result[`${region}::${metric}`] = null
+          continue
+        }
+        // Collect all historical values for this region × metric
+        const vals = []
+        for (const record of data) {
+          if (record.Regions !== region) continue
+          const v = record[metric]
+          if (v !== null && v !== undefined && !isNaN(v)) vals.push(v)
+        }
+        if (vals.length < 2) { result[`${region}::${metric}`] = null; continue }
+        vals.sort((a, b) => a - b)
+        let rank = 0
+        for (const v of vals) { if (v <= currentValue) rank++ }
+        result[`${region}::${metric}`] = (rank / vals.length) * 100
+      }
+    }
+    return result
+  }, [data, regions, metricsToDisplay, metricMeta, latestDataPerRegion])
+
+  // ── Check if any displayed metric uses time-series coloring ─────────────────
+  const hasTimeseriesMetrics = useMemo(() => {
+    return metricsToDisplay.some(metric => metricMeta[metric]?.colorMode === 'timeseries')
+  }, [metricsToDisplay, metricMeta])
+
   // ── Sorted regions ─────────────────────────────────────────────────────
   const sortedRegions = useMemo(() => {
     if (!sortConfig.key) return regions
@@ -316,6 +430,25 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
     label: metricMeta[key]?.label || key,
     unit: metricMeta[key]?.unit || '',
   })), [metricsToDisplay, metricMeta])
+
+  // ── Latest real data date per metric (Aktualität) ────────────────────────
+  // For each metric column: find the most recent DatePoint across ALL regions
+  // where the metric carried a non-null value. Used as a tooltip on the header.
+  const metricAktualitaet = useMemo(() => {
+    if (!data || data.length === 0) return {}
+    const result = {}
+    for (const metric of metricsToDisplay) {
+      let latest = null
+      for (const record of data) {
+        const v = record[metric]
+        if (v !== null && v !== undefined && record.DatePoint) {
+          if (!latest || record.DatePoint > latest) latest = record.DatePoint
+        }
+      }
+      if (latest) result[metric] = latest.split('T')[0]
+    }
+    return result
+  }, [data, metricsToDisplay])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Guard clauses AFTER all hooks
@@ -348,19 +481,33 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   // ── Cell content + style ─────────────────────────────────────────────────
   const getCellContent = (region, metric) => {
     const value = getValue(region, metric)
-    const pct = percentiles[`${region}::${metric}`]
-    const higherBetter = metricMeta[metric]?.higherBetter ?? null
+    const colorMode = metricMeta[metric]?.colorMode ?? null
 
-    if (displayMode === 'percentile') {
-      if (pct === null) return { text: '–', style: {} }
-      const style = getPercentileStyle(pct, higherBetter)
-      return { text: `${pct.toFixed(0)}%`, style }
+    // ── S&P Rating: ordinal red→green based on credit quality ───────────────
+    if (colorMode === 'sp_rating') {
+      const text = fmt(value, metric)
+      const style = colorFormatting ? getSPRatingStyle(value) : {}
+      return { text, style }
     }
 
-    // latest mode
-    const text = fmt(value, metric)
-    const style = getPercentileStyle(pct, higherBetter)
-    return { text, style }
+    // ── Time-series percentile: blue (historically low) ↔ amber (historically high) ─
+    if (colorMode === 'timeseries') {
+      const tsPct = timeseriesPercentiles[`${region}::${metric}`]
+      if (displayMode === 'percentile') {
+        if (tsPct === null) return { text: '–', style: {} }
+        return { text: `${tsPct.toFixed(0)}%`, style: colorFormatting ? getTimeseriesStyle(tsPct) : {} }
+      }
+      return { text: fmt(value, metric), style: colorFormatting ? getTimeseriesStyle(tsPct) : {} }
+    }
+
+    // ── Default: cross-region percentile with higherBetter direction ─────────
+    const pct = percentiles[`${region}::${metric}`]
+    const higherBetter = metricMeta[metric]?.higherBetter ?? null
+    if (displayMode === 'percentile') {
+      if (pct === null) return { text: '–', style: {} }
+      return { text: `${pct.toFixed(0)}%`, style: colorFormatting ? getPercentileStyle(pct, higherBetter) : {} }
+    }
+    return { text: fmt(value, metric), style: colorFormatting ? getPercentileStyle(pct, higherBetter) : {} }
   }
 
   return (
@@ -383,13 +530,44 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
             Perzentile
           </button>
         </div>
-        <button
-          className="metrics-table-export-btn"
-          onClick={() => exportTableAsCSV(regions, metricsInfo, latestDataPerRegion, tabLabel)}
-          title="Tabelle als CSV exportieren"
-        >
-          <ExcelIcon width={26} height={26} />
-        </button>
+        {colorFormatting && (
+          <div className="metrics-table-formatting-group">
+            <button
+              className={`metrics-table-color-toggle ${colorFormatting ? 'active' : ''}`}
+              onClick={() => setColorFormattingRaw(!colorFormatting)}
+              title={colorFormatting ? 'Farbkodierung deaktivieren' : 'Farbkodierung aktivieren'}
+            >
+              {colorFormatting ? '🎨 Farbe AN' : '◯ Farbe AUS'}
+            </button>
+            <div className="metrics-table-legend">
+              {hasTimeseriesMetrics && (
+                <>
+                  <span className="legend-item">
+                    <span className="legend-swatch" style={{ background: 'linear-gradient(to right, rgba(59,130,246,0.12), rgba(59,130,246,0.5))' }}></span>
+                    <span>Histor. niedrig</span>
+                  </span>
+                  <span className="legend-item">
+                    <span className="legend-swatch" style={{ background: 'linear-gradient(to right, rgba(245,158,11,0.12), rgba(245,158,11,0.5))' }}></span>
+                    <span>Histor. hoch</span>
+                  </span>
+                </>
+              )}
+              <span className="legend-item">
+                <span className="legend-swatch" style={{ background: 'linear-gradient(to right, rgba(220,38,38,0.28), rgba(52,211,153,0.48))' }}></span>
+                <span>Schlecht–Gut</span>
+              </span>
+            </div>
+          </div>
+        )}
+        {!colorFormatting && (
+          <button
+            className="metrics-table-color-toggle"
+            onClick={() => setColorFormattingRaw(!colorFormatting)}
+            title="Farbkodierung aktivieren"
+          >
+            ◯ Farbe AUS
+          </button>
+        )}
       </div>
 
       <div className="metrics-table-scroll">
@@ -425,7 +603,7 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
                     key={metric}
                     className={`metrics-table-metric-header sortable-col${isSorted ? ' sorted' : ''}${subCatClass}`}
                     onClick={() => handleSortClick(metric)}
-                    title="Klicken zum Sortieren"
+                    title={metricAktualitaet[metric] ? `Aktualität: ${metricAktualitaet[metric]}` : 'Klicken zum Sortieren'}
                   >
                     {metricMeta[metric]?.label || metric}
                     <span className="sort-indicator">{indicator}</span>
@@ -461,6 +639,30 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="metrics-table-export-row">
+        <button
+          className="metrics-table-export-btn metrics-table-export-btn-bottom"
+          onClick={() => exportTableAsCSV(regions, metricsInfo, latestDataPerRegion, tabLabel)}
+          title="Tabelle als CSV exportieren"
+        >
+          <ExcelIcon width={26} height={26} />
+        </button>
+        <button
+          className="metrics-table-export-btn metrics-table-export-btn-doc"
+          onClick={async () => {
+            try {
+              await downloadMetricsDocumentation()
+            } catch (err) {
+              alert(`Fehler beim Download: ${err.message}`)
+            }
+          }}
+          title="Metriken-Dokumentation herunterladen (Excel)"
+        >
+          <MetricsDocIcon width={26} height={26} />
+        </button>
+        <span className="metrics-table-bloomberg">Bloomberg Finance L.P.</span>
       </div>
 
       {displayMode === 'percentile'}

@@ -9,6 +9,7 @@
   padding: 1rem 1.25rem 1.25rem;
   border: 1px solid var(--border);
   transition: background 0.25s ease;
+  position: relative;
 }
 
 /* ── Toolbar ─────────────────────────────────────────────────────────────── */
@@ -17,7 +18,7 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.75rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.5rem;
 }
 
@@ -54,14 +55,48 @@
   color: var(--text-primary);
 }
 
-/* Export button */
+/* Color formatting toggle button */
+.metrics-table-color-toggle {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.metrics-table-color-toggle.active {
+  background: var(--bg-btn-active);
+  color: #fff;
+}
+
+.metrics-table-color-toggle:not(.active):hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Formatting group (color toggle + legend) ────────────────────────────── */
+.metrics-table-formatting-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+/* Export button – original inline version (hidden) */
 .metrics-table-export-btn {
-  display: inline-flex;
+  display: none;
+}
+
+/* Export button – bottom left version */
+.metrics-table-export-btn-bottom {
+  display: inline-flex !important;
   align-items: center;
   padding: 0.35rem 0.85rem;
   margin: 0;
-  font-size: 0.8rem;
-  font-weight: 500;
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -70,8 +105,68 @@
   transition: opacity 0.15s ease;
 }
 
-.metrics-table-export-btn:hover {
+.metrics-table-export-btn-bottom:hover {
   opacity: 0.85;
+}
+
+/* Row that holds export buttons side-by-side */
+.metrics-table-export-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+/* Bloomberg attribution – mirrors .chart-export-date */
+.metrics-table-bloomberg {
+  margin-left: auto;
+  font-size: 0.74rem;
+  color: var(--text-muted, #9ca3af);
+  white-space: nowrap;
+}
+
+/* Documentation download button */
+.metrics-table-export-btn-doc {
+  display: inline-flex !important;
+  align-items: center;
+  padding: 0.35rem 0.85rem;
+  margin: 0;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted, #888);
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.metrics-table-export-btn-doc:hover {
+  opacity: 0.85;
+  color: var(--accent, #6366f1);
+}
+
+/* ── Legend / Color scale description ─────────────────────────────────────── */
+.metrics-table-legend {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 20px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 /* ── Scroll wrapper ──────────────────────────────────────────────────────── */
@@ -89,7 +184,9 @@
 
 /* ── Header rows ─────────────────────────────────────────────────────────── */
 .metrics-table thead {
-  color: #fff;
+  color: var(--text-primary);
+  background: var(--table-header-bg);
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
 /* Group row (category names) */
@@ -100,7 +197,7 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  border-right: 2px solid rgba(255,255,255,0.25);
+  border-right: 2px solid var(--border-light);
   white-space: nowrap;
 }
 
@@ -111,7 +208,10 @@
 .metrics-table-corner {
   text-align: left !important;
   min-width: 130px;
-  border-right: 2px solid rgba(255,255,255,0.3) !important;
+  border-right: 2px solid var(--border-light) !important;
+  background: var(--table-header-bg) !important;
+  color: var(--text-primary) !important;
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
 /* Subtle category tints on group cells */

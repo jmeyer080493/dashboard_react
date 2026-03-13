@@ -8,13 +8,14 @@ to work with the React dashboard's chartData row format:
 import io
 import os
 import math
+from datetime import datetime
 from statistics import mean
 
 import pandas as pd
 
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
-from pptx.util import Pt
+from pptx.util import Pt, Emu
 from pptx.enum.chart import (
     XL_CHART_TYPE,
     XL_MARKER_STYLE,
@@ -22,11 +23,212 @@ from pptx.enum.chart import (
     XL_TICK_LABEL_POSITION,
 )
 from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN
 from lxml import etree
 from pptx.oxml.xmlchemy import OxmlElement
 
+from pptx.oxml.ns import qn
+
+from config.countries import REGION_TRANSLATIONS
+
 # ── Template path ─────────────────────────────────────────────────────────────
 _TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "..", "pptx_template.pptx")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PMI Heatmap helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Color stops matching Excel's red→yellow→green 3-color scale
+# (same palette used in the slide1.xml template)
+_PMI_COLOR_STOPS = [
+    (44, (0xF8, 0x69, 0x6B)),
+    (45, (0xF9, 0x7E, 0x6F)),
+    (46, (0xFA, 0x94, 0x73)),
+    (47, (0xFB, 0xAA, 0x77)),
+    (48, (0xFC, 0xBF, 0x7B)),
+    (49, (0xFD, 0xD5, 0x7F)),
+    (50, (0xFF, 0xEB, 0x84)),
+    (51, (0xE9, 0xE5, 0x83)),
+    (52, (0xD3, 0xDF, 0x82)),
+    (53, (0xBD, 0xD8, 0x81)),
+    (54, (0xA6, 0xD2, 0x7F)),
+    (55, (0x90, 0xCB, 0x7E)),
+    (56, (0x7A, 0xC5, 0x7D)),
+    (57, (0x63, 0xBE, 0x7B)),
+]
+
+
+def _pmi_value_to_rgb(value):
+    """Interpolate a PMI value onto the red→yellow→green colour scale.
+    Returns an (R, G, B) tuple or None for missing data."""
+    if value is None:
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    if value <= _PMI_COLOR_STOPS[0][0]:
+        return _PMI_COLOR_STOPS[0][1]
+    if value >= _PMI_COLOR_STOPS[-1][0]:
+        return _PMI_COLOR_STOPS[-1][1]
+    for i in range(len(_PMI_COLOR_STOPS) - 1):
+        v1, c1 = _PMI_COLOR_STOPS[i]
+        v2, c2 = _PMI_COLOR_STOPS[i + 1]
+        if v1 <= value <= v2:
+            t = (value - v1) / (v2 - v1)
+            return (
+                int(c1[0] + t * (c2[0] - c1[0])),
+                int(c1[1] + t * (c2[1] - c1[1])),
+                int(c1[2] + t * (c2[2] - c1[2])),
+            )
+    return _PMI_COLOR_STOPS[-1][1]
+
+
+def _remove_cell_borders(cell):
+    """Set all four borders of a table cell to noFill (invisible)."""
+    tc = cell._tc
+    # Find or create <a:tcPr>
+    tcPr = tc.find(qn('a:tcPr'))
+    if tcPr is None:
+        tcPr = etree.SubElement(tc, qn('a:tcPr'))
+    for ln_tag in ('a:lnL', 'a:lnR', 'a:lnT', 'a:lnB'):
+        existing = tcPr.find(qn(ln_tag))
+        if existing is not None:
+            tcPr.remove(existing)
+        ln_el = etree.SubElement(tcPr, qn(ln_tag))
+        etree.SubElement(ln_el, qn('a:noFill'))
+
+
+_MONTHS_DE = ['Jan', 'Feb', 'Mrz', 'Apr', 'Mai', 'Jun',
+              'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+
+
+def _fmt_pmi_col_date(date_str):
+    """Format a date string as German short month + 2-digit year, e.g. 'Mrz 26'."""
+    try:
+        d = datetime.fromisoformat(str(date_str)[:10])
+        return f"{_MONTHS_DE[d.month - 1]} {str(d.year)[-2:]}"
+    except Exception:
+        return str(date_str)[:7]
+
+
+def _add_pmi_heatmap_table(item: dict, chart_pl, slide) -> bool:
+    """
+    Replace the chart placeholder with a color-coded PMI heatmap table.
+
+    The data is expected to be already aggregated to monthly resolution
+    (sortedData from the frontend, newest first, max 13 months).
+    Each cell background is filled using the red→yellow→green PMI scale.
+    """
+    chart_data = item.get('chartData') or []
+    regions    = item.get('regions') or []
+    x_key      = item.get('xKey') or 'DatePoint'
+
+    if not chart_data or not regions:
+        return False
+
+    # Data is already in newest-first order (sorted by frontend)
+    date_cols = chart_data
+    num_date_cols = len(date_cols)
+    num_regions   = len(regions)
+
+    # Save placeholder geometry before removing it
+    left   = chart_pl.left
+    top    = chart_pl.top
+    width  = chart_pl.width
+    height = chart_pl.height
+
+    # Remove the chart placeholder from the slide spTree
+    chart_pl._element.getparent().remove(chart_pl._element)
+
+    # Table dimensions: header row + one row per region; label col + one col per date
+    n_rows = num_regions + 1
+    n_cols = num_date_cols + 1
+
+    tbl_shape = slide.shapes.add_table(n_rows, n_cols, left, top, width, height)
+    tbl = tbl_shape.table
+
+    # Disable all special first/last row/col formatting
+    tbl.first_row  = False
+    tbl.first_col  = False
+    tbl.last_row   = False
+    tbl.last_col   = False
+
+    # Column widths: label col ~15% of total, rest split equally
+    label_col_w = int(width * 0.14)
+    data_col_w  = (width - label_col_w) // num_date_cols
+    tbl.columns[0].width = label_col_w
+    for i in range(1, n_cols):
+        tbl.columns[i].width = data_col_w
+
+    # Row heights: equal
+    row_h = height // n_rows
+    for i in range(n_rows):
+        tbl.rows[i].height = row_h
+
+    # ── Header row ────────────────────────────────────────────────────────────
+    hdr = tbl.cell(0, 0)
+    hdr.text = 'Region'
+    tf = hdr.text_frame
+    for para in tf.paragraphs:
+        for run in para.runs:
+            run.font.size = Pt(10)
+    _remove_cell_borders(hdr)
+
+    for ci, row in enumerate(date_cols):
+        cell = tbl.cell(0, ci + 1)
+        cell.text = _fmt_pmi_col_date(row.get(x_key, ''))
+        tf = cell.text_frame
+        for para in tf.paragraphs:
+            para.alignment = PP_ALIGN.CENTER
+            for run in para.runs:
+                run.font.size = Pt(10)
+        _remove_cell_borders(cell)
+
+    # ── Data rows ─────────────────────────────────────────────────────────────
+    for ri, region in enumerate(regions):
+        # Label cell
+        label_cell = tbl.cell(ri + 1, 0)
+        label_cell.text = REGION_TRANSLATIONS.get(region, region)
+        tf = label_cell.text_frame
+        for para in tf.paragraphs:
+            for run in para.runs:
+                run.font.size = Pt(10)
+        _remove_cell_borders(label_cell)
+
+        # Value cells
+        for ci, date_row in enumerate(date_cols):
+            raw = date_row.get(region)
+            cell = tbl.cell(ri + 1, ci + 1)
+            if raw is not None:
+                try:
+                    fval = float(raw)
+                    cell.text = str(int(round(fval)))
+                    rgb = _pmi_value_to_rgb(fval)
+                    if rgb:
+                        cell.fill.solid()
+                        cell.fill.fore_color.rgb = RGBColor(*rgb)
+                    else:
+                        cell.fill.solid()
+                        cell.fill.fore_color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                except (TypeError, ValueError):
+                    cell.text = ''
+                    cell.fill.solid()
+                    cell.fill.fore_color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            else:
+                cell.text = ''
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+            tf = cell.text_frame
+            for para in tf.paragraphs:
+                para.alignment = PP_ALIGN.CENTER
+                for run in para.runs:
+                    run.font.size = Pt(10)
+            _remove_cell_borders(cell)
+
+    return True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -52,7 +254,8 @@ def _chartdata_to_traces(chart_data: list, regions: list, x_key: str) -> list:
         if not has_numeric:
             continue
         # Use only the part before the first '_' as display name (e.g. "Germany_PE" → "Germany")
-        display_name = region.split("_")[0] if "_" in region else region
+        base_name = region.split("_")[0] if "_" in region else region
+        display_name = REGION_TRANSLATIONS.get(base_name, base_name)
         traces.append({
             "type": "scatter",
             "name": display_name,
@@ -732,12 +935,20 @@ def _add_scatter_chart(traces: list, item: dict, chart_pl) -> bool:
     if df_long.empty:
         return False
 
-    df = df_long.groupby(["Date", "Series"])["Value"].first().unstack()
+    # sort=False preserves the original x-axis order from the traces.
+    # Without this, pandas sorts the "Date" index alphabetically, which
+    # breaks non-date x-axes like yield curve maturities (2J, 5J, 10J…
+    # would become 10J, 20J, 2J, 30J, 5J in alphabetical order).
+    df = df_long.groupby(["Date", "Series"], sort=False)["Value"].first().unstack()
     col_order = [tr["name"] for tr in scatter_traces]
     existing_cols = [c for c in col_order if c in df.columns]
     df = df[existing_cols].reset_index()
     if "Date" in df.columns:
         df = df.set_index("Date")
+    # Restore the original x-axis order (unstack may re-sort).
+    x_order = [x for x in scatter_traces[0]["x"] if x in df.index] if scatter_traces else []
+    if x_order:
+        df = df.reindex(x_order)
     try:
         df.index = pd.to_datetime(df.index)
     except Exception:
@@ -949,7 +1160,10 @@ def build_pptx(items: list) -> bytes:
             chart_pl = placeholders[idx_chart]
 
             # Choose chart renderer based on chart type
-            if item.get('chartType') == 'Bar' and item.get('balkenData'):
+            if item.get('chartType') == 'PMIHeatmap':
+                # PMI heatmap: replace chart placeholder with a colour-coded table
+                _add_pmi_heatmap_table(item, chart_pl, slide)
+            elif item.get('chartType') == 'Bar' and item.get('balkenData'):
                 # Balken chart: mixed stacked-bar + scatter (range bars + current dot)
                 _add_balken_chart(item['balkenData'], item, chart_pl)
             else:

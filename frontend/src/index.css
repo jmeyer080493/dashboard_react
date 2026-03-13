@@ -132,14 +132,25 @@ body {
   --modal-spinner-border:   rgba(0, 0, 0, 0.2);
   --modal-spinner-top:      #6d28d9;
 
-  /* Metrics Filter Modal (dark purple panel) */
-  --mfm-bg:          #1e1e30;
-  --mfm-border:      #3a3a5c;
-  --mfm-text:        #e0e0f0;
-  --mfm-header-border:#3a3a5c;
-  --mfm-title:       #d0d0f0;
-  --mfm-close:       #888888;
-  --mfm-inner-border:#2e2e50;
+  /* Metrics Filter Modal – Light Mode */
+  --mfm-bg:              #ffffff;
+  --mfm-border:          #e0e0e0;
+  --mfm-text:            #333333;
+  --mfm-header-border:   #e5e7eb;
+  --mfm-title:           #6d28d9;
+  --mfm-close:           #9ca3af;
+  --mfm-inner-border:    #e5e7eb;
+  /* MFM inner category elements – Light Mode */
+  --mfm-cat-bg:          #f3f0fa;
+  --mfm-cat-border:      #d8cef0;
+  --mfm-cat-header-bg:   #ede8f8;
+  --mfm-cat-header-border:#d8cef0;
+  --mfm-cat-name:        #5b21b6;
+  --mfm-col-header:      #7c3aed;
+  --mfm-field-row-border:#e8e2f5;
+  --mfm-field-row-hover: #ede8f8;
+  --mfm-field-label:     #374151;
+  --mfm-scrollbar:       #c4b5e8;
 
   /* Feedback Modal – Light Mode */
   --feedback-bg:             #f8f9fa;
@@ -311,14 +322,25 @@ body {
   --tab-error-bg:   rgba(133, 100, 4, 0.2);
   --tab-error-text: #fcd34d;
 
-  /* Metrics Filter Modal */
-  --mfm-bg:          #1a1a2e;
-  --mfm-border:      #2e2e50;
-  --mfm-text:        #d0d0f0;
-  --mfm-header-border:#2e2e50;
-  --mfm-title:       #c9a0dc;
-  --mfm-close:       rgba(255, 255, 255, 0.4);
-  --mfm-inner-border:#252540;
+  /* Metrics Filter Modal – Dark Mode */
+  --mfm-bg:              #1a1a2e;
+  --mfm-border:          #2e2e50;
+  --mfm-text:            #d0d0f0;
+  --mfm-header-border:   #2e2e50;
+  --mfm-title:           #c9a0dc;
+  --mfm-close:           rgba(255, 255, 255, 0.4);
+  --mfm-inner-border:    #252540;
+  /* MFM inner category elements – Dark Mode */
+  --mfm-cat-bg:          #252540;
+  --mfm-cat-border:      #3a3a5c;
+  --mfm-cat-header-bg:   #1a1a35;
+  --mfm-cat-header-border:#3a3a5c;
+  --mfm-cat-name:        #a0a0d0;
+  --mfm-col-header:      #8888bb;
+  --mfm-field-row-border:#2a2a4a;
+  --mfm-field-row-hover: #2e2e52;
+  --mfm-field-label:     #c8c8e8;
+  --mfm-scrollbar:       #444466;
 
   /* Export Modal (becomes dark in dark mode) */
   --export-modal-bg:        #1e1b3a;

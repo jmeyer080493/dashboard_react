@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -10,6 +10,8 @@ import logging
 from dotenv import load_dotenv
 import math
 import numpy as np
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 logging.basicConfig(level=logging.DEBUG)
 from datetime import datetime, timedelta, timezone
@@ -20,7 +22,9 @@ import pandas as pd
 from utils.export_utils import build_excel, build_pptx
 from utils.auth import (
     authenticate_user, create_session, invalidate_session,
-    validate_session, get_user_by_id, get_user_permissions, change_password
+    validate_session, get_user_by_id, get_user_permissions, change_password,
+    list_users, create_user, update_user, delete_user, reset_user_password,
+    list_roles, get_all_role_permissions, set_role_permissions, create_role,
 )
 
 # Load environment variables
@@ -83,18 +87,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Startup: warm the Länder data caches in the background ───────────────────
+_cache_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cache-warmup")
+
+@app.on_event("startup")
+async def startup_warmup():
+    """
+    Kick off cache warm-up in a background thread so the server starts
+    immediately, then becomes fast once warm-up completes (≈ 30-60 s).
+    """
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(_cache_executor, LänderDataService.warm_caches)
+    logging.getLogger(__name__).info(
+        "🚀 Server started – cache warm-up running in background"
+    )
+
 # Security
 security = HTTPBearer()
+_auth_logger = logging.getLogger("auth")
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Verify JWT token"""
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
+        user_id: int = int(payload.get("sub"))
         if user_id is None:
+            _auth_logger.error("verify_token: sub claim missing from payload")
             raise HTTPException(status_code=401, detail="Invalid token")
         return user_id
-    except jwt.InvalidTokenError:
+    except jwt.ExpiredSignatureError:
+        _auth_logger.warning("verify_token: TOKEN EXPIRED")
+        raise HTTPException(status_code=401, detail="Token abgelaufen – bitte neu anmelden")
+    except jwt.InvalidTokenError as exc:
+        _auth_logger.error(f"verify_token: InvalidTokenError – {exc}")
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as exc:
+        _auth_logger.error(f"verify_token: unexpected error – {exc}")
         raise HTTPException(status_code=401, detail="Invalid token")
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -105,6 +133,21 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 async def health_check():
     """Health check endpoint to verify API is running - PUBLIC ENDPOINT"""
     return {"message": "API is running successfully", "status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+@app.get("/api/cache/status")
+async def cache_status():
+    """Report the state of the startup warm-up cache - PUBLIC ENDPOINT"""
+    return {
+        "cache_ready": LänderDataService._cache_ready,
+        "cache_warming": LänderDataService._cache_warming,
+        "equity_eur": LänderDataService._equity_eur_cache is not None,
+        "equity_usd": LänderDataService._equity_usd_cache is not None,
+        "fi": LänderDataService._fi_full_cache is not None,
+        "macro": LänderDataService._macro_full_cache is not None,
+        "equity_eur_rows": len(LänderDataService._equity_eur_cache) if LänderDataService._equity_eur_cache is not None else 0,
+        "fi_rows": len(LänderDataService._fi_full_cache) if LänderDataService._fi_full_cache is not None else 0,
+        "macro_rows": len(LänderDataService._macro_full_cache) if LänderDataService._macro_full_cache is not None else 0,
+    }
 
 @app.get("/")
 async def root():
@@ -144,7 +187,7 @@ async def login(body: LoginRequest):
     token_expiry = timedelta(days=30) if body.remember_me else timedelta(hours=24)
     jwt_token = jwt.encode(
         {
-            "sub": user["user_id"],
+            "sub": str(user["user_id"]),
             "username": user["username"],
             "role_id": user["role_id"],
             "role_name": user["role_name"],
@@ -191,12 +234,186 @@ async def get_current_user(user_id: int = Depends(verify_token)):
     return {**user, "permissions": permissions}
 
 
+@app.get("/api/admin/debug-auth")
+async def debug_auth(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Temporary debug endpoint – shows what token the server receives and why it may fail."""
+    raw = credentials.credentials
+    # Decode without verification to inspect claims
+    try:
+        import base64, json as _json
+        parts = raw.split(".")
+        padded = parts[1] + "=" * (4 - len(parts[1]) % 4)
+        claims = _json.loads(base64.urlsafe_b64decode(padded))
+    except Exception:
+        claims = "could not decode"
+    # Attempt real verification
+    try:
+        payload = jwt.decode(raw, SECRET_KEY, algorithms=[ALGORITHM])
+        return {"status": "token_valid", "claims": claims, "user_id": payload.get("sub")}
+    except jwt.ExpiredSignatureError:
+        return {"status": "token_EXPIRED", "claims": claims}
+    except jwt.InvalidTokenError as exc:
+        return {"status": f"invalid_token: {exc}", "claims": claims}
+    except Exception as exc:
+        return {"status": f"error: {exc}", "claims": claims}
+
+
 @app.post("/api/auth/change-password")
 async def change_user_password(body: ChangePasswordRequest, user_id: int = Depends(verify_token)):
     """Change the current user's password."""
     if body.new_password != body.confirm_password:
         raise HTTPException(status_code=400, detail="Passwörter stimmen nicht überein")
     success, message = change_password(user_id, body.current_password, body.new_password)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    return {"message": message}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ADMIN ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+# All tab/permission names available in the dashboard
+ALL_PERMISSIONS = [
+    "countries", "factors", "sectors", "portfolios",
+    "data", "anleihen", "duoplus", "extras", "user", "admin",
+]
+
+
+class CreateUserRequest(BaseModel):
+    username: str
+    password: str
+    role_id: int
+
+
+class UpdateUserRequest(BaseModel):
+    role_id: Optional[int] = None
+    is_active: Optional[bool] = None
+    username: Optional[str] = None
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str
+
+
+class SetRolePermissionsRequest(BaseModel):
+    permissions: List[str]
+
+
+class CreateRoleRequest(BaseModel):
+    role_name: str
+
+
+def require_admin(user_id: int = Depends(verify_token)):
+    """Dependency: raises 403 if the current user does not have 'admin' permission."""
+    user = get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Benutzer nicht gefunden")
+    perms = get_user_permissions(user["role_id"])
+    if "admin" not in perms:
+        raise HTTPException(status_code=403, detail="Administratorrechte erforderlich")
+    return user_id
+
+
+# ── Users ──────────────────────────────────────────────────────────────────
+
+@app.get("/api/admin/users")
+async def admin_list_users(_: int = Depends(require_admin)):
+    """List all users (admin only)."""
+    return list_users()
+
+
+@app.post("/api/admin/users", status_code=201)
+async def admin_create_user(body: CreateUserRequest, _: int = Depends(require_admin)):
+    """Create a new user (admin only)."""
+    user, error = create_user(body.username, body.password, body.role_id)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return user
+
+
+@app.put("/api/admin/users/{target_user_id}")
+async def admin_update_user(
+    target_user_id: int,
+    body: UpdateUserRequest,
+    admin_id: int = Depends(require_admin),
+):
+    """Update a user's role or active status (admin only)."""
+    success, message = update_user(
+        target_user_id,
+        role_id=body.role_id,
+        is_active=body.is_active,
+        username=body.username,
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    return {"message": message}
+
+
+@app.delete("/api/admin/users/{target_user_id}")
+async def admin_delete_user(target_user_id: int, admin_id: int = Depends(require_admin)):
+    """Deactivate a user (soft-delete, admin only)."""
+    if target_user_id == admin_id:
+        raise HTTPException(status_code=400, detail="Eigener Account kann nicht deaktiviert werden")
+    success, message = delete_user(target_user_id)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    return {"message": message}
+
+
+@app.post("/api/admin/users/{target_user_id}/reset-password")
+async def admin_reset_password(
+    target_user_id: int,
+    body: ResetPasswordRequest,
+    _: int = Depends(require_admin),
+):
+    """Reset a user's password (admin only)."""
+    success, message = reset_user_password(target_user_id, body.new_password)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    return {"message": message}
+
+
+# ── Roles & permissions ────────────────────────────────────────────────────
+
+@app.get("/api/admin/roles")
+async def admin_list_roles(_: int = Depends(require_admin)):
+    """List all roles (admin only)."""
+    return list_roles()
+
+
+@app.post("/api/admin/roles", status_code=201)
+async def admin_create_role(body: CreateRoleRequest, _: int = Depends(require_admin)):
+    """Create a new role (admin only)."""
+    role, error = create_role(body.role_name)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return role
+
+
+@app.get("/api/admin/permissions/available")
+async def admin_available_permissions(_: int = Depends(require_admin)):
+    """Return the list of all defined permission keys (admin only)."""
+    return {"permissions": ALL_PERMISSIONS}
+
+
+@app.get("/api/admin/roles/permissions")
+async def admin_all_role_permissions(_: int = Depends(require_admin)):
+    """Return a mapping {role_id: [permission, ...]} for all roles (admin only)."""
+    return get_all_role_permissions()
+
+
+@app.put("/api/admin/roles/{role_id}/permissions")
+async def admin_set_role_permissions(
+    role_id: int,
+    body: SetRolePermissionsRequest,
+    _: int = Depends(require_admin),
+):
+    """Set the full permissions list for a role (admin only)."""
+    invalid = [p for p in body.permissions if p not in ALL_PERMISSIONS]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"Unbekannte Berechtigungen: {invalid}")
+    success, message = set_role_permissions(role_id, body.permissions)
     if not success:
         raise HTTPException(status_code=400, detail=message)
     return {"message": message}
@@ -1216,6 +1433,493 @@ async def attribution_table(req: _AttrTableRequest):
         tb = traceback.format_exc()
         logging.error("Attribution table error:\n%s", tb)
         return {"status": "error", "error": str(e), "rows": []}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Länder Metrics Documentation Export
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_metrics_documentation_excel() -> bytes:
+    """
+    Build an Excel workbook documenting all Länder tab metrics.
+    Queries ticker_master live for region/ticker/frequency data.
+    Returns raw bytes of the .xlsx file.
+    """
+    import io
+    import xlsxwriter
+    from utils.database import DatabaseGateway
+
+    db = DatabaseGateway()
+    engine = db.get_duoplus_engine()
+
+    # ── 1.  Load all Countries tickers from DB ────────────────────────────
+    fi_df = pd.read_sql_query(
+        """
+        SELECT Ticker, Regions,
+               [Dashboard Grouping Name] AS GroupingName,
+               Period, Frequency
+        FROM [ApoAsset_Quant].[dbo].[ticker_master]
+        WHERE [Dashboard Page] = 'Countries'
+          AND [Dashboard Grouping] = 'Fixed Income'
+          AND Active = 1
+        """,
+        engine,
+    )
+
+    macro_df = pd.read_sql_query(
+        """
+        SELECT Ticker, Regions,
+               [Dashboard Grouping Name] AS GroupingName,
+               Period, Frequency
+        FROM [ApoAsset_Quant].[dbo].[ticker_master]
+        WHERE [Dashboard Page] = 'Countries'
+          AND [Dashboard Grouping] = 'Macro'
+          AND Active = 1
+        """,
+        engine,
+    )
+
+    eq_df = pd.read_sql_query(
+        """
+        SELECT Ticker, Regions, Frequency
+        FROM [ApoAsset_Quant].[dbo].[ticker_master]
+        WHERE [Dashboard Page] = 'Countries'
+          AND Active IN (1.0, 2.0)
+          AND (Ticker LIKE 'M1%' OR Ticker LIKE 'NDDU%')
+        """,
+        engine,
+    )
+
+    # ── 2. Helper: build {region: [ticker, …]} from a filtered DF ─────────
+    def tickers_by_region(df: pd.DataFrame) -> dict:
+        result: dict = {}
+        for _, row in df.iterrows():
+            r = str(row["Regions"]).strip()
+            t = str(row["Ticker"]).strip()
+            result.setdefault(r, []).append(t)
+        return result
+
+    def freq_from_df(df: pd.DataFrame, default: str = "Täglich") -> str:
+        if df.empty or "Frequency" not in df.columns:
+            return default
+        val = df["Frequency"].dropna().iloc[0] if not df["Frequency"].dropna().empty else default
+        freq_map = {
+            "Daily": "Täglich", "Monthly": "Monatlich",
+            "Quarterly": "Quartalsmäßig", "Yearly": "Jährlich",
+            "Weekly": "Wöchentlich",
+        }
+        return freq_map.get(str(val).strip(), str(val).strip())
+
+    def fmt_tickers(by_region: dict) -> str:
+        de_names = {
+            "U.S.": "U.S.", "Europe": "Europa", "Germany": "Deutschland",
+            "France": "Frankreich", "Italy": "Italien", "UK": "UK",
+            "Japan": "Japan", "Spain": "Spanien", "China": "China",
+            "India": "Indien", "EM": "EM", "Australia": "Australien",
+            "Belgium": "Belgien", "Latvia": "Lettland", "Lithuania": "Litauen",
+            "Mexico": "Mexiko", "Netherlands": "Niederlande",
+            "New Zealand": "Neuseeland", "Norway": "Norwegen",
+            "Poland": "Polen", "Portugal": "Portugal", "Sweden": "Schweden",
+        }
+        parts = []
+        for r, tickers in sorted(by_region.items()):
+            label = de_names.get(r, r)
+            parts.append(f"{label}: {', '.join(tickers)}")
+        return "; ".join(parts)
+
+    def fmt_regions(by_region: dict) -> str:
+        de_names = {
+            "U.S.": "U.S.", "Europe": "Europa", "Germany": "Deutschland",
+            "France": "Frankreich", "Italy": "Italien", "UK": "UK",
+            "Japan": "Japan", "Spain": "Spanien", "China": "China",
+            "India": "Indien", "EM": "EM", "Australia": "Australien",
+            "Belgium": "Belgien", "Latvia": "Lettland", "Lithuania": "Litauen",
+            "Mexico": "Mexiko", "Netherlands": "Niederlande",
+            "New Zealand": "Neuseeland", "Norway": "Norwegen",
+            "Poland": "Polen", "Portugal": "Portugal", "Sweden": "Schweden",
+        }
+        return ", ".join(sorted(de_names.get(r, r) for r in by_region))
+
+    # ── 3. FI helper: filter by GroupingName + Period ─────────────────────
+    def fi_metric(grouping: str, period: str | None = None):
+        mask = fi_df["GroupingName"] == grouping
+        if period is not None:
+            mask &= fi_df["Period"].astype(str) == str(period)
+        sub = fi_df[mask]
+        return tickers_by_region(sub), freq_from_df(sub)
+
+    # Equity base tickers
+    eq_by_region = tickers_by_region(eq_df)
+    eq_freq = freq_from_df(eq_df, "Täglich")
+
+    # Macro helper
+    def macro_metric(grouping: str):
+        sub = macro_df[macro_df["GroupingName"] == grouping]
+        return tickers_by_region(sub), freq_from_df(sub)
+
+    # Government Debt from Macro (used in both Macro and FI tabs)
+    gov_debt_by_region, gov_debt_freq = macro_metric("Government Debt")
+
+    # ── 4. Metric definitions ─────────────────────────────────────────────
+    #  Each entry: (Kategorie, Metrik, Perzentil-Berechnung, Bed. Formatierung,
+    #               {region: [ticker]}, Frequenz)
+    COMPUTED_EQ = (
+        "Eigenberechnung (abgeleitet aus MSCI-Indexkursen; Basisindizes je Region)"
+    )
+    CROSS_REGION_PCT = (
+        "Regionsübergreifendes Perzentil: Der aktuelle Wert dieser Region wird "
+        "anhand der letzten verfügbaren Werte aller Regionen in eine Rangliste "
+        "eingeordnet (0 % = Minimum über alle Regionen, 100 % = Maximum)."
+    )
+    TIMESERIES_PCT = (
+        "Zeitreihen-Perzentil: Der aktuelle Wert wird im Vergleich zur historischen "
+        "Verteilung dieser Region über den gewählten Betrachtungszeitraum "
+        "eingestuft (0 % = historisches Tief dieser Region, 100 % = historisches Hoch)."
+    )
+    NO_PCT = "Kein Perzentil: Die Kennzahl wird als absoluter Wert dargestellt."
+
+    FMT_GREEN_HIGH = (
+        "Rot-Grün-Farbskala (regionsübergreifend): "
+        "Grüne Zelle = hoher Wert im Vergleich zu anderen Regionen (positiv); "
+        "rote Zelle = niedriger Wert (negativ)."
+    )
+    FMT_GREEN_LOW = (
+        "Rot-Grün-Farbskala (regionsübergreifend): "
+        "Grüne Zelle = niedriger Wert im Vergleich zu anderen Regionen (positiv); "
+        "rote Zelle = hoher Wert (negativ)."
+    )
+    FMT_TIMESERIES = (
+        "Blau-Amber-Farbskala (Zeitreihe): "
+        "Blaue Zelle = historisch niedriger Wert; "
+        "amber/orangefarbene Zelle = historisch hoher Wert. "
+        "Richtungsunabhängig – kein Gut/Schlecht-Urteil."
+    )
+    FMT_SP = (
+        "Rot-Grün-Farbskala nach Kreditqualität: "
+        "AAA (bestes Rating) = grün; D (schlechtestes Rating) = rot."
+    )
+    FMT_NONE = "Keine Farbkodierung."
+
+    # Precompute FI groups
+    fi_yields_by = {}
+    for period_key in ["2Y", "5Y", "10Y", "20Y", "30Y"]:
+        fi_yields_by[period_key] = fi_metric("Yields", period_key)
+
+    fi_infl_by = {}
+    for p in ["1Y", "2Y", "5Y", "10Y"]:
+        fi_infl_by[p] = fi_metric("Inflation Expectations", p)
+
+    fi_cds_3, fi_cds_3_freq = fi_metric("CDS", "3")
+    fi_cds_5, fi_cds_5_freq = fi_metric("CDS", "5")
+    fi_cds_7, fi_cds_7_freq = fi_metric("CDS", "7")
+    fi_cds_10, fi_cds_10_freq = fi_metric("CDS", "10")
+    fi_be_by, fi_be_freq = fi_metric("Breakevens", "10Y")
+
+    # Steepness/Curvature/Spreads to Bunds: same regions as 10Y Yields
+    yields_10y_by, yields_freq = fi_yields_by["10Y"]
+    derived_fi_note = (
+        "Eigenberechnung (aus Renditedaten der einzelnen Laufzeiten abgeleitet)"
+    )
+
+    metrics: list[tuple] = [
+        # ── AKTIEN ───────────────────────────────────────────────────────────
+        ("Aktien", "Momentum 3M",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         eq_by_region, eq_freq,
+         COMPUTED_EQ),
+        ("Aktien", "Momentum 12M",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         eq_by_region, eq_freq,
+         COMPUTED_EQ),
+        ("Aktien", "TS-Momentum",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         eq_by_region, eq_freq,
+         COMPUTED_EQ),
+        ("Aktien", "Wachstumsrate",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         eq_by_region, eq_freq,
+         COMPUTED_EQ),
+        ("Aktien", "Bewertung Aggregiert",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         eq_by_region, eq_freq,
+         "Eigenberechnung (gewichteter Durchschnitt aus KGV, KBV, KUV und Ertragsrendite)"),
+        ("Aktien", "Risikoprämie",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         eq_by_region, eq_freq,
+         "Eigenberechnung (Ertragsrendite minus risikoloser Zins)"),
+        ("Aktien", "Dividendenrendite",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         eq_by_region, eq_freq,
+         COMPUTED_EQ),
+        ("Aktien", "Ertragsrendite",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         eq_by_region, eq_freq,
+         COMPUTED_EQ),
+        ("Aktien", "KUV",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         eq_by_region, eq_freq,
+         COMPUTED_EQ),
+        ("Aktien", "KBV",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         eq_by_region, eq_freq,
+         COMPUTED_EQ),
+        ("Aktien", "KGV",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         eq_by_region, eq_freq,
+         COMPUTED_EQ),
+        ("Aktien", "KGV (Fwd.)",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         eq_by_region, eq_freq,
+         COMPUTED_EQ),
+        ("Aktien", "KGV - KGV (Fwd.)",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         eq_by_region, eq_freq,
+         "Eigenberechnung (KGV minus Forward-KGV: PE_RATIO − BEST_PE_RATIO)"),
+        ("Aktien", "Volatilität (6M Roll.)",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         eq_by_region, eq_freq,
+         "Eigenberechnung (rollierende 6-Monats-Standardabweichung der Tagesrenditen)"),
+        ("Aktien", "RSI",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         eq_by_region, eq_freq,
+         "Eigenberechnung (Relative Strength Index, 14 Tage)"),
+        ("Aktien", "MACD",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         eq_by_region, eq_freq,
+         "Eigenberechnung (MACD = EMA 12 minus EMA 26)"),
+
+        # ── ANLEIHEN ─────────────────────────────────────────────────────────
+        ("Anleihen", "S&P Rating",
+         NO_PCT, FMT_SP,
+         {}, "Statisch",
+         "S&P-Länderratings (Quelle: Bloomberg / S&P Global)"),
+        ("Anleihen", "Verschuldung (FI)",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         gov_debt_by_region, gov_debt_freq,
+         "Bloomberg (Staatsverschuldung in % des BIP)"),
+        ("Anleihen", "3J CDS",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_cds_3, fi_cds_3_freq,
+         "Quant-Datenbank (Markit CDX/iTraxx CDS-Spreads)"),
+        ("Anleihen", "5J CDS",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_cds_5, fi_cds_5_freq,
+         "Quant-Datenbank (Markit CDX/iTraxx CDS-Spreads)"),
+        ("Anleihen", "7J CDS",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_cds_7, fi_cds_7_freq,
+         "Quant-Datenbank (Markit CDX/iTraxx CDS-Spreads)"),
+        ("Anleihen", "10J CDS",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_cds_10, fi_cds_10_freq,
+         "Quant-Datenbank (Markit CDX/iTraxx CDS-Spreads)"),
+        ("Anleihen", "2J Rendite",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_yields_by["2Y"][0], fi_yields_by["2Y"][1],
+         "Quant-Datenbank (Benchmark-Staatsanleihenrenditen, BVLI-Kurve)"),
+        ("Anleihen", "5J Rendite",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_yields_by["5Y"][0], fi_yields_by["5Y"][1],
+         "Quant-Datenbank (Benchmark-Staatsanleihenrenditen, BVLI-Kurve)"),
+        ("Anleihen", "10J Rendite",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_yields_by["10Y"][0], fi_yields_by["10Y"][1],
+         "Quant-Datenbank (Benchmark-Staatsanleihenrenditen, BVLI-Kurve)"),
+        ("Anleihen", "20J Rendite",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_yields_by["20Y"][0], fi_yields_by["20Y"][1],
+         "Quant-Datenbank (Benchmark-Staatsanleihenrenditen, BVLI-Kurve)"),
+        ("Anleihen", "30J Rendite",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_yields_by["30Y"][0], fi_yields_by["30Y"][1],
+         "Quant-Datenbank (Benchmark-Staatsanleihenrenditen, BVLI-Kurve)"),
+        ("Anleihen", "Steilheit (10J-2J)",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         yields_10y_by, yields_freq,
+         derived_fi_note + " – Differenz 10J-Rendite minus 2J-Rendite"),
+        ("Anleihen", "Krümmung",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         yields_10y_by, yields_freq,
+         derived_fi_note + " – Krümmung der Zinskurve (2 × 5J − 2J − 10J)"),
+        ("Anleihen", "Aufschläge zu Bunds",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         yields_10y_by, yields_freq,
+         derived_fi_note + " – 10J-Rendite der Region minus 10J-Bund-Rendite"),
+        ("Anleihen", "1J Infl. Erw.",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_infl_by["1Y"][0], fi_infl_by["1Y"][1],
+         "Bloomberg (Inflation-Swap-Sätze)"),
+        ("Anleihen", "2J Infl. Erw.",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_infl_by["2Y"][0], fi_infl_by["2Y"][1],
+         "Bloomberg (Inflation-Swap-Sätze)"),
+        ("Anleihen", "5J Infl. Erw.",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_infl_by["5Y"][0], fi_infl_by["5Y"][1],
+         "Bloomberg (Inflation-Swap-Sätze)"),
+        ("Anleihen", "10J Infl. Erw.",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_infl_by["10Y"][0], fi_infl_by["10Y"][1],
+         "Bloomberg (Inflation-Swap-Sätze)"),
+        ("Anleihen", "10J Breakevens",
+         TIMESERIES_PCT, FMT_TIMESERIES,
+         fi_be_by, fi_be_freq,
+         "Bloomberg (Break-even-Inflationsraten aus inflationsgeschützten Anleihen)"),
+
+        # ── MAKRO ─────────────────────────────────────────────────────────────
+        ("Makro", "BIP",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         *macro_metric("GDP"),
+         "Bloomberg (BIP-Wachstum YoY, %)"),
+        ("Makro", "Überraschungsindex",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         *macro_metric("Economic Surprise"),
+         "Bloomberg (Citi Economic Surprise Index)"),
+        ("Makro", "Industrie",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         *macro_metric("Industrial Production"),
+         "Bloomberg (Industrieproduktion YoY, %)"),
+        ("Makro", "Einzelhandel",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         *macro_metric("Retail Sales"),
+         "Bloomberg (Einzelhandelsumsätze YoY, %)"),
+        ("Makro", "Inflation",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         *macro_metric("Inflation"),
+         "Bloomberg (Verbraucherpreisindex YoY, %)"),
+        ("Makro", "Arbeitslosigkeit",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         *macro_metric("Unemployment"),
+         "Bloomberg (Arbeitslosenquote, %)"),
+        ("Makro", "Inflation + Arbeitslosigkeit",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         *macro_metric("Inflation"),
+         "Eigenberechnung (Misery Index = Inflation + Arbeitslosigkeit)"),
+        ("Makro", "PMI Gesamt",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         *macro_metric("Composite PMI"),
+         "Quant-Datenbank (S&P Global Composite PMI)"),
+        ("Makro", "PMI Industrie",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         *macro_metric("Manufacturing PMI"),
+         "Quant-Datenbank (S&P Global Manufacturing PMI)"),
+        ("Makro", "PMI Dienstleistungen",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         *macro_metric("Services PMI"),
+         "Quant-Datenbank (S&P Global Services PMI)"),
+        ("Makro", "Verbrauchervertrauen",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         *macro_metric("Consumer Confidence"),
+         "Bloomberg (Verbrauchervertrauensindex)"),
+        ("Makro", "Exporte (YoY %)",
+         CROSS_REGION_PCT, FMT_GREEN_HIGH,
+         *macro_metric("Exports"),
+         "Bloomberg (Exporte YoY, %)"),
+        ("Makro", "Importe (YoY %)",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         *macro_metric("Imports"),
+         "Bloomberg (Importe YoY, %)"),
+        ("Makro", "Verschuldung (Makro)",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         *macro_metric("Government Debt"),
+         "Bloomberg (Staatsverschuldung in % des BIP)"),
+        ("Makro", "Leitzins",
+         CROSS_REGION_PCT, FMT_GREEN_LOW,
+         *macro_metric("Interest Rate"),
+         "Bloomberg (Zentralbank-Leitzins, %)"),
+    ]
+
+    # ── 5. Build Excel ────────────────────────────────────────────────────
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {"in_memory": True})
+    ws = workbook.add_worksheet("Metriken-Dokumentation")
+
+    # Formats
+    hdr_fmt = workbook.add_format({
+        "bold": True, "bg_color": "#1F3864", "font_color": "#FFFFFF",
+        "border": 1, "text_wrap": True, "valign": "vcenter", "align": "center",
+        "font_size": 10,
+    })
+    cat_equity_fmt = workbook.add_format({
+        "bold": True, "bg_color": "#D6E4F7", "border": 1,
+        "text_wrap": True, "valign": "top", "font_size": 9,
+    })
+    cat_fi_fmt = workbook.add_format({
+        "bold": True, "bg_color": "#E2EFDA", "border": 1,
+        "text_wrap": True, "valign": "top", "font_size": 9,
+    })
+    cat_macro_fmt = workbook.add_format({
+        "bold": True, "bg_color": "#FFF2CC", "border": 1,
+        "text_wrap": True, "valign": "top", "font_size": 9,
+    })
+    cell_fmt = workbook.add_format({
+        "border": 1, "text_wrap": True, "valign": "top", "font_size": 9,
+    })
+
+    COL_HEADERS = [
+        "Metrik",
+        "Perzentil-Berechnung",
+        "Bedingte Formatierung",
+        "Verfügbare Regionen",
+        "Bloomberg-Ticker (Region: Ticker)",
+        "Datenfrequenz",
+    ]
+    COL_WIDTHS = [22, 60, 60, 40, 80, 16]
+
+    for col, (header, width) in enumerate(zip(COL_HEADERS, COL_WIDTHS)):
+        ws.write(0, col, header, hdr_fmt)
+        ws.set_column(col, col, width)
+
+    ws.set_row(0, 30)
+
+    for row_idx, entry in enumerate(metrics, start=1):
+        cat, label, pct_desc, fmt_desc, by_region, freq, ticker_note = entry
+
+        if cat == "Aktien":
+            label_fmt = cat_equity_fmt
+        elif cat == "Anleihen":
+            label_fmt = cat_fi_fmt
+        else:
+            label_fmt = cat_macro_fmt
+
+        regions_str = fmt_regions(by_region) if by_region else "–"
+        tickers_str = fmt_tickers(by_region) if by_region else ticker_note
+
+        ws.write(row_idx, 0, f"[{cat}] {label}", label_fmt)
+        ws.write(row_idx, 1, pct_desc, cell_fmt)
+        ws.write(row_idx, 2, fmt_desc, cell_fmt)
+        ws.write(row_idx, 3, regions_str, cell_fmt)
+        ws.write(row_idx, 4, tickers_str, cell_fmt)
+        ws.write(row_idx, 5, freq, cell_fmt)
+        ws.set_row(row_idx, 60)
+
+    workbook.close()
+    output.seek(0)
+    return output.read()
+
+
+@app.get("/api/countries/metrics-documentation/excel")
+async def download_metrics_documentation():
+    """
+    Download an Excel file documenting all Länder tab metrics:
+    label, percentile method, conditional formatting logic,
+    available regions, Bloomberg tickers, data frequency.
+    Data is sourced live from the ticker_master database table.
+    """
+    try:
+        xlsx_bytes = await asyncio.get_event_loop().run_in_executor(
+            None, _build_metrics_documentation_excel
+        )
+        ts = datetime.now().strftime("%Y-%m-%d")
+        filename = f"Metriken_Dokumentation_{ts}.xlsx"
+        return StreamingResponse(
+            io.BytesIO(xlsx_bytes),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as exc:
+        logging.error("Metrics documentation export failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 if __name__ == "__main__":

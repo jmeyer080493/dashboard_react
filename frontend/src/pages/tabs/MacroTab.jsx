@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react'
 import {
   ComposedChart,
   LineChart,
@@ -25,11 +26,36 @@ import {
 } from '../../config/metricsConfig'
 import { useExport } from '../../context/ExportContext'
 import { ExcelIcon, PowerPointIcon } from '../../icons/MicrosoftIcons'
+import { REGION_TRANSLATIONS } from '../../config/countries'
 import './TabStyles.css'
+
+/** Translate a region key to its German display name */
+const translateRegion = (r) => REGION_TRANSLATIONS[r] || r
 
 /** Produce a stable string ID from a chart title */
 function makeId(title) {
   return String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
+/**
+ * Apply a local period filter to already-globally-filtered chart data.
+ * Uses the latest date in chartData as the anchor.
+ */
+function applyLocalPeriod(chartData, period) {
+  if (!period || period === 'All') return chartData
+  const allDates = chartData.map(r => r.DatePoint).filter(Boolean).sort()
+  if (!allDates.length) return chartData
+  const latestDate = new Date(allDates[allDates.length - 1])
+  let cutoffDate
+  if (period === 'YtD') {
+    cutoffDate = new Date(latestDate.getFullYear() - 1, 11, 31)
+  } else {
+    const daysMap = { '1Y': 365, '3Y': 365 * 3, '5Y': 365 * 5 }
+    const days = daysMap[period] ?? 365
+    cutoffDate = new Date(latestDate.getTime() - days * 86400000)
+  }
+  const cutoffStr = cutoffDate.toISOString().split('T')[0]
+  return chartData.filter(r => r.DatePoint >= cutoffStr)
 }
 
 /** Build a German-formatted date range string from chartData, e.g. "01.01.2020 – 31.12.2024" */
@@ -159,6 +185,22 @@ function fmtLegendValue(val, unit = '') {
   return unit ? `${formatted}\u00a0${unit}` : formatted
 }
 
+/** Determine if log scale is appropriate for a dataset (all values must be positive) */
+function canUseLogScale(chartData, regions) {
+  if (!chartData || chartData.length === 0 || regions.length === 0) return false
+  
+  for (const row of chartData) {
+    for (const region of regions) {
+      const val = row[region]
+      if (val !== undefined && val !== null && typeof val === 'number') {
+        // Log scale requires strictly positive values
+        if (val <= 0) return false
+      }
+    }
+  }
+  return true
+}
+
 /** Find the latest (most recent) value for a specific region across all data points */
 function getLatestValueForRegion(chartData, region) {
   if (!chartData || chartData.length === 0) return undefined
@@ -170,6 +212,61 @@ function getLatestValueForRegion(chartData, region) {
     }
   }
   return undefined
+}
+
+/** Find the first (oldest) non-null value for a specific region across all data points */
+function getFirstValueForRegion(chartData, region) {
+  if (!chartData || chartData.length === 0) return undefined
+  for (let i = 0; i < chartData.length; i++) {
+    const value = chartData[i][region]
+    if (value !== undefined && value !== null) {
+      return value
+    }
+  }
+  return undefined
+}
+
+/**
+ * For each region, find the last date where the value genuinely changed.
+ * After this date the backend has forward-filled the value unchanged.
+ * Returns { region: dateString }.
+ */
+function findLastRealDatePerRegion(chartData, regions) {
+  const result = {}
+  for (const region of regions) {
+    let lastRealDate = null
+    for (let i = chartData.length - 1; i > 0; i--) {
+      const currVal = chartData[i][region]
+      const prevVal = chartData[i - 1][region]
+      if (currVal != null && prevVal != null && Math.abs(currVal - prevVal) > 1e-10) {
+        lastRealDate = chartData[i].DatePoint; break
+      }
+      if (currVal != null && prevVal == null) {
+        lastRealDate = chartData[i].DatePoint; break
+      }
+    }
+    if (lastRealDate === null) {
+      for (let i = 0; i < chartData.length; i++) {
+        if (chartData[i][region] != null) { lastRealDate = chartData[i].DatePoint; break }
+      }
+    }
+    if (lastRealDate !== null) result[region] = lastRealDate
+  }
+  return result
+}
+
+/**
+ * Return a copy of chartData where each region's value is nulled out
+ * for all rows after that region's last real date (removes forward-fill tail).
+ */
+function stripForwardFill(chartData, lastRealDateByRegion) {
+  return chartData.map(row => {
+    const newRow = { ...row }
+    for (const [region, lastDate] of Object.entries(lastRealDateByRegion)) {
+      if (row.DatePoint > lastDate) newRow[region] = null
+    }
+    return newRow
+  })
 }
 
 /**
@@ -196,10 +293,35 @@ function RangeBarTooltip({ active, payload }) {
  * Y-axis = regions
  * Cell colour = green (>50) / yellow (~50) / red (<50)
  */
-function PMIHeatmapChart({ chartData, regions, metricLabel, metricKey }) {
+function PMIHeatmapChart({ chartData, allChartData, regions, metricLabel, metricKey, globalPeriod = null }) {
   const { addToPptx, addToXlsx } = useExport()
 
-  if (!chartData || chartData.length === 0 || regions.length === 0) {
+  // ── Local period filter (persisted per chart) ──────────────────────────
+  const [localPeriod, setLocalPeriodRaw] = useState(() => {
+    try { return localStorage.getItem(`chartPeriod_macro_pmi_${metricKey}`) || null } catch { return null }
+  })
+  const setLocalPeriod = (p) => {
+    setLocalPeriodRaw(p)
+    try {
+      if (p) localStorage.setItem(`chartPeriod_macro_pmi_${metricKey}`, p)
+      else localStorage.removeItem(`chartPeriod_macro_pmi_${metricKey}`)
+    } catch {}
+  }
+  // Sync to global when global period changes (clears any local override)
+  const prevGlobalPeriodRef = useRef(globalPeriod)
+  useEffect(() => {
+    if (prevGlobalPeriodRef.current === globalPeriod) return
+    prevGlobalPeriodRef.current = globalPeriod
+    setLocalPeriod(null)
+  }, [globalPeriod])
+
+  // Active button: local override wins; falls back to global; null → no active btn
+  const activeBtn = localPeriod ?? globalPeriod
+
+  // Use local period override if set, otherwise use globally-filtered data
+  const displayData = localPeriod ? applyLocalPeriod(allChartData ?? chartData, localPeriod) : chartData
+
+  if (!displayData || displayData.length === 0 || regions.length === 0) {
     return (
       <div className="chart-container">
         <h3>{metricLabel}</h3>
@@ -208,7 +330,7 @@ function PMIHeatmapChart({ chartData, regions, metricLabel, metricKey }) {
     )
   }
 
-  const activeRegions = regions.filter(r => chartData.some(d => d[r] != null))
+  const activeRegions = regions.filter(r => displayData.some(d => d[r] != null))
   if (activeRegions.length === 0) {
     return (
       <div className="chart-container">
@@ -221,7 +343,7 @@ function PMIHeatmapChart({ chartData, regions, metricLabel, metricKey }) {
   // Aggregate to one value per month (take the latest data point within each month).
   // PMI data is often stored at daily frequency with the same value repeated.
   const monthMap = {}
-  for (const row of chartData) {
+  for (const row of displayData) {
     const d = new Date(row.DatePoint)
     if (isNaN(d)) continue
     const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -267,19 +389,44 @@ function PMIHeatmapChart({ chartData, regions, metricLabel, metricKey }) {
     return `${month} ${year}`
   }
 
-  const lastDate = sortedData[0]?.DatePoint?.split('T')[0] || ''
-  const dateRange = getDateRange(chartData, 'DatePoint')
+  // Aktualität = earliest of all regions' last non-null month
+  const pmiLastDates = activeRegions
+    .map(region => {
+      // sortedData is newest-first; find the newest month with a real value for this region
+      const row = sortedData.find(r => r[region] != null)
+      return row?.DatePoint ?? null
+    })
+    .filter(Boolean)
+    .sort()
+  const pmiLetzesDatum = pmiLastDates[0] ?? null
+  const dateRange = getDateRange(displayData, 'DatePoint')
   const fullTitle = `Makro – ${metricLabel}`
+  const periodLabel = activeBtn || 'All'
   const exportItem = {
-    id: makeId(fullTitle), title: fullTitle, pptx_title: metricLabel,
+    id: `${makeId(fullTitle)}-${periodLabel.toLowerCase()}-pmi`, title: `${fullTitle} (${periodLabel})`, pptx_title: metricLabel,
     subheading: dateRange, yAxisLabel: 'Index',
     source: 'Quelle: Bloomberg Finance L.P.',
-    tab: 'Makro', chartData, regions: activeRegions, xKey: 'DatePoint',
+    tab: 'Makro', chartData: sortedData, regions: activeRegions, xKey: 'DatePoint',
+    chartType: 'PMIHeatmap',
   }
+
+  const periodButtons = (
+    <div className="chart-period-buttons">
+      {['YtD', '1Y', '3Y', '5Y', 'All'].map(p => (
+        <button
+          key={p}
+          className={`chart-period-btn${activeBtn === p ? ' active' : ''}`}
+          onClick={() => setLocalPeriod(p)}
+        >
+          {p}
+        </button>
+      ))}
+    </div>
+  )
 
   return (
     <div className="chart-container pmi-heatmap-container">
-      <h3>{metricLabel}</h3>
+      <div className="chart-header"><h3>{metricLabel}</h3>{periodButtons}</div>
       <div className="pmi-heatmap-wrapper">
         {/* Rotated Y-axis label */}
         <div className="pmi-heatmap-yaxis-label">Index</div>
@@ -288,7 +435,7 @@ function PMIHeatmapChart({ chartData, regions, metricLabel, metricKey }) {
           {/* One row per region */}
           {activeRegions.map((region) => (
             <div key={region} className="pmi-heatmap-row">
-              <div className="pmi-heatmap-row-label">{region}</div>
+              <div className="pmi-heatmap-row-label">{translateRegion(region)}</div>
               <div className="pmi-heatmap-cells">
                 {sortedData.map((row) => {
                   const value = row[region]
@@ -333,7 +480,7 @@ function PMIHeatmapChart({ chartData, regions, metricLabel, metricKey }) {
         <button className="chart-export-btn xlsx" onClick={() => withDataGapWarning(addToXlsx, chartData, activeRegions)(exportItem)} title="Zu Excel hinzufügen">
           <ExcelIcon width={26} height={26} />
         </button>
-        {lastDate && <span className="chart-export-date">Letztes Datum: {lastDate}</span>}
+        {pmiLetzesDatum && <span className="chart-export-date">Aktualität: {new Date(pmiLetzesDatum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}, Bloomberg Finance L.P.</span>}
       </div>
     </div>
   )
@@ -343,9 +490,89 @@ function PMIHeatmapChart({ chartData, regions, metricLabel, metricKey }) {
  * Multi-Region Line Chart for a single Macro metric.
  * PMI charts add a reference line at 50 (neutral expansion/contraction boundary).
  */
-function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel = '', unit = '', height = 300, chartType = 'Line' }) {
+function MacroLineChart({ chartData, allChartData, regions, metricLabel, metricKey, yAxisLabel = '', unit = '', height = 300, chartType = 'Line', globalPeriod = null, lineWidth = 2 }) {
   const { addToPptx, addToXlsx } = useExport()
-  const { formatter: smartDateFormatter, interval: smartInterval } = getSmartDateFormat(chartData)
+
+  // ── Local period filter (persisted per chart) ──────────────────────────
+  const [localPeriod, setLocalPeriodRaw] = useState(() => {
+    try { return localStorage.getItem(`chartPeriod_macro_${metricKey}`) || null } catch { return null }
+  })
+  const setLocalPeriod = (p) => {
+    setLocalPeriodRaw(p)
+    try {
+      if (p) localStorage.setItem(`chartPeriod_macro_${metricKey}`, p)
+      else localStorage.removeItem(`chartPeriod_macro_${metricKey}`)
+    } catch {}
+  }
+  // Sync to global when global period changes (clears any local override)
+  const prevGlobalPeriodRef = useRef(globalPeriod)
+  useEffect(() => {
+    if (prevGlobalPeriodRef.current === globalPeriod) return
+    prevGlobalPeriodRef.current = globalPeriod
+    setLocalPeriod(null)
+  }, [globalPeriod])
+
+  // ── Local chart type override (persisted per chart) ─────────────────────
+  const [localChartType, setLocalChartTypeRaw] = useState(() => {
+    try { return localStorage.getItem(`chartType_macro_${metricKey}`) || null } catch { return null }
+  })
+  const setLocalChartType = (t) => {
+    setLocalChartTypeRaw(t)
+    try {
+      if (t) localStorage.setItem(`chartType_macro_${metricKey}`, t)
+      else localStorage.removeItem(`chartType_macro_${metricKey}`)
+    } catch {}
+  }
+  const prevGlobalChartTypeRef = useRef(chartType)
+  useEffect(() => {
+    if (prevGlobalChartTypeRef.current === chartType) return
+    prevGlobalChartTypeRef.current = chartType
+    setLocalChartType(null)
+  }, [chartType])
+  const effectiveChartType = localChartType ?? chartType
+
+  // ── Legend mode (value / delta) ──────────────────────────────────────────
+  const [legendMode, setLegendModeRaw] = useState(() => {
+    try { return localStorage.getItem(`legendMode_macro_${metricKey}`) || 'value' } catch { return 'value' }
+  })
+  const setLegendMode = (m) => {
+    setLegendModeRaw(m)
+    try { localStorage.setItem(`legendMode_macro_${metricKey}`, m) } catch {}
+  }
+
+  // Active button: local override wins; falls back to global; null → no active btn
+  const activeBtn = localPeriod ?? globalPeriod
+
+  const displayData = localPeriod ? applyLocalPeriod(allChartData ?? chartData, localPeriod) : chartData
+  const { formatter: smartDateFormatter, interval: smartInterval } = getSmartDateFormat(displayData)
+
+  const chartTypeButtons = (
+    <div className="chart-type-buttons">
+      {[{ id: 'Line', label: 'Standard' }, { id: 'Bar', label: 'Balken' }].map(ct => (
+        <button
+          key={ct.id}
+          className={`chart-period-btn${effectiveChartType === ct.id ? ' active' : ''}`}
+          onClick={() => setLocalChartType(ct.id)}
+        >
+          {ct.label}
+        </button>
+      ))}
+    </div>
+  )
+
+  const periodButtons = (
+    <div className="chart-period-buttons">
+      {['YtD', '1Y', '3Y', '5Y', 'All'].map(p => (
+        <button
+          key={p}
+          className={`chart-period-btn${activeBtn === p ? ' active' : ''}`}
+          onClick={() => setLocalPeriod(p)}
+        >
+          {p}
+        </button>
+      ))}
+    </div>
+  )
 
   if (!chartData || chartData.length === 0) {
     return (
@@ -357,29 +584,42 @@ function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel
   }
 
   // Only render lines for regions that actually have at least one data point
-  const activeRegions = regions.filter(r => chartData.some(d => d[r] !== undefined && d[r] !== null))
+  const activeRegions = regions.filter(r => displayData.some(d => d[r] !== undefined && d[r] !== null))
 
   if (activeRegions.length === 0) {
     return (
       <div className="chart-container">
-        <h3>{metricLabel}</h3>
+        <div className="chart-header"><h3>{metricLabel}</h3>{chartTypeButtons}{periodButtons}</div>
         <div className="chart-empty">Keine Daten verfügbar</div>
       </div>
     )
   }
 
+  // Strip backend forward-fill so each region's line ends at its last real data point
+  const lastRealDateByRegion = findLastRealDatePerRegion(displayData, activeRegions)
+  const strippedData = stripForwardFill(displayData, lastRealDateByRegion)
+  // "Aktualität" = earliest of all regions' last real dates
+  const letzesDatum = Object.values(lastRealDateByRegion).filter(Boolean).sort().shift() ?? null
+
   const isPMI = metricKey && metricKey.includes('PMI')
-  const [yMin, yMax] = computeSmartDomain(chartData, activeRegions)
-  const isLongSeries = isLongTimeseries(chartData)
+  const [yMin, yMax] = computeSmartDomain(strippedData, activeRegions)
+  const isLongSeries = isLongTimeseries(strippedData)
+  const useLogScale = canUseLogScale(strippedData, activeRegions)
   
-  // Compute even interval spacing for y-axis
+  // Compute even interval spacing for y-axis (linear only; log uses 'auto')
   let yDomain = ['auto', 'auto']
-  if (yMin !== undefined && yMax !== undefined) {
+  if (yMin !== undefined && yMax !== undefined && !useLogScale) {
     const range = yMax - yMin
-    const step = Math.pow(10, Math.floor(Math.log10(range)))
-    const roundedMin = Math.floor(yMin / step) * step
-    const roundedMax = Math.ceil(yMax / step) * step
-    yDomain = [roundedMin, roundedMax]
+    if (range > 0) {
+      const step = Math.pow(10, Math.floor(Math.log10(range)))
+      const roundedMin = Math.floor(yMin / step) * step
+      const roundedMax = Math.ceil(yMax / step) * step
+      yDomain = [roundedMin, roundedMax]
+    } else {
+      // Flat data: add a fixed ±10% buffer around the single value
+      const buffer = Math.abs(yMin) * 0.1 || 1
+      yDomain = [yMin - buffer, yMax + buffer]
+    }
   }
   
   const formatter = (value) => {
@@ -387,36 +627,38 @@ function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel
     return `${value.toFixed(2)}${unit ? ' ' + unit : ''}`
   }
 
-  const dateRange = getDateRange(chartData, 'DatePoint')
+  const dateRange = getDateRange(strippedData, 'DatePoint')
   const subheading = dateRange
 
+  const periodLabel = activeBtn || 'All'
+  const ctLabel     = effectiveChartType === 'Bar' ? 'Balken' : 'Linie'
   const fullTitle = `Makro – ${metricLabel}`
-  const exportItem = { id: makeId(fullTitle), title: fullTitle, pptx_title: metricLabel, subheading, yAxisLabel, source: 'Quelle: Bloomberg Finance L.P.', tab: 'Makro', chartData, regions: activeRegions, xKey: 'DatePoint' }
+  const exportItem = { id: `${makeId(fullTitle)}-${periodLabel.toLowerCase()}-${effectiveChartType.toLowerCase()}`, title: `${fullTitle} (${periodLabel}, ${ctLabel})`, pptx_title: metricLabel, subheading, yAxisLabel, source: 'Quelle: Bloomberg Finance L.P.', tab: 'Makro', chartData: strippedData, regions: activeRegions, xKey: 'DatePoint' }
 
   // Build range-bar data (one entry per region: min/max/median/current)
   const barData = activeRegions
     .map((region) => {
-      const vals = chartData.map(r => r[region]).filter(v => v != null && !Number.isNaN(v))
+      const vals = strippedData.map(r => r[region]).filter(v => v != null && !Number.isNaN(v))
       if (!vals.length) return null
       const min = Math.min(...vals)
       const max = Math.max(...vals)
       const sorted = [...vals].sort((a, b) => a - b)
       const median = sorted[Math.floor(sorted.length / 2)]
-      const current = getLatestValueForRegion(chartData, region)
-      return { name: region, spacer: min, range: max - min, current, min, max, color: REGION_COLORS[regions.indexOf(region) % REGION_COLORS.length] }
+      const current = getLatestValueForRegion(strippedData, region)
+      return { name: translateRegion(region), spacer: min, range: max - min, current, min, max, color: REGION_COLORS[regions.indexOf(region) % REGION_COLORS.length] }
     })
     .filter(Boolean)
     .sort((a, b) => (b.current ?? -Infinity) - (a.current ?? -Infinity))
 
   // Attach Balken-specific export fields
-  exportItem.chartType = chartType
-  exportItem.balkenData = chartType === 'Bar' ? barData : undefined
+  exportItem.chartType = effectiveChartType
+  exportItem.balkenData = effectiveChartType === 'Bar' ? barData : undefined
 
   return (
     <div className="chart-container">
-      <h3>{metricLabel}</h3>
+      <div className="chart-header"><h3>{metricLabel}</h3>{chartTypeButtons}{periodButtons}</div>
       <ResponsiveContainer width="100%" height={height}>
-        {chartType === 'Bar' ? (
+        {effectiveChartType === 'Bar' ? (
           <ComposedChart data={barData} margin={{ top: 5, right: 20, left: 0, bottom: 60 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-35} textAnchor="end" interval={0} height={60} />
@@ -448,7 +690,7 @@ function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel
             }} activeDot={false} legendType="none" isAnimationActive={false} />
           </ComposedChart>
         ) : (
-          <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+          <LineChart data={strippedData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis
               dataKey="DatePoint"
@@ -457,8 +699,9 @@ function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel
               interval={smartInterval}
             />
             <YAxis 
+              scale={useLogScale ? 'log' : undefined}
+              domain={useLogScale ? ['auto', 'auto'] : yDomain}
               tick={{ fontSize: 11 }}
-              domain={yDomain}
               tickFormatter={formatYValue}
               width={yAxisLabel ? 48 : 40}
               label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', offset: 12, style: { textAnchor: 'middle', fontSize: 11, fill: '#6b7280' } } : undefined}
@@ -466,9 +709,29 @@ function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel
             <Tooltip
               contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', fontSize: 12 }}
               formatter={formatter}
-              labelFormatter={(label) => fmtDate(label, smartDateFormatter)}
+              labelFormatter={(label) => typeof label === 'string' ? label.split('T')[0] : label}
             />
-            <Legend />
+            <Legend
+              content={({ payload }) => {
+                if (!payload || payload.length === 0) return null
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 16px', fontSize: 14, paddingTop: 4, paddingLeft: 8, paddingRight: 8 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', flex: 1, minWidth: 0 }}>
+                      {payload.map((entry, i) => (
+                        <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <svg width="16" height="4" style={{ flexShrink: 0 }}><line x1="0" y1="2" x2="16" y2="2" stroke={entry.color} strokeWidth="2" /></svg>
+                          <span style={{ color: 'var(--text-primary)' }}>{entry.value}</span>
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                      <button className={`chart-period-btn${legendMode === 'value' ? ' active' : ''}`} onClick={() => setLegendMode('value')}>Letzter Wert</button>
+                      <button className={`chart-period-btn${legendMode === 'delta' ? ' active' : ''}`} onClick={() => setLegendMode('delta')}>Delta</button>
+                    </div>
+                  </div>
+                )
+              }}
+            />
             {/* Zero baseline for all charts */}
             <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="4 2" />
             {/* PMI 50-line (expansion vs contraction boundary) */}
@@ -482,14 +745,36 @@ function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel
             )}
             {[...activeRegions]
               .sort((a, b) => {
-                const latestA = getLatestValueForRegion(chartData, a) ?? -Infinity
-                const latestB = getLatestValueForRegion(chartData, b) ?? -Infinity
+                if (legendMode === 'delta') {
+                  const firstA = getFirstValueForRegion(strippedData, a)
+                  const lastA  = getLatestValueForRegion(strippedData, a)
+                  const firstB = getFirstValueForRegion(strippedData, b)
+                  const lastB  = getLatestValueForRegion(strippedData, b)
+                  const dA = (firstA != null && lastA != null) ? (lastA - firstA) : -Infinity
+                  const dB = (firstB != null && lastB != null) ? (lastB - firstB) : -Infinity
+                  return dB - dA
+                }
+                const latestA = getLatestValueForRegion(strippedData, a) ?? -Infinity
+                const latestB = getLatestValueForRegion(strippedData, b) ?? -Infinity
                 return latestB - latestA
               })
               .map((region) => {
-              const latestValue = getLatestValueForRegion(chartData, region)
+              const latestValue = getLatestValueForRegion(strippedData, region)
               const formatted = fmtLegendValue(latestValue, unit)
-              const legendName = formatted !== null ? `${region} (${formatted})` : region
+              let legendName
+              if (legendMode === 'delta') {
+                const firstValue = getFirstValueForRegion(strippedData, region)
+                if (firstValue != null && latestValue != null) {
+                  const delta = latestValue - firstValue
+                  const arrow = delta > 0.0001 ? '▲' : delta < -0.0001 ? '▼' : '→'
+                  const formattedDelta = fmtLegendValue(Math.abs(delta), unit)
+                  legendName = formattedDelta !== null ? `${translateRegion(region)} (${arrow} ${formattedDelta})` : translateRegion(region)
+                } else {
+                  legendName = translateRegion(region)
+                }
+              } else {
+                legendName = formatted !== null ? `${translateRegion(region)} (${formatted})` : translateRegion(region)
+              }
               return (
                 <Line
                   key={region}
@@ -498,7 +783,7 @@ function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel
                   name={legendName}
                   stroke={REGION_COLORS[regions.indexOf(region) % REGION_COLORS.length]}
                   dot={false}
-                  strokeWidth={2}
+                  strokeWidth={lineWidth}
                   isAnimationActive={false}
                   connectNulls
                 />
@@ -508,10 +793,10 @@ function MacroLineChart({ chartData, regions, metricLabel, metricKey, yAxisLabel
         )}
       </ResponsiveContainer>
       <div className="chart-export-buttons">
-        <button className="chart-export-btn pptx" onClick={() => withDataGapWarning(addToPptx, chartData, activeRegions)(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={26} height={26} /></button>
-        <button className="chart-export-btn xlsx" onClick={() => withDataGapWarning(addToXlsx, chartData, activeRegions)(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={26} height={26} /></button>
-        {chartData[chartData.length - 1]?.DatePoint && (
-          <span className="chart-export-date">Letztes Datum: {chartData[chartData.length - 1].DatePoint.split('T')[0]}</span>
+        <button className="chart-export-btn pptx" onClick={() => withDataGapWarning(addToPptx, strippedData, activeRegions)(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={26} height={26} /></button>
+        <button className="chart-export-btn xlsx" onClick={() => withDataGapWarning(addToXlsx, strippedData, activeRegions)(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={26} height={26} /></button>
+        {letzesDatum && (
+          <span className="chart-export-date">Aktualität: {new Date(letzesDatum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}, Bloomberg Finance L.P.</span>
         )}
       </div>
     </div>
@@ -537,6 +822,7 @@ function MacroTab({
   chartsPerRow = 2,
   chartHeight = 300,
   chartType = 'Line',
+  lineWidth = 2,
 }) {
   if (loading) {
     return <div className="tab-loading">📊 Laden…</div>
@@ -550,6 +836,7 @@ function MacroTab({
 
   const regions = filters.regions || []
   const allRecords = data.data
+  const globalPeriod = filters.customMode ? null : (filters.lookback || null)
 
   // Apply date-range filter for charts
   const filteredRecords = allRecords.filter((r) => {
@@ -612,9 +899,11 @@ function MacroTab({
                 <PMIHeatmapChart
                   key={metric}
                   chartData={cd}
+                  allChartData={pivotDataForChart(allRecords, metric, regions)}
                   regions={regions}
                   metricLabel={getMacroMetricLabel(metric)}
                   metricKey={metric}
+                  globalPeriod={globalPeriod}
                 />
               )
             }
@@ -622,6 +911,7 @@ function MacroTab({
               <MacroLineChart
                 key={metric}
                 chartData={cd}
+                allChartData={pivotDataForChart(allRecords, metric, regions)}
                 regions={regions}
                 metricLabel={getMacroMetricLabel(metric)}
                 metricKey={metric}
@@ -629,6 +919,8 @@ function MacroTab({
                 unit={getMacroMetricUnit(metric)}
                 height={chartHeight}
                 chartType={chartType}
+                globalPeriod={globalPeriod}
+                lineWidth={lineWidth}
               />
             )
           })

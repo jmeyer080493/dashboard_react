@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './GlobalControls.css'
 import MetricsFilterModal from './MetricsFilterModal'
 import {
@@ -8,7 +8,8 @@ import {
   EUROPEAN_COUNTRIES,
   WORLD_REGIONS,
   getPresetRegions,
-  getRegionDisplayName
+  getRegionDisplayName,
+  REGION_ABBREVIATIONS,
 } from '../config/countries'
 import {
   EQUITY_METRICS_CATEGORIES,
@@ -38,6 +39,10 @@ function normalizeDate(dateStr) {
   const [, year, month, day] = match
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
+// S&P rating groups for FI quick-select buttons
+const AAA_AA_RATINGS = new Set(['AAA', 'AA+', 'AA', 'AA-'])
+const A_BBB_RATINGS  = new Set(['A+', 'A', 'A-', 'BBB+', 'BBB', 'BBB-'])
+
 function GlobalControls({ 
   filters, 
   onFiltersChange, 
@@ -59,10 +64,31 @@ function GlobalControls({
   // Chart type toggle
   chartType = 'Line',
   onChartTypeChange,
+  // Ratings (for FI rating-based quick select)
+  ratingsData = [],
 }) {
   console.log('[DEBUG GLOBALCONTROLS] Received props:', { activeTab, availableMetricsCount: availableMetrics.length, availableMetrics })
   const [showMetricsModal, setShowMetricsModal] = useState(false)
   const [activeDateRange, setActiveDateRange] = useState(filters.customMode ? null : (filters.lookback ?? '1Y'))
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false)
+  const countryDropdownRef = useRef(null)
+  // Per-tab region memory: saves the full region selection for each tab so that
+  // switching away and back restores the original selection (e.g. FI-only countries
+  // are dropped when switching to Equity, but restored when switching back to FI).
+  const prevActiveTabRef = useRef(activeTab)
+  const tabRegionsRef = useRef({})
+
+  // Close country dropdown on outside click
+  useEffect(() => {
+    if (!showCountryDropdown) return
+    const handleOutside = (e) => {
+      if (countryDropdownRef.current && !countryDropdownRef.current.contains(e.target)) {
+        setShowCountryDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [showCountryDropdown])
 
   // Determine which metric config to use based on active tab
   const isEquityTab = activeTab === 'equity'
@@ -122,13 +148,33 @@ function GlobalControls({
     ? ALL_REGIONS.filter(r => !EXCLUDED_MACRO.has(r))
     : ALL_REGIONS
 
-  // Auto-filter regions when switching tabs if selected regions include excluded ones
+  // When the active tab changes: save the outgoing tab's full region selection, then
+  // restore the incoming tab's previously-saved selection (or filter the current one
+  // down to what's valid for the new tab if no saved state exists yet).
   useEffect(() => {
-    const invalidRegions = filters.regions.filter(r => !AVAILABLE_REGIONS.includes(r))
-    if (invalidRegions.length > 0) {
-      const validRegions = filters.regions.filter(r => AVAILABLE_REGIONS.includes(r))
-      onFiltersChange({ regions: validRegions })
+    const prevTab = prevActiveTabRef.current
+    if (prevTab === activeTab) return // initial mount – nothing to do
+
+    // Persist the outgoing tab's complete region list (including tab-specific extras)
+    tabRegionsRef.current = {
+      ...tabRegionsRef.current,
+      [prevTab]: filters.regions,
     }
+
+    const savedForNewTab = tabRegionsRef.current[activeTab]
+    if (savedForNewTab) {
+      // Restore the selection last used on this tab, clamped to what's available here
+      const valid = savedForNewTab.filter(r => AVAILABLE_REGIONS.includes(r))
+      onFiltersChange({ regions: valid })
+    } else {
+      // First visit to this tab: strip any regions that aren't available here
+      const invalid = filters.regions.filter(r => !AVAILABLE_REGIONS.includes(r))
+      if (invalid.length > 0) {
+        onFiltersChange({ regions: filters.regions.filter(r => AVAILABLE_REGIONS.includes(r)) })
+      }
+    }
+
+    prevActiveTabRef.current = activeTab
   }, [activeTab])
 
   const handleDateQuickSelect = (days, label) => {
@@ -152,7 +198,13 @@ function GlobalControls({
   }
 
   const handleRegionPreset = (preset) => {
-    const presetRegions = getPresetRegions(preset, AVAILABLE_REGIONS)
+    let presetRegions = getPresetRegions(preset, AVAILABLE_REGIONS)
+    
+    // Add Emerging Markets to "Welt" selection on the Equity tab
+    if (preset === 'Welt' && isEquityTab && !presetRegions.includes('EM') && !presetRegions.includes('China')) {
+      presetRegions = [...presetRegions, 'EM', 'China']
+    }
+    
     onFiltersChange({
       regions: presetRegions
     })
@@ -214,78 +266,101 @@ function GlobalControls({
       </div>
 
       {/* ── Land / Region ────────────────────────────────────────── */}
-      <div className="control-section">
+      <div className="control-section" ref={countryDropdownRef}>
         <span className="ctrl-label">🌍 Land / Region</span>
         <div className="control-group">
-          {/* Preset buttons */}
-          {Object.keys(REGION_PRESETS).map(preset => {
-            const presetRegions = getPresetRegions(preset, AVAILABLE_REGIONS)
-            const isActive = presetRegions.length === filters.regions.length &&
-                             presetRegions.every(r => filters.regions.includes(r))
-            return (
-              <button
-                key={preset}
-                className={`preset-btn ${isActive ? 'active' : ''}`}
-                onClick={() => handleRegionPreset(preset)}
-              >
-                {preset}
-              </button>
-            )
-          })}
-
-          {/* Smart region tag display */}
-          {(() => {
-            // Check if a named preset is active
-            // Allow partial matches: if selected regions are a subset of a preset, consider it active
-            const activePreset = Object.keys(REGION_PRESETS).find(preset => {
-              const pr = getPresetRegions(preset, AVAILABLE_REGIONS)
-              const isExactMatch = pr.length === filters.regions.length &&
-                                   pr.every(r => filters.regions.includes(r))
-              const isSubsetMatch = pr.length > 0 &&
-                                    filters.regions.every(r => pr.includes(r))
-              return isExactMatch || isSubsetMatch
-            })
-
-            if (activePreset) {
-              // Single summary chip – no remove needed, user can switch preset or deselect individually
+          {/* Preset buttons – hide "Welt" on the Fixed Income tab, and hide "Alle" */}
+          {Object.keys(REGION_PRESETS)
+            .filter(preset => preset !== 'Alle' && !(isFITab && preset === 'Welt'))
+            .map(preset => {
+              const presetRegions = getPresetRegions(preset, AVAILABLE_REGIONS)
+              const isActive = presetRegions.length === filters.regions.length &&
+                               presetRegions.every(r => filters.regions.includes(r))
               return (
-                <span className="region-tag region-tag--preset">
-                  {activePreset} · {filters.regions.length} Länder
-                </span>
+                <button
+                  key={preset}
+                  className={`preset-btn ${isActive ? 'active' : ''}`}
+                  onClick={() => handleRegionPreset(preset)}
+                >
+                  {preset}
+                </button>
               )
-            }
+            })
+          }
 
-            const MAX_VISIBLE = 4
-            const visible = filters.regions.slice(0, MAX_VISIBLE)
-            const overflow = filters.regions.length - MAX_VISIBLE
-            return (
-              <>
-                {visible.map(region => (
-                  <span key={region} className="region-tag">
-                    {getRegionDisplayName(region)}
-                    <button className="tag-remove" onClick={() => toggleRegion(region)}>×</button>
-                  </span>
-                ))}
-                {overflow > 0 && (
-                  <span className="region-tag region-tag--overflow">+{overflow}</span>
-                )}
-              </>
-            )
+          {/* Rating-based quick-select buttons (Fixed Income tab only) */}
+          {isFITab && (() => {
+            const ratingBuckets = [
+              { label: 'AAA-AA', ratingSet: AAA_AA_RATINGS },
+              { label: 'A-BBB',  ratingSet: A_BBB_RATINGS, exclude: new Set(['Japan']) },
+            ]
+            return ratingBuckets.map(({ label, ratingSet, exclude = new Set() }) => {
+              const matchingRegions = ratingsData
+                .filter(r => r.SP && ratingSet.has(r.SP) && AVAILABLE_REGIONS.includes(r.Regions) && !exclude.has(r.Regions))
+                .map(r => r.Regions)
+              const isActive =
+                matchingRegions.length > 0 &&
+                matchingRegions.length === filters.regions.length &&
+                matchingRegions.every(r => filters.regions.includes(r))
+              return (
+                <button
+                  key={label}
+                  className={`preset-btn ${isActive ? 'active' : ''}`}
+                  onClick={() => onFiltersChange({ regions: matchingRegions })}
+                  title={`Länder mit S&P Rating ${label}`}
+                >
+                  {label}
+                </button>
+              )
+            })
           })()}
 
-          {/* Add-region dropdown */}
-          <select
-            className="region-add-select"
-            value=""
-            onChange={(e) => {
-              if (e.target.value) toggleRegion(e.target.value)
-            }}
-          >
-            <option value="">+ Region</option>
-            {AVAILABLE_REGIONS.filter(r => !filters.regions.includes(r)).map(region => (
-              <option key={region} value={region}>{getRegionDisplayName(region)}</option>
-            ))}
-          </select>
+          <div className="country-multiselect">
+            <button
+              className={`country-multiselect-trigger ${showCountryDropdown ? 'open' : ''}`}
+              onClick={() => setShowCountryDropdown(v => !v)}
+              title={filters.regions.map(r => getRegionDisplayName(r)).join(', ') || 'Keine Länder ausgewählt'}
+            >
+              <span className="country-multiselect-value">
+                {filters.regions.length === 0
+                  ? 'Keine'
+                  : filters.regions.length === AVAILABLE_REGIONS.length
+                  ? `Alle (${AVAILABLE_REGIONS.length})`
+                  : filters.regions.map(r => REGION_ABBREVIATIONS[r] || r).join(', ')}
+              </span>
+              <span className="country-multiselect-arrow">{showCountryDropdown ? '▴' : '▾'}</span>
+            </button>
+
+            {showCountryDropdown && (
+              <div className="country-multiselect-dropdown">
+                <div className="country-multiselect-actions">
+                  <button onClick={() => onFiltersChange({ regions: [...AVAILABLE_REGIONS] })}>Alle</button>
+                  <button onClick={() => onFiltersChange({ regions: [] })}>Keine</button>
+                </div>
+                <div className="country-multiselect-list">
+                  {AVAILABLE_REGIONS.map(region => {
+                    const abbr = REGION_ABBREVIATIONS[region] || region
+                    const checked = filters.regions.includes(region)
+                    return (
+                      <label
+                        key={region}
+                        className={`country-option ${checked ? 'checked' : ''}`}
+                        title={getRegionDisplayName(region)}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleRegion(region)}
+                        />
+                        <span className="country-abbr">{abbr}</span>
+                        <span className="country-fullname">{getRegionDisplayName(region)}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

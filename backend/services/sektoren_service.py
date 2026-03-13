@@ -76,10 +76,10 @@ VIEW_TO_REGIONS = {
     "U.S. vs. Europe": ["US", "Europe"],
 }
 
-# Graph 4 builds two sub-series per sector:  "Energie KGV"  and  "Energie Erw. KGV"
+# Graph 4 builds two sub-series per sector:  "Energie KGV"  and  "Energie KGV (Fwd.)"
 FIELD_LABEL_SINGLE = {
     "PE Ratio":         "KGV",
-    "Forward PE Ratio": "Erw. KGV",
+    "Forward PE Ratio": "KGV (Fwd.)",
 }
 REGION_LABEL = {"US": "US", "Europe": "EU"}
 
@@ -502,9 +502,9 @@ def _series_colors_for(traces: list) -> dict:
 
 GRAPH_TITLES = {
     "g1": "KGV",
-    "g2": "Erwartetes KGV",
-    "g3": "KGV - Erwartetes KGV",
-    "g4": "KGV vs. Erwartetes KGV",
+    "g2": "KGV (Fwd.)",
+    "g3": "KGV - KGV (Fwd.)",
+    "g4": "KGV vs. KGV (Fwd.)",
 }
 
 

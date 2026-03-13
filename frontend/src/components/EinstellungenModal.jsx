@@ -32,14 +32,20 @@ const CHARTS_PER_ROW_OPTIONS = [
   { value: 1, label: '1 Grafik pro Zeile' },
   { value: 2, label: '2 Grafiken pro Zeile' },
   { value: 3, label: '3 Grafiken pro Zeile' },
-  { value: 4, label: '4 Grafiken pro Zeile' },
 ]
 
 const CHART_HEIGHT_OPTIONS = [
-  { value: 300, label: 'Klein (300px)' },
-  { value: 450, label: 'Mittel (450px)' },
-  { value: 650, label: 'Groß (650px)' },
-  { value: 800, label: 'Sehr groß (800px)' },
+  { value: 300, label: 'Klein' },
+  { value: 450, label: 'Mittel' },
+  { value: 650, label: 'Groß' },
+  { value: 800, label: 'Sehr groß' },
+]
+
+const LINE_WIDTH_OPTIONS = [
+  { value: 1,   label: 'Dünn' },
+  { value: 2,   label: 'Mittel' },
+  { value: 3,   label: 'Dick' },
+  { value: 5,   label: 'Sehr dick' },
 ]
 
 export default function EinstellungenModal({ isOpen, onClose, activePage, graphSettings, onSaveSettings }) {
@@ -100,6 +106,18 @@ export default function EinstellungenModal({ isOpen, onClose, activePage, graphS
     return vals.equity === vals.fi && vals.fi === vals.macro
   }
 
+  // All page keys (all 6 sections)
+  const ALL_PAGE_KEYS = ['equity', 'fi', 'macro', 'faktoren', 'sektoren', 'alternativ']
+
+  const getAllPagesValues = (field) => {
+    return ALL_PAGE_KEYS.map(k => draft[k]?.[field])
+  }
+
+  const areAllPagesEqual = (field) => {
+    const vals = getAllPagesValues(field)
+    return vals.every(v => v === vals[0])
+  }
+
   const getMostCommonValue = (field) => {
     const vals = getAllTabsValues(field)
     const valuesArray = [vals.equity, vals.fi, vals.macro]
@@ -116,7 +134,17 @@ export default function EinstellungenModal({ isOpen, onClose, activePage, graphS
     )
   }
 
+  const getMostCommonValueAllPages = (field) => {
+    const vals = getAllPagesValues(field)
+    const counts = {}
+    vals.forEach(v => { counts[v] = (counts[v] || 0) + 1 })
+    return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b)
+  }
+
   const getEffectiveValue = (field) => {
+    if (selectedPage === 'all') {
+      return getMostCommonValueAllPages(field)
+    }
     if (selectedPage === 'laender') {
       if (activeLänderTab === 'all') {
         // Return the most common value across all tabs
@@ -129,7 +157,12 @@ export default function EinstellungenModal({ isOpen, onClose, activePage, graphS
   }
 
   const setFieldValue = (field, value) => {
-    if (selectedPage === 'laender') {
+    if (selectedPage === 'all') {
+      setDraft(prev => ({
+        ...prev,
+        ...Object.fromEntries(ALL_PAGE_KEYS.map(k => [k, { ...prev[k], [field]: value }])),
+      }))
+    } else if (selectedPage === 'laender') {
       if (activeLänderTab === 'all') {
         setDraft(prev => ({
           ...prev,
@@ -263,11 +296,21 @@ export default function EinstellungenModal({ isOpen, onClose, activePage, graphS
                   value={selectedPage}
                   onChange={(e) => { setSelectedPage(e.target.value); setActiveLänderTab('all') }}
                 >
+                  <option value="all">🌐 Alle Seiten</option>
                   {visiblePageOptions.map(p => (
                     <option key={p.value} value={p.value}>{p.label}</option>
                   ))}
                 </select>
               </div>
+
+              {/* Alle Seiten hint */}
+              {selectedPage === 'all' && (
+                <p style={{ fontSize: '0.55rem', margin: '0', opacity: 0.5 }}>
+                  {areAllPagesEqual('chartsPerRow') && areAllPagesEqual('chartHeight') && areAllPagesEqual('lineWidth')
+                    ? '✓ Alle Seiten nutzen die gleichen Einstellungen'
+                    : '⚠ Die Seiten nutzen unterschiedliche Einstellungen. Die Dropdowns zeigen die häufigste Einstellung an.'}
+                </p>
+              )}
 
               {/* Tab selector – only for Länder */}
               {selectedPage === 'laender' && (
@@ -277,7 +320,7 @@ export default function EinstellungenModal({ isOpen, onClose, activePage, graphS
                   {activeLänderTab === 'all' && (
                     <>
                       <p style={{ fontSize: '0.55rem', margin: '0', opacity: 0.5 }}>
-                        {areAllTabsEqual('chartsPerRow') && areAllTabsEqual('chartHeight')
+                        {areAllTabsEqual('chartsPerRow') && areAllTabsEqual('chartHeight') && areAllTabsEqual('lineWidth')
                           ? '✓ Alle Tabs nutzen die gleichen Einstellungen'
                           : '⚠ Die Tabs nutzen unterschiedliche Einstellungen. Die Dropdowns zeigen die häufigste Einstellung an.'}
                       </p>
@@ -321,6 +364,20 @@ export default function EinstellungenModal({ isOpen, onClose, activePage, graphS
                   onChange={(e) => setFieldValue('chartHeight', Number(e.target.value))}
                 >
                   {CHART_HEIGHT_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Line width */}
+              <label className="eins-label">Grafik-Linie:</label>
+              <div className="eins-select-wrap">
+                <select
+                  className="eins-select"
+                  value={getEffectiveValue('lineWidth') ?? 2}
+                  onChange={(e) => setFieldValue('lineWidth', Number(e.target.value))}
+                >
+                  {LINE_WIDTH_OPTIONS.map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>

@@ -98,6 +98,7 @@ export default function Alternative({ graphSettings }) {
   const gs = graphSettings ?? {}
   const chartsPerRow = gs.alternativ?.chartsPerRow ?? 2
   const chartHeight  = gs.alternativ?.chartHeight  ?? 450
+  const lineWidth    = gs.alternativ?.lineWidth    ?? 2
 
   // ── Filter state (seeded from localStorage once at mount) ─────────────
   const _initRef = useRef(null)
@@ -242,6 +243,7 @@ export default function Alternative({ graphSettings }) {
                 tab="Alternativ"
                 yUnit={GRAPH_Y_UNIT[gn] ?? 'pct'}
                 yDomainAuto
+                lineWidth={lineWidth}
               />
             )
           })}

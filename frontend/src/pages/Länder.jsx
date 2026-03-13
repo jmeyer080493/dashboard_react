@@ -4,7 +4,20 @@ import GlobalControls from '../components/GlobalControls'
 import EquityTab from './tabs/EquityTab'
 import FixedIncomeTab from './tabs/FixedIncomeTab'
 import MacroTab from './tabs/MacroTab'
-import { STANDARD_DEFAULTS, FI_STANDARD_DEFAULTS, MACRO_STANDARD_DEFAULTS, ALL_MACRO_TABLE_METRICS, ALL_MACRO_GRAPH_METRICS } from '../config/metricsConfig'
+import { STANDARD_DEFAULTS, FI_STANDARD_DEFAULTS, MACRO_STANDARD_DEFAULTS, ALL_MACRO_TABLE_METRICS, ALL_MACRO_GRAPH_METRICS, VIRTUAL_GRAPH_METRICS } from '../config/metricsConfig'
+import { ALL_REGIONS } from '../config/countries'
+
+// ── Module-level data cache (survives component unmount / tab switch) ──────────
+const _equityCache    = {}   // key → API result
+const _fiCache        = {}   // key → API result
+const _macroCache     = {}   // key → API result
+const _equityColCache = {}   // key → columns array
+const _onceCache      = { masterEquity: null, masterFI: null, masterMacro: null, ratings: null }
+
+function _equityKey(f)    { const d = f.customMode ? `|${f.startDate}|${f.endDate}` : ''; return `${f.regions.join(',')}|${f.lookback}${d}|${f.currency}` }
+function _fiKey(f)        { const d = f.customMode ? `|${f.startDate}|${f.endDate}` : ''; return `${f.regions.join(',')}|${f.lookback}${d}` }
+function _macroKey(f)     { const d = f.customMode ? `|${f.startDate}|${f.endDate}` : ''; return `${f.lookback}${d}` }
+function _equityColKey(f) { return `${f.regions.join(',')}|${f.lookback}` }
 
 /**
  * Länder (Countries) Page
@@ -29,23 +42,23 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
   }
 
   // State for all three tabs' data
-  const [equityData, setEquityData] = useState(null)
+  const [equityData, setEquityData] = useState(() => _equityCache[_equityKey(filters)] ?? null)
   const [equityLoading, setEquityLoading] = useState(false)
   const [equityError, setEquityError] = useState(null)
-  const [equityColumns, setEquityColumns] = useState([])
+  const [equityColumns, setEquityColumns] = useState(() => _equityColCache[_equityColKey(filters)] ?? [])
   const [equityColumnsLoading, setEquityColumnsLoading] = useState(false)
   
   // Master columns: CONSISTENT list of all possible metrics (does not change with region selection)
-  const [masterEquityColumns, setMasterEquityColumns] = useState([])
+  const [masterEquityColumns, setMasterEquityColumns] = useState(() => _onceCache.masterEquity ?? [])
 
-  const [fixedIncomeData, setFixedIncomeData] = useState(null)
+  const [fixedIncomeData, setFixedIncomeData] = useState(() => _fiCache[_fiKey(filters)] ?? null)
   const [fixedIncomeLoading, setFixedIncomeLoading] = useState(false)
   const [fixedIncomeError, setFixedIncomeError] = useState(null)
 
   // S&P credit ratings – fetched once on mount, independent of region selection
-  const [ratingsData, setRatingsData] = useState([])
+  const [ratingsData, setRatingsData] = useState(() => _onceCache.ratings ?? [])
 
-  const [macroData, setMacroData] = useState(null)
+  const [macroData, setMacroData] = useState(() => _macroCache[_macroKey(filters)] ?? null)
   const [macroLoading, setMacroLoading] = useState(false)
   const [macroError, setMacroError] = useState(null)
 
@@ -78,7 +91,7 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
   })
 
   // ── Fixed-Income metrics filter state ───────────────────────────────────
-  const [masterFIColumns, setMasterFIColumns] = useState([])
+  const [masterFIColumns, setMasterFIColumns] = useState(() => _onceCache.masterFI ?? [])
   const [selectedFIMetricsTable, setSelectedFIMetricsTable] = useState(() => {
     return loadMetricsFromStorage('fiMetricsFilter_table') || []
   })
@@ -87,7 +100,7 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
   })
 
   // ── Macro metrics filter state ───────────────────────────────────────────
-  const [masterMacroColumns, setMasterMacroColumns] = useState([])
+  const [masterMacroColumns, setMasterMacroColumns] = useState(() => _onceCache.masterMacro ?? [])
   const [selectedMacroMetricsTable, setSelectedMacroMetricsTable] = useState(() => {
     const stored = loadMetricsFromStorage('macroMetricsFilter_table') || []
     return stored.filter(k => ALL_MACRO_TABLE_METRICS.includes(k))
@@ -101,19 +114,43 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
   const buildParams = () => {
     const params = new URLSearchParams()
     params.append('regions', filters.regions.join(','))
-    if (filters.startDate) params.append('start_date', filters.startDate)
-    if (filters.endDate) params.append('end_date', filters.endDate)
+    // Only pass explicit dates in custom mode.
+    // In lookback mode the backend returns full history and the
+    // client-side filteredRecords handles the display window.
+    if (filters.customMode) {
+      if (filters.startDate) params.append('start_date', filters.startDate)
+      if (filters.endDate) params.append('end_date', filters.endDate)
+    }
+    params.append('lookback', filters.lookback)
+    return params
+  }
+
+  // Build API params for macro: always fetch ALL regions so that
+  // conditional formatting percentiles are stable regardless of the
+  // user's current country selection.
+  const buildParamsMacroFull = () => {
+    const params = new URLSearchParams()
+    params.append('regions', ALL_REGIONS.join(','))
+    if (filters.customMode) {
+      if (filters.startDate) params.append('start_date', filters.startDate)
+      if (filters.endDate) params.append('end_date', filters.endDate)
+    }
     params.append('lookback', filters.lookback)
     return params
   }
 
   // Fetch data for a specific endpoint
-  const fetchTabData = async (endpoint, setData, setLoading, setError, isCurrencyNeeded = false) => {
+  // Pass `customParams` to override the default buildParams() (e.g. for macro full-region fetch)
+  const fetchTabData = async (endpoint, setData, setLoading, setError, isCurrencyNeeded = false, customParams = null, cache = null, cacheKey = null) => {
+    if (cache && cacheKey && cache[cacheKey]) {
+      setData(cache[cacheKey])
+      return
+    }
     try {
       setLoading(true)
       setError(null)
 
-      const params = buildParams()
+      const params = customParams ?? buildParams()
       if (isCurrencyNeeded) {
         params.append('currency', filters.currency)
       }
@@ -136,6 +173,7 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
         throw new Error(result.error)
       }
 
+      if (cache && cacheKey) cache[cacheKey] = result
       setData(result)
     } catch (err) {
       setError(err.message)
@@ -245,83 +283,103 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
   useEffect(() => {
     console.log('[DEBUG] EFFECT INIT COLUMNS: Fetching master columns on mount')
     
-    // Fetch master equity columns - ONCE
-    fetch(`/api/countries/equity/columns-master`)
-      .then(r => {
-        console.log('[DEBUG] INIT COLUMNS: Fetch response status:', r.status)
-        return r.json()
-      })
-      .then(result => {
-        console.log('[DEBUG] INIT COLUMNS: Master columns response:', result)
-        if (result.status === 'ok') {
-          const masterColumns = result.columns || []
-          console.log('[DEBUG] INIT COLUMNS: Fetched master columns:', masterColumns)
-          console.log('[DEBUG] INIT COLUMNS: Setting masterEquityColumns to:', masterColumns)
-          setMasterEquityColumns(masterColumns)
-          
-          // Only set defaults if BOTH selections are truly empty (first visit)
-          if (selectedMetricsTable.length === 0 && selectedMetricsGraph.length === 0) {
-            setSelectedMetricsTable(STANDARD_DEFAULTS.table)
-            setSelectedMetricsGraph(STANDARD_DEFAULTS.graph)
+    // Fetch master equity columns - ONCE (skip if cached)
+    if (_onceCache.masterEquity) {
+      setMasterEquityColumns(_onceCache.masterEquity)
+    } else {
+      fetch(`/api/countries/equity/columns-master`)
+        .then(r => {
+          console.log('[DEBUG] INIT COLUMNS: Fetch response status:', r.status)
+          return r.json()
+        })
+        .then(result => {
+          console.log('[DEBUG] INIT COLUMNS: Master columns response:', result)
+          if (result.status === 'ok') {
+            const masterColumns = result.columns || []
+            _onceCache.masterEquity = masterColumns
+            setMasterEquityColumns(masterColumns)
+            if (selectedMetricsTable.length === 0 && selectedMetricsGraph.length === 0) {
+              setSelectedMetricsTable(STANDARD_DEFAULTS.table)
+              setSelectedMetricsGraph(STANDARD_DEFAULTS.graph)
+            }
+          } else {
+            console.error('[DEBUG] INIT COLUMNS: Bad status in response:', result)
           }
-        } else {
-          console.error('[DEBUG] INIT COLUMNS: Bad status in response:', result)
-        }
-      })
-      .catch(err => console.error('[DEBUG] INIT COLUMNS: Fetch error:', err))
+        })
+        .catch(err => console.error('[DEBUG] INIT COLUMNS: Fetch error:', err))
+    }
 
-    // Fetch master FI columns - ONCE
-    fetch(`/api/countries/fixed-income/columns-master`)
-      .then(r => r.json())
-      .then(result => {
-        if (result.status === 'ok') {
-          const masterColumns = result.columns || []
-          setMasterFIColumns(masterColumns)
-          // Only set FI defaults if both selections are empty (first visit)
-          if (selectedFIMetricsTable.length === 0 && selectedFIMetricsGraph.length === 0) {
-            setSelectedFIMetricsTable(FI_STANDARD_DEFAULTS.table)
-            setSelectedFIMetricsGraph(FI_STANDARD_DEFAULTS.graph)
+    // Fetch master FI columns - ONCE (skip if cached)
+    if (_onceCache.masterFI) {
+      setMasterFIColumns(_onceCache.masterFI)
+    } else {
+      fetch(`/api/countries/fixed-income/columns-master`)
+        .then(r => r.json())
+        .then(result => {
+          if (result.status === 'ok') {
+            const masterColumns = result.columns || []
+            _onceCache.masterFI = masterColumns
+            setMasterFIColumns(masterColumns)
+            if (selectedFIMetricsTable.length === 0 && selectedFIMetricsGraph.length === 0) {
+              setSelectedFIMetricsTable(FI_STANDARD_DEFAULTS.table)
+              setSelectedFIMetricsGraph(FI_STANDARD_DEFAULTS.graph)
+            }
           }
-        }
-      })
-      .catch(err => console.error('[DEBUG] INIT FI COLUMNS: Fetch error:', err))
+        })
+        .catch(err => console.error('[DEBUG] INIT FI COLUMNS: Fetch error:', err))
+    }
 
-    // Fetch master Macro columns - ONCE
-    fetch(`/api/countries/macro/columns-master`)
-      .then(r => r.json())
-      .then(result => {
-        if (result.status === 'ok') {
-          const masterColumns = result.columns || []
-          setMasterMacroColumns(masterColumns)
-          if (selectedMacroMetricsTable.length === 0 && selectedMacroMetricsGraph.length === 0) {
-            setSelectedMacroMetricsTable(MACRO_STANDARD_DEFAULTS.table)
-            setSelectedMacroMetricsGraph(MACRO_STANDARD_DEFAULTS.graph)
+    // Fetch master Macro columns - ONCE (skip if cached)
+    if (_onceCache.masterMacro) {
+      setMasterMacroColumns(_onceCache.masterMacro)
+    } else {
+      fetch(`/api/countries/macro/columns-master`)
+        .then(r => r.json())
+        .then(result => {
+          if (result.status === 'ok') {
+            const masterColumns = result.columns || []
+            _onceCache.masterMacro = masterColumns
+            setMasterMacroColumns(masterColumns)
+            if (selectedMacroMetricsTable.length === 0 && selectedMacroMetricsGraph.length === 0) {
+              setSelectedMacroMetricsTable(MACRO_STANDARD_DEFAULTS.table)
+              setSelectedMacroMetricsGraph(MACRO_STANDARD_DEFAULTS.graph)
+            }
           }
-        }
-      })
-      .catch(err => console.error('[DEBUG] INIT MACRO COLUMNS: Fetch error:', err))
+        })
+        .catch(err => console.error('[DEBUG] INIT MACRO COLUMNS: Fetch error:', err))
+    }
 
-    // Fetch S&P credit ratings - ONCE (ratings are quasi-static, no region param needed)
-    const token = localStorage.getItem('auth_token')
-    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {}
-    fetch('/api/countries/fixed-income/ratings', { headers: authHeaders })
-      .then(r => r.json())
-      .then(result => {
-        console.log('[RATINGS] API response:', result)
-        if (result.status === 'ok') {
-          console.log('[RATINGS] data sample:', result.data?.slice(0, 5))
-          setRatingsData(result.data || [])
-        } else {
-          console.warn('[RATINGS] non-ok status:', result)
-        }
-      })
-      .catch(err => console.error('[RATINGS] Fetch error:', err))
+    // Fetch S&P credit ratings - ONCE (skip if cached)
+    if (_onceCache.ratings) {
+      setRatingsData(_onceCache.ratings)
+    } else {
+      const token = localStorage.getItem('auth_token')
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {}
+      fetch('/api/countries/fixed-income/ratings', { headers: authHeaders })
+        .then(r => r.json())
+        .then(result => {
+          console.log('[RATINGS] API response:', result)
+          if (result.status === 'ok') {
+            console.log('[RATINGS] data sample:', result.data?.slice(0, 5))
+            _onceCache.ratings = result.data || []
+            setRatingsData(result.data || [])
+          } else {
+            console.warn('[RATINGS] non-ok status:', result)
+          }
+        })
+        .catch(err => console.error('[RATINGS] Fetch error:', err))
+    }
   }, []) // Only run once on mount
 
   // Helper: fetch equity data + columns together
   const fetchEquityFull = () => {
-    fetchTabData('/countries/equity', setEquityData, setEquityLoading, setEquityError, true)
+    fetchTabData('/countries/equity', setEquityData, setEquityLoading, setEquityError, true, null, _equityCache, _equityKey(filters))
 
+    const colKey = _equityColKey(filters)
+    if (_equityColCache[colKey]) {
+      setEquityColumns(_equityColCache[colKey])
+      return
+    }
     const params = new URLSearchParams()
     params.append('regions', filters.regions.join(','))
     params.append('lookback', filters.lookback)
@@ -330,9 +388,10 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
       .then(result => {
         if (result.status === 'ok') {
           const newColumns = result.columns || []
+          _equityColCache[colKey] = newColumns
           setEquityColumns(newColumns)
           const filteredTable = selectedMetricsTable.filter(m => newColumns.includes(m))
-          const filteredGraph = selectedMetricsGraph.filter(m => newColumns.includes(m))
+          const filteredGraph = selectedMetricsGraph.filter(m => newColumns.includes(m) || VIRTUAL_GRAPH_METRICS.includes(m))
           if (filteredTable.length !== selectedMetricsTable.length) setSelectedMetricsTable(filteredTable)
           if (filteredGraph.length !== selectedMetricsGraph.length) setSelectedMetricsGraph(filteredGraph)
         }
@@ -347,9 +406,9 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
       if (tab === 'equity') {
         fetchEquityFull()
       } else if (tab === 'fixed-income') {
-        fetchTabData('/countries/fixed-income', setFixedIncomeData, setFixedIncomeLoading, setFixedIncomeError)
+        fetchTabData('/countries/fixed-income', setFixedIncomeData, setFixedIncomeLoading, setFixedIncomeError, false, null, _fiCache, _fiKey(filters))
       } else if (tab === 'macro') {
-        fetchTabData('/countries/macro', setMacroData, setMacroLoading, setMacroError)
+        fetchTabData('/countries/macro', setMacroData, setMacroLoading, setMacroError, false, buildParamsMacroFull(), _macroCache, _macroKey(filters))
       }
       // Mark all other tabs as needing a refresh
       setStaleFlags({
@@ -368,10 +427,10 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
       fetchEquityFull()
       setStaleFlags(prev => ({ ...prev, equity: false }))
     } else if (activeTab === 'fixed-income') {
-      fetchTabData('/countries/fixed-income', setFixedIncomeData, setFixedIncomeLoading, setFixedIncomeError)
+      fetchTabData('/countries/fixed-income', setFixedIncomeData, setFixedIncomeLoading, setFixedIncomeError, false, null, _fiCache, _fiKey(filters))
       setStaleFlags(prev => ({ ...prev, 'fixed-income': false }))
     } else if (activeTab === 'macro') {
-      fetchTabData('/countries/macro', setMacroData, setMacroLoading, setMacroError)
+      fetchTabData('/countries/macro', setMacroData, setMacroLoading, setMacroError, false, buildParamsMacroFull(), _macroCache, _macroKey(filters))
       setStaleFlags(prev => ({ ...prev, macro: false }))
     }
   }, [activeTab])
@@ -383,7 +442,7 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
         filters={filters}
         onFiltersChange={onFiltersChange}
         activeTab={activeTab}
-        availableMetrics={activeTab === 'equity' ? masterEquityColumns : []}
+        availableMetrics={activeTab === 'equity' ? [...masterEquityColumns, ...VIRTUAL_GRAPH_METRICS] : []}
         selectedMetricsTable={selectedMetricsTable}
         selectedMetricsGraph={selectedMetricsGraph}
         onMetricsChange={handleMetricsChange}
@@ -397,6 +456,7 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
         onMacroMetricsChange={handleMacroMetricsChange}
         chartType={chartType}
         onChartTypeChange={handleChartTypeChange}
+        ratingsData={ratingsData}
       />
 
       {/* Tab container */}
@@ -435,6 +495,7 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
               selectedMetricsGraph={selectedMetricsGraph}
               chartsPerRow={gs.equity?.chartsPerRow ?? 2}
               chartHeight={gs.equity?.chartHeight ?? 300}
+              lineWidth={gs.equity?.lineWidth ?? 2}
               chartType={chartType}
             />
           )}
@@ -448,6 +509,7 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
               selectedMetricsGraph={selectedFIMetricsGraph}
               chartsPerRow={gs.fi?.chartsPerRow ?? 2}
               chartHeight={gs.fi?.chartHeight ?? 300}
+              lineWidth={gs.fi?.lineWidth ?? 2}
               chartType={chartType}
               ratingsData={ratingsData}
             />
@@ -462,6 +524,7 @@ function Länder({ activeTab, onActiveTabChange, filters, onFiltersChange, graph
               selectedMetricsGraph={selectedMacroMetricsGraph}
               chartsPerRow={gs.macro?.chartsPerRow ?? 2}
               chartHeight={gs.macro?.chartHeight ?? 300}
+              lineWidth={gs.macro?.lineWidth ?? 2}
               chartType={chartType}
             />
           )}

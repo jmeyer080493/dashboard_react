@@ -67,6 +67,7 @@ export function PerformanceChart({ data, title = 'Market Performance', tab = 'Ak
           <Tooltip 
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
             formatter={(value) => typeof value === 'number' ? value.toFixed(2) : value}
+            labelFormatter={(label) => typeof label === 'string' ? label.split('T')[0] : label}
           />
           <Legend
             formatter={(name, entry) => {
@@ -91,8 +92,9 @@ export function PerformanceChart({ data, title = 'Market Performance', tab = 'Ak
         <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={26} height={26} /></button>
         <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={26} height={26} /></button>
         {data[data.length - 1]?.DatePoint && (
-          <span className="chart-export-date">Letztes Datum: {data[data.length - 1].DatePoint.split('T')[0]}</span>
+          <span className="chart-export-date">Aktualität: {data[data.length - 1].DatePoint.split('T')[0]}</span>
         )}
+  
       </div>
     </div>
   )
@@ -152,6 +154,7 @@ export function MetricChart({ data, dataKey, title, yAxisLabel = '', tab = 'Akti
           <Tooltip 
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
             formatter={(value) => typeof value === 'number' ? value.toFixed(2) : value}
+            labelFormatter={(label) => typeof label === 'string' ? label.split('T')[0] : label}
           />
           <Legend
             formatter={(name, entry) => {
@@ -196,7 +199,7 @@ export function MetricChart({ data, dataKey, title, yAxisLabel = '', tab = 'Akti
         <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={26} height={26} /></button>
         <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={26} height={26} /></button>
         {data[data.length - 1]?.DatePoint && (
-          <span className="chart-export-date">Letztes Datum: {data[data.length - 1].DatePoint}</span>
+          <span className="chart-export-date">Aktualität: {data[data.length - 1].DatePoint.split('T')[0]}</span>
         )}
       </div>
     </div>
@@ -237,6 +240,7 @@ export function ComparisonChart({ data, metrics, title, tab = '', height = 300 }
           <Tooltip 
             contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
             formatter={(value) => typeof value === 'number' ? value.toFixed(4) : value}
+            labelFormatter={(label) => typeof label === 'string' ? label.split('T')[0] : label}
           />
           <Legend
             formatter={(name, entry) => {
@@ -261,7 +265,7 @@ export function ComparisonChart({ data, metrics, title, tab = '', height = 300 }
         <button className="chart-export-btn pptx" onClick={() => addToPptx(exportItem)} title="Zu PowerPoint hinzufügen"><PowerPointIcon width={20} height={20} /></button>
         <button className="chart-export-btn xlsx" onClick={() => addToXlsx(exportItem)} title="Zu Excel hinzufügen"><ExcelIcon width={20} height={20} /></button>
         {data[data.length - 1]?.date && (
-          <span className="chart-export-date">Letztes Datum: {data[data.length - 1].date.split('T')[0]}</span>
+          <span className="chart-export-date">Aktualität: {data[data.length - 1].date.split('T')[0]}</span>
         )}
       </div>
     </div>

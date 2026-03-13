@@ -5,8 +5,7 @@ import {
   STANDARD_DEFAULTS,
 } from '../config/metricsConfig'
 
-const USER_DEFAULT_KEY_TABLE = 'metricsFilter_userDefault_table'
-const USER_DEFAULT_KEY_GRAPH = 'metricsFilter_userDefault_graph'
+
 
 /**
  * MetricsFilterModal Component
@@ -14,7 +13,7 @@ const USER_DEFAULT_KEY_GRAPH = 'metricsFilter_userDefault_graph'
  * Category-based filter modal matching the reference Dash dashboard design.
  * Each field shows TABELLE and GRAFIK checkboxes inline.
  * "Spezial" category is graph-only (no TABELLE column).
- * Buttons: Save Default | Load Default | Load Standard | Ok
+ * Buttons: Load Standard | Ok
  *
  * Accepts optional `categories` and `standardDefaults` props so the same modal
  * can be reused for both equity and fixed-income tabs.
@@ -35,9 +34,6 @@ function MetricsFilterModal({
   // Use provided categories/defaults, or fall back to equity
   const activeCategories = categories || EQUITY_METRICS_CATEGORIES
   const activeStandardDefaults = standardDefaults || STANDARD_DEFAULTS
-
-  const userDefaultKeyTable = USER_DEFAULT_KEY_TABLE + storageKeySuffix
-  const userDefaultKeyGraph  = USER_DEFAULT_KEY_GRAPH  + storageKeySuffix
 
   const [pendingTable, setPendingTable] = useState([])
   const [pendingGraph, setPendingGraph]  = useState([])
@@ -93,22 +89,6 @@ function MetricsFilterModal({
 
   // ── default management ────────────────────────────────────────────────────
 
-  const handleSaveDefault = () => {
-    try {
-      localStorage.setItem(userDefaultKeyTable, JSON.stringify(pendingTable))
-      localStorage.setItem(userDefaultKeyGraph, JSON.stringify(pendingGraph))
-    } catch (_) {}
-  }
-
-  const handleLoadDefault = () => {
-    try {
-      const t = JSON.parse(localStorage.getItem(userDefaultKeyTable) || 'null')
-      const g = JSON.parse(localStorage.getItem(userDefaultKeyGraph) || 'null')
-      if (t) setPendingTable(t)
-      if (g) setPendingGraph(g)
-    } catch (_) {}
-  }
-
   const handleLoadStandard = () => {
     setPendingTable(activeStandardDefaults.table)
     setPendingGraph(activeStandardDefaults.graph)
@@ -134,8 +114,6 @@ function MetricsFilterModal({
 
         {/* Default action buttons */}
         <div className="mfm-default-btns">
-          <button className="mfm-btn mfm-btn-save"   onClick={handleSaveDefault}>💾 Save Default</button>
-          <button className="mfm-btn mfm-btn-load"   onClick={handleLoadDefault}>📂 Load Default</button>
           <button className="mfm-btn mfm-btn-std"    onClick={handleLoadStandard}>🔄 Load Standard</button>
         </div>
 

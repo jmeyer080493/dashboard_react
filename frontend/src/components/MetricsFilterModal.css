@@ -86,7 +86,22 @@
 
 .mfm-btn-save { background: #2979ff; color: #fff; }
 .mfm-btn-load { background: #7c4dff; color: #fff; }
-.mfm-btn-std  { background: #ff8f00; color: #fff; }
+.mfm-btn-std  {
+  background: transparent;
+  color: var(--mfm-cat-name);
+  border: 1px solid var(--mfm-cat-border);
+  border-radius: 6px;
+  padding: 0.45rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.mfm-btn-std:hover {
+  background: color-mix(in srgb, var(--mfm-cat-name) 12%, transparent);
+  border-color: var(--mfm-cat-name);
+  filter: none;
+}
 .mfm-btn-ok   { background: #00bfa5; color: #fff; padding: 0.55rem 2rem; font-size: 0.9rem; }
 
 /* Scrollable body */
@@ -102,8 +117,8 @@
 
 /* Category box */
 .mfm-category {
-  background: #252540;
-  border: 1px solid #3a3a5c;
+  background: var(--mfm-cat-bg);
+  border: 1px solid var(--mfm-cat-border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -114,15 +129,15 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.45rem 0.75rem;
-  background: #1a1a35;
-  border-bottom: 1px solid #3a3a5c;
+  background: var(--mfm-cat-header-bg);
+  border-bottom: 1px solid var(--mfm-cat-header-border);
 }
 
 .mfm-cat-name {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: #a0a0d0;
+  color: var(--mfm-cat-name);
   text-transform: uppercase;
 }
 
@@ -137,7 +152,7 @@
   gap: 0.3rem;
   font-size: 0.68rem;
   font-weight: 600;
-  color: #8888bb;
+  color: var(--mfm-col-header);
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
@@ -155,11 +170,11 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.3rem 0.75rem;
-  border-bottom: 1px solid #2a2a4a;
+  border-bottom: 1px solid var(--mfm-field-row-border);
   transition: background 0.1s;
 }
 .mfm-field-row:last-child { border-bottom: none; }
-.mfm-field-row:hover { background: #2e2e52; }
+.mfm-field-row:hover { background: var(--mfm-field-row-hover); }
 
 .mfm-field-unavailable {
   opacity: 0.38;
@@ -168,7 +183,7 @@
 
 .mfm-field-label {
   font-size: 0.82rem;
-  color: #c8c8e8;
+  color: var(--mfm-field-label);
   flex: 1;
   padding-right: 0.5rem;
 }
@@ -209,7 +224,7 @@
 /* Scrollbar styling */
 .mfm-body::-webkit-scrollbar { width: 6px; }
 .mfm-body::-webkit-scrollbar-track { background: transparent; }
-.mfm-body::-webkit-scrollbar-thumb { background: #444466; border-radius: 3px; }
+.mfm-body::-webkit-scrollbar-thumb { background: var(--mfm-scrollbar); border-radius: 3px; }
 
 /* Responsive: single column on narrow screens */
 @media (max-width: 620px) {

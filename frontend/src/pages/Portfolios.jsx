@@ -405,7 +405,7 @@ function AllocationPieChart({ title, chartId, data, latestDate, tab }) {
         </ResponsiveContainer>
       </div>
       {latestDate && (
-        <div className="portfolio-chart-date">Letztes Datum: {latestDate}</div>
+        <div className="portfolio-chart-date">Aktualität: {latestDate}</div>
       )}
       <div className="portfolio-export-row">
         <button className="portfolio-export-btn pptx" onClick={() => addToPptx(exportItem)}

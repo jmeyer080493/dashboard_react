@@ -72,6 +72,12 @@ GRAPH_DICTIONARY = {
 GRAPH_NAMES  = ["g1", "g2", "g3", "g4", "g5", "g6"]
 VIEW_OPTIONS = ["U.S.", "Europe", "U.S. vs. Europe", "World"]
 
+# Display-only translations for chart headings (does not affect data queries)
+TITLE_TRANSLATIONS = {
+    "Europe": "Europa",
+    "World":  "Welt",
+}
+
 
 # ---------------------------------------------------------------------------
 # Database helpers  (same engine pattern as länder_service.py)
@@ -338,9 +344,11 @@ def _build_graph_data(
     if prices_df.empty:
         title = ""
         if len(unique_db_regions) == 1:
-            title = unique_db_regions[0] + " " + " – ".join(factors)
+            region_display = TITLE_TRANSLATIONS.get(unique_db_regions[0], unique_db_regions[0])
+            title = region_display + " " + " – ".join(factors)
         else:
-            title = f"{view} {factors[0]}"
+            view_display = TITLE_TRANSLATIONS.get(view, view)
+            title = f"{view_display} {factors[0]}"
         return {"title": title, "data": [], "series": [], "has_difference": False, "latest_date": "N/A"}
 
     # Annotate prices with region and factor name from the ticker map
@@ -445,9 +453,11 @@ def _build_graph_data(
 
     # Build title
     if len(unique_db_regions) == 1:
-        title = unique_db_regions[0] + " " + " – ".join(factors)
+        region_display = TITLE_TRANSLATIONS.get(unique_db_regions[0], unique_db_regions[0])
+        title = region_display + " " + " – ".join(factors)
     else:
-        title = f"{view} {factors[0]}"
+        view_display = TITLE_TRANSLATIONS.get(view, view)
+        title = f"{view_display} {factors[0]}"
 
     if not traces:
         return {"title": title, "data": [], "series": [], "has_difference": False, "latest_date": "N/A"}

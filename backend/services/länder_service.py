@@ -185,7 +185,191 @@ class LänderDataService:
     # Cache for FI ticker mapping
     _fi_ticker_mapping_cache: Optional[pd.DataFrame] = None
     _fi_cache_initialized: bool = False
-    
+
+    # ── Startup warm-up cache ─────────────────────────────────────────────────
+    # Pre-computed wide-format DataFrames for all regions, populated once at
+    # server startup.  Requests then just slice in-memory data rather than
+    # re-querying Bloomberg every time.
+    _equity_eur_cache: Optional[pd.DataFrame] = None   # equity, EUR currency
+    _equity_usd_cache: Optional[pd.DataFrame] = None   # equity, USD currency
+    _fi_full_cache: Optional[pd.DataFrame] = None       # fixed income, all regions
+    _macro_full_cache: Optional[pd.DataFrame] = None    # macro, all regions
+    _cache_ready: bool = False          # True once all three caches are populated
+    _cache_warming: bool = False        # True while warm-up is running
+
+    @classmethod
+    def warm_caches(cls) -> None:
+        """
+        Pre-compute and cache full wide-format DataFrames for all regions.
+
+        Called once at server startup (in a background thread so it does not
+        block the first request).  After this returns, get_equity_data /
+        get_fixed_income_data / get_macro_data skip all Bloomberg queries and
+        simply slice the in-memory cache.
+        """
+        if cls._cache_warming or cls._cache_ready:
+            return
+        cls._cache_warming = True
+        logger.info("🔥 Starting startup cache warm-up …")
+
+        try:
+            # ── 1. EQUITY ─────────────────────────────────────────────────────
+            logger.info("  [cache] Fetching equity data for all regions …")
+            ticker_mapping = cls._get_ticker_to_region_mapping()
+            all_equity_tickers = list(ticker_mapping.keys())
+
+            df_bloomberg = cls._get_bloomberg_equity_data(all_equity_tickers)
+            df_mapped = cls._merge_with_region_mapping(df_bloomberg)
+
+            CURRENCY_INDEPENDENT_FIELDS = {
+                'PE_RATIO', 'PX_TO_BOOK_RATIO', 'PX_TO_SALES_RATIO',
+                'EARN_YLD', 'BEST_PE_RATIO', 'IS_DIL_EPS_CONT_OPS',
+            }
+
+            for curr in ("EUR", "USD"):
+                currency_dependent = df_mapped[~df_mapped['FieldName'].isin(CURRENCY_INDEPENDENT_FIELDS)].copy()
+                currency_independent = df_mapped[df_mapped['FieldName'].isin(CURRENCY_INDEPENDENT_FIELDS)].copy()
+                currency_dependent = currency_dependent[currency_dependent['Currency'] == curr].copy()
+                df_for_curr = pd.concat([currency_dependent, currency_independent], ignore_index=True)
+
+                if df_for_curr.empty:
+                    logger.warning(f"  [cache] No equity data for currency {curr} – skipping")
+                    continue
+
+                df_wide = cls._calculate_all_indicators(df_for_curr, requested_currency=curr)
+
+                # Merge ERP
+                try:
+                    erp_engine = DatabaseGateway().jm_engine
+                    if erp_engine is not None:
+                        erp_df = pd.read_sql_query("SELECT * FROM erp", erp_engine)
+                        erp_df["Date"] = pd.to_datetime(erp_df["Date"], format="%m/%d/%y", errors="coerce")
+                        erp_df = erp_df.rename(columns={"Date": "DatePoint", "Country": "Regions"})
+                        erp_df["DatePoint"] = pd.to_datetime(erp_df["DatePoint"])
+                        erp_cols = [c for c in erp_df.columns if c not in ["DatePoint", "Regions"]]
+                        df_wide = df_wide.sort_values(["Regions", "DatePoint"]).reset_index(drop=True)
+                        df_wide = pd.merge(df_wide, erp_df, how="left", on=["DatePoint", "Regions"])
+                        df_wide[erp_cols] = df_wide.groupby("Regions", sort=False)[erp_cols].ffill()
+                        logger.info(f"  [cache] ERP merged for {curr} equity cache")
+                except Exception as erp_exc:
+                    logger.warning(f"  [cache] ERP merge skipped for {curr}: {erp_exc}")
+
+                if curr == "EUR":
+                    cls._equity_eur_cache = df_wide
+                    logger.info(f"  [cache] equity EUR cache ready: {df_wide.shape}")
+                else:
+                    cls._equity_usd_cache = df_wide
+                    logger.info(f"  [cache] equity USD cache ready: {df_wide.shape}")
+
+        except Exception as exc:
+            logger.error(f"  [cache] Equity warm-up failed: {exc}", exc_info=True)
+
+        try:
+            # ── 2. FIXED INCOME ───────────────────────────────────────────────
+            logger.info("  [cache] Fetching fixed income data for all regions …")
+            fi_fetch_days = 3650
+            fi_mapping = cls._load_fi_ticker_mapping()
+            focus_groups = {"Yields", "CDS", "Breakevens", "Inflation Expectations"}
+            fi_map = fi_mapping[fi_mapping["GroupingName"].isin(focus_groups)].copy()
+
+            bloomberg_tickers = fi_map[fi_map["DBSource"] == "Bloomberg"]["Ticker"].tolist()
+            quant_tickers = fi_map[fi_map["DBSource"] == "Quant"]["Ticker"].tolist()
+
+            df_bloomberg_fi = cls._get_bloomberg_fi_data(bloomberg_tickers, days_back=fi_fetch_days)
+            df_quant_fi = cls._get_quant_fi_data(quant_tickers, days_back=fi_fetch_days)
+
+            frames_fi = []
+            if not df_bloomberg_fi.empty:
+                frames_fi.append(df_bloomberg_fi[df_bloomberg_fi["FieldName"] == "PX_LAST"].copy())
+            if not df_quant_fi.empty:
+                frames_fi.append(df_quant_fi)
+
+            if frames_fi:
+                raw_fi = pd.concat(frames_fi, ignore_index=True, sort=False)
+                # Process with ALL available regions
+                all_fi_regions = fi_map["Regions"].dropna().unique().tolist()
+                df_fi_wide = cls._process_fi_raw_data(raw_fi, fi_map, all_fi_regions)
+
+                # Merge Government Debt
+                try:
+                    macro_mapping = cls._load_macro_ticker_mapping()
+                    gov_debt_map = macro_mapping[macro_mapping["GroupingName"] == "Government Debt"].copy()
+                    if not gov_debt_map.empty:
+                        gov_bb_tickers = gov_debt_map[gov_debt_map["DBSource"] == "Bloomberg"]["Ticker"].tolist()
+                        gov_q_tickers = gov_debt_map[gov_debt_map["DBSource"] == "Quant"]["Ticker"].tolist()
+                        gov_bloomberg = cls._get_bloomberg_macro_data(gov_bb_tickers, days_back=fi_fetch_days + 730)
+                        gov_quant = cls._get_quant_macro_data(gov_q_tickers, days_back=fi_fetch_days + 730)
+                        gov_frames = []
+                        if not gov_bloomberg.empty:
+                            gov_frames.append(gov_bloomberg[gov_bloomberg["FieldName"] == "PX_LAST"].copy())
+                        if not gov_quant.empty:
+                            gov_frames.append(gov_quant)
+                        if gov_frames:
+                            gov_raw = pd.concat(gov_frames, ignore_index=True, sort=False)
+                            gov_processed = cls._process_macro_raw_data(gov_raw, gov_debt_map, all_fi_regions)
+                            if not gov_processed.empty and "Government Debt" in gov_processed.columns:
+                                gov_subset = gov_processed[["DatePoint", "Regions", "Government Debt"]].copy()
+                                df_fi_wide = df_fi_wide.merge(gov_subset, on=["DatePoint", "Regions"], how="left")
+                                df_fi_wide["Government Debt"] = (
+                                    df_fi_wide.groupby("Regions")["Government Debt"].ffill()
+                                )
+                                logger.info("  [cache] Merged Government Debt into FI cache")
+                except Exception as gov_exc:
+                    logger.warning(f"  [cache] Government Debt merge skipped: {gov_exc}")
+
+                cls._fi_full_cache = df_fi_wide
+                logger.info(f"  [cache] FI cache ready: {df_fi_wide.shape}")
+            else:
+                logger.warning("  [cache] No FI data retrieved – FI cache empty")
+
+        except Exception as exc:
+            logger.error(f"  [cache] FI warm-up failed: {exc}", exc_info=True)
+
+        try:
+            # ── 3. MACRO ──────────────────────────────────────────────────────
+            logger.info("  [cache] Fetching macro data for all regions …")
+            macro_fetch_days = 3650
+            query_days_back = macro_fetch_days + 730
+
+            macro_mapping = cls._load_macro_ticker_mapping()
+            bb_macro_tickers = macro_mapping[macro_mapping["DBSource"] == "Bloomberg"]["Ticker"].tolist()
+            q_macro_tickers = macro_mapping[macro_mapping["DBSource"] == "Quant"]["Ticker"].tolist()
+
+            df_bloomberg_m = cls._get_bloomberg_macro_data(bb_macro_tickers, days_back=query_days_back)
+            df_quant_m = cls._get_quant_macro_data(q_macro_tickers, days_back=query_days_back)
+
+            frames_m = []
+            if not df_bloomberg_m.empty:
+                frames_m.append(df_bloomberg_m[df_bloomberg_m["FieldName"] == "PX_LAST"].copy())
+            if not df_quant_m.empty:
+                frames_m.append(df_quant_m)
+
+            if frames_m:
+                raw_m = pd.concat(frames_m, ignore_index=True, sort=False)
+                all_macro_regions = macro_mapping["Regions"].dropna().unique().tolist()
+                df_macro_wide = cls._process_macro_raw_data(raw_m, macro_mapping, all_macro_regions)
+
+                # Trim YoY buffer: keep only the 10-year window
+                trim_cutoff = pd.Timestamp.now(tz=None).normalize() - pd.Timedelta(days=macro_fetch_days)
+                df_macro_wide = df_macro_wide[df_macro_wide["DatePoint"] >= trim_cutoff].copy()
+
+                cls._macro_full_cache = df_macro_wide
+                logger.info(f"  [cache] Macro cache ready: {df_macro_wide.shape}")
+            else:
+                logger.warning("  [cache] No Macro data retrieved – Macro cache empty")
+
+        except Exception as exc:
+            logger.error(f"  [cache] Macro warm-up failed: {exc}", exc_info=True)
+
+        at_least_one = any([
+            cls._equity_eur_cache is not None,
+            cls._fi_full_cache is not None,
+            cls._macro_full_cache is not None,
+        ])
+        cls._cache_ready = at_least_one
+        cls._cache_warming = False
+        logger.info("✅ Startup cache warm-up complete (cache_ready=%s)", cls._cache_ready)
+
     # Region name aliases - normalize incoming region names to database names
     REGION_ALIASES = {
         "US": "U.S.",
@@ -331,7 +515,7 @@ class LänderDataService:
             return pd.DataFrame()
         
         if start_date is None:
-            start_date = datetime.now() - timedelta(days=1460)  # 4 years
+            start_date = datetime.now() - timedelta(days=3650)  # 10 years
         if end_date is None:
             end_date = datetime.now()
         
@@ -592,6 +776,11 @@ class LänderDataService:
             final_df['Weighted Valuation'] = final_df[val_cols].mean(axis=1)
             logger.info(f"  ✓ Computed Weighted Valuation from {val_cols}")
 
+        # PE_Diff: KGV minus KGV (Fwd.) = PE_RATIO - BEST_PE_RATIO
+        if 'PE_RATIO' in final_df.columns and 'BEST_PE_RATIO' in final_df.columns:
+            final_df['PE_Diff'] = final_df['PE_RATIO'] - final_df['BEST_PE_RATIO']
+            logger.info("  ✓ Computed PE_Diff (KGV - KGV Fwd.) from PE_RATIO - BEST_PE_RATIO")
+
         # EPS Growth: cumulative growth of IS_DIL_EPS_CONT_OPS per region+currency
         if 'IS_DIL_EPS_CONT_OPS' in final_df.columns:
             def _cumulative_growth(series):
@@ -637,6 +826,105 @@ class LänderDataService:
         logger.info("=" * 80)
         
         try:
+            # ── Fast path: serve from startup cache when available ─────────────
+            equity_cache = (
+                LänderDataService._equity_eur_cache if currency == "EUR"
+                else LänderDataService._equity_usd_cache
+            )
+            if equity_cache is not None:
+                logger.info(f"⚡ Serving equity from in-memory cache (currency={currency})")
+                normalized_regions = [LänderDataService._normalize_region_name(r) for r in regions]
+                df_final = equity_cache[equity_cache["Regions"].isin(normalized_regions)].copy()
+                if df_final.empty:
+                    raise ValueError(f"No cached data for regions: {normalized_regions}")
+
+                # Performance rebase (always date-specific – must remain per-request)
+                import math as _math
+                if 'Performance' in df_final.columns and 'PX_LAST' in df_final.columns:
+                    df_final = df_final.sort_values(['Regions', 'DatePoint']).reset_index(drop=True)
+                    if start_date:
+                        rebase_date = start_date
+                        filter_by_date = True
+                    else:
+                        _today = datetime.now()
+                        _days_map = {'1Y': 365, '3Y': 1095, '5Y': 1825}
+                        if lookback == 'YtD':
+                            rebase_date = str(datetime(_today.year - 1, 12, 31).date())
+                        elif lookback in _days_map:
+                            rebase_date = str((_today - timedelta(days=_days_map[lookback])).date())
+                        else:
+                            rebase_date = None
+                        filter_by_date = False
+
+                    base_prices: dict = {}
+                    if rebase_date:
+                        rebase_ts = pd.Timestamp(rebase_date)
+                        for region_name, grp in df_final.groupby('Regions'):
+                            pre = grp[grp['DatePoint'] <= rebase_ts].dropna(subset=['PX_LAST'])
+                            if not pre.empty:
+                                base_prices[region_name] = float(pre['PX_LAST'].iloc[-1])
+
+                    if filter_by_date and rebase_date:
+                        df_final = df_final[df_final['DatePoint'] >= pd.Timestamp(rebase_date)].copy()
+                    if filter_by_date and end_date:
+                        df_final = df_final[df_final['DatePoint'] <= pd.Timestamp(end_date)].copy()
+
+                    df_final = df_final.sort_values(['Regions', 'DatePoint']).reset_index(drop=True)
+                    first_dates = []
+                    for _, grp in df_final.groupby('Regions'):
+                        valid = grp.dropna(subset=['PX_LAST'])
+                        if not valid.empty:
+                            first_dates.append(valid['DatePoint'].min())
+                    if first_dates:
+                        common_display_start = max(first_dates)
+                        df_final = df_final[df_final['DatePoint'] >= common_display_start].copy()
+                        df_final = df_final.sort_values(['Regions', 'DatePoint']).reset_index(drop=True)
+                        logger.info("✓ Common display start: %s", common_display_start)
+
+                    def _rebase_perf(group):
+                        rname = group['Regions'].iloc[0]
+                        prices = group['PX_LAST'].copy()
+                        base_price = base_prices.get(rname)
+                        if base_price is None:
+                            valid = prices.dropna()
+                            base_price = float(valid.iloc[0]) if not valid.empty else None
+                        if base_price is None or base_price == 0:
+                            group = group.copy(); group['Performance'] = np.nan; return group
+                        group = group.copy()
+                        group['Performance'] = (prices / base_price - 1) * 100
+                        return group
+
+                    df_final = df_final.groupby('Regions', group_keys=False).apply(_rebase_perf)
+                    logger.info("✓ Performance rebased (cache path)")
+                else:
+                    if start_date:
+                        df_final = df_final[df_final["DatePoint"] >= pd.Timestamp(start_date)]
+                    if end_date:
+                        df_final = df_final[df_final["DatePoint"] <= pd.Timestamp(end_date)]
+
+                records = df_final.to_dict('records')
+                for record in records:
+                    if 'DatePoint' in record and hasattr(record['DatePoint'], 'isoformat'):
+                        record['DatePoint'] = record['DatePoint'].isoformat()
+                    for key, value in record.items():
+                        if isinstance(value, float) and _math.isnan(value):
+                            record[key] = None
+
+                logger.info(f"\n✅ SUCCESS (cache): Returned {len(records)} records")
+                logger.info("=" * 80)
+                return {
+                    "status": "ok",
+                    "data": records,
+                    "metadata": {
+                        "regions": regions,
+                        "currency": currency,
+                        "lookback": lookback,
+                        "record_count": len(records),
+                        "source": "cache",
+                    },
+                }
+            # ── End fast path ─────────────────────────────────────────────────
+
             # Normalize region names (e.g., "US" -> "U.S.")
             normalized_regions = [LänderDataService._normalize_region_name(r) for r in regions]
             logger.info(f"Normalized regions: {normalized_regions}")
@@ -737,39 +1025,52 @@ class LänderDataService:
             except Exception as erp_exc:
                 logger.warning(f"⚠ ERP merge failed (non-fatal): {erp_exc}")
 
-            # ── Rebase Performance to 0% using last-known price before start_date ──
+            # ── Rebase Performance to 0% using last-known price before rebase_date ──
             #
             # Finance convention for period-return charts:
-            #   base_price[region] = last available price ON OR BEFORE start_date
+            #   base_price[region] = last available price ON OR BEFORE rebase_date
             #
-            # This means:
-            # • YtD (start = Dec 31): each region anchors to its last 2025 close
-            #   even if that region's exchange was closed on Dec 31 (e.g. some
-            #   European markets). We look back through the full pre-filter data.
-            # • 1Y / 3Y / etc.: same logic – last price on or before the anchor.
-            # • All series then share the same first DISPLAY date (the common
-            #   first trading day after start_date), so the chart left-edge is
-            #   visually aligned.
+            # In custom mode (explicit start_date): rebase from the user-provided date
+            # and also trim the returned data to that window.
+            # In lookback mode (no start_date): derive rebase_date from lookback but
+            # return the full 5Y dataset so client-side local period overrides work.
             if 'Performance' in df_final.columns and 'PX_LAST' in df_final.columns:
                 df_final = df_final.sort_values(['Regions', 'DatePoint']).reset_index(drop=True)
+
+                # Determine the rebase anchor date
+                if start_date:
+                    # Custom mode: user-provided explicit date
+                    rebase_date = start_date
+                    filter_by_date = True   # also trim the returned data window
+                else:
+                    # Lookback mode: derive anchor from lookback parameter
+                    _today = datetime.now()
+                    _days_map = {'1Y': 365, '3Y': 1095, '5Y': 1825}
+                    if lookback == 'YtD':
+                        rebase_date = str(datetime(_today.year - 1, 12, 31).date())
+                    elif lookback in _days_map:
+                        rebase_date = str((_today - timedelta(days=_days_map[lookback])).date())
+                    else:
+                        rebase_date = None  # 'All' or unknown – no rebase
+                    filter_by_date = False  # return full dataset; frontend filters for display
 
                 # Collect base prices BEFORE trimming the date window.
                 # df_final still contains the full Bloomberg history at this point.
                 base_prices: dict = {}
-                if start_date:
-                    start_ts = pd.Timestamp(start_date)
+                if rebase_date:
+                    rebase_ts = pd.Timestamp(rebase_date)
                     for region_name, grp in df_final.groupby('Regions'):
-                        pre = grp[grp['DatePoint'] <= start_ts].dropna(subset=['PX_LAST'])
+                        pre = grp[grp['DatePoint'] <= rebase_ts].dropna(subset=['PX_LAST'])
                         if not pre.empty:
                             base_prices[region_name] = float(pre['PX_LAST'].iloc[-1])
                         else:
                             # No price before anchor – will fall back to first price in window
                             pass
 
-                # Apply the user-requested date window
-                if start_date:
-                    df_final = df_final[df_final['DatePoint'] >= pd.Timestamp(start_date)].copy()
-                if end_date:
+                # Apply date window filter only in custom mode
+                if filter_by_date and rebase_date:
+                    df_final = df_final[df_final['DatePoint'] >= pd.Timestamp(rebase_date)].copy()
+                if filter_by_date and end_date:
                     df_final = df_final[df_final['DatePoint'] <= pd.Timestamp(end_date)].copy()
 
                 df_final = df_final.sort_values(['Regions', 'DatePoint']).reset_index(drop=True)
@@ -926,7 +1227,8 @@ class LänderDataService:
             'PX_TO_SALES_RATIO',  # KUV               Bloomberg
             'PX_TO_BOOK_RATIO',   # KBV               Bloomberg
             'PE_RATIO',           # KGV               Bloomberg
-            'BEST_PE_RATIO',      # KGV Fwd.          Bloomberg (graph-only, not in table)
+            'BEST_PE_RATIO',      # KGV Fwd.          Bloomberg
+            'PE_Diff',            # KGV - KGV (Fwd.)  Eigenberechnung (PE_RATIO - BEST_PE_RATIO)
             # Technisch (Technical)
             'Rolling Volatility', # Volatilität       rolling(126).std()*sqrt(126)*100
             'MA_50_Diff',         # MA50 Distanz      (price-MA50)/MA50*100 (graph-only)
@@ -1210,6 +1512,11 @@ class LänderDataService:
             )
             if not germany_10y.empty:
                 pivot_df = pivot_df.merge(germany_10y, on="DatePoint", how="left")
+                # Forward-fill the Bund reference yield so that countries on
+                # different trading calendars (e.g. Australia, New Zealand) still
+                # get a spread value on dates where Germany has no data point.
+                pivot_df = pivot_df.sort_values("DatePoint")
+                pivot_df["_bund_10y"] = pivot_df["_bund_10y"].ffill()
                 pivot_df["Spreads to Bunds"] = pivot_df["10Y Yields"] - pivot_df["_bund_10y"]
                 pivot_df = pivot_df.drop(columns=["_bund_10y"], errors="ignore")
                 logger.info("  ✓ Computed Spreads to Bunds")
@@ -1252,9 +1559,47 @@ class LänderDataService:
         try:
             import math
 
+            # ── Fast path: serve from startup cache when available ─────────────
+            if LänderDataService._fi_full_cache is not None:
+                logger.info("⚡ Serving FI from in-memory cache")
+                normalized_regions = [LänderDataService._normalize_region_name(r) for r in regions]
+                fi_df = LänderDataService._fi_full_cache
+                df_final = fi_df[fi_df["Regions"].isin(normalized_regions)].copy()
+                if df_final.empty:
+                    raise ValueError(f"No cached FI data for regions: {normalized_regions}")
+                if start_date:
+                    df_final = df_final[df_final["DatePoint"] >= pd.Timestamp(start_date)]
+                if end_date:
+                    df_final = df_final[df_final["DatePoint"] <= pd.Timestamp(end_date)]
+                records = df_final.to_dict("records")
+                for record in records:
+                    if "DatePoint" in record and hasattr(record["DatePoint"], "isoformat"):
+                        record["DatePoint"] = record["DatePoint"].isoformat()
+                    for key, value in record.items():
+                        if isinstance(value, float) and math.isnan(value):
+                            record[key] = None
+                metric_cols = sorted([c for c in df_final.columns if c not in ("DatePoint", "Regions")])
+                logger.info(f"✅ FI SUCCESS (cache): {len(records)} records, {len(metric_cols)} metrics")
+                logger.info("=" * 80)
+                return {
+                    "status": "ok",
+                    "data": records,
+                    "metadata": {
+                        "regions": regions,
+                        "lookback": lookback,
+                        "record_count": len(records),
+                        "source": "cache",
+                        "columns": metric_cols,
+                    },
+                }
+            # ── End fast path ─────────────────────────────────────────────────
+
             lookback_days = {"1Y": 365, "3Y": 1095, "5Y": 1825, "All": 3650}.get(
                 lookback, 1460
             )
+            # Always fetch full 10Y history so all local period overrides work
+            # (including 'All'). Client-side filteredRecords handles the global display window.
+            fi_fetch_days = 3650
 
             # Normalize region names
             normalized_regions = [
@@ -1290,10 +1635,10 @@ class LänderDataService:
 
             # Query both data sources
             df_bloomberg = LänderDataService._get_bloomberg_fi_data(
-                bloomberg_tickers, days_back=lookback_days
+                bloomberg_tickers, days_back=fi_fetch_days
             )
             df_quant = LänderDataService._get_quant_fi_data(
-                quant_tickers, days_back=lookback_days
+                quant_tickers, days_back=fi_fetch_days
             )
 
             # Combine
@@ -1315,6 +1660,46 @@ class LänderDataService:
             )
             if df_final.empty:
                 raise ValueError("No FI data after processing/pivoting")
+
+            # ── Merge Government Debt (sourced from Macro ticker mapping) ──────────
+            try:
+                macro_mapping = LänderDataService._load_macro_ticker_mapping()
+                gov_debt_map = macro_mapping[macro_mapping["GroupingName"] == "Government Debt"].copy()
+                if not gov_debt_map.empty:
+                    gov_bloomberg_tickers = gov_debt_map[gov_debt_map["DBSource"] == "Bloomberg"]["Ticker"].tolist()
+                    gov_quant_tickers = gov_debt_map[gov_debt_map["DBSource"] == "Quant"]["Ticker"].tolist()
+                    gov_bloomberg = LänderDataService._get_bloomberg_macro_data(
+                        gov_bloomberg_tickers, days_back=fi_fetch_days + 730
+                    )
+                    gov_quant = LänderDataService._get_quant_macro_data(
+                        gov_quant_tickers, days_back=fi_fetch_days + 730
+                    )
+                    gov_frames: list = []
+                    if not gov_bloomberg.empty:
+                        gov_frames.append(gov_bloomberg[gov_bloomberg["FieldName"] == "PX_LAST"].copy())
+                    if not gov_quant.empty:
+                        gov_frames.append(gov_quant)
+                    if gov_frames:
+                        gov_raw = pd.concat(gov_frames, ignore_index=True, sort=False)
+                        gov_processed = LänderDataService._process_macro_raw_data(
+                            gov_raw, gov_debt_map, normalized_regions
+                        )
+                        if not gov_processed.empty and "Government Debt" in gov_processed.columns:
+                            gov_subset = gov_processed[["DatePoint", "Regions", "Government Debt"]].copy()
+                            df_final = df_final.merge(gov_subset, on=["DatePoint", "Regions"], how="left")
+                            df_final = df_final.sort_values(["Regions", "DatePoint"])
+                            df_final["Government Debt"] = df_final.groupby("Regions")["Government Debt"].transform(
+                                lambda x: x.ffill().bfill()
+                            )
+                            logger.info("✓ Merged Government Debt into Fixed Income data")
+                        else:
+                            logger.warning("⚠ Government Debt column not found after macro processing")
+                    else:
+                        logger.warning("⚠ No Government Debt raw data retrieved")
+                else:
+                    logger.warning("⚠ No Government Debt tickers found in macro ticker mapping")
+            except Exception as gov_e:
+                logger.warning(f"⚠ Could not merge Government Debt into FI data: {gov_e}")
 
             # Optional date range filter
             if start_date:
@@ -1389,6 +1774,8 @@ class LänderDataService:
             # Spezial / special chart types (graph-only)
             "SP",     # S&P credit rating bar chart
             "Kurve",  # Yield curve cross-sectional chart
+            # Fiskal (from Macro data source)
+            "Government Debt",
         ]
 
     @staticmethod
@@ -1800,15 +2187,55 @@ class LänderDataService:
         try:
             import math
 
+            # ── Fast path: serve from startup cache when available ─────────────
+            if LänderDataService._macro_full_cache is not None:
+                logger.info("⚡ Serving Macro from in-memory cache")
+                normalized_regions = [LänderDataService._normalize_region_name(r) for r in regions]
+                df_final = LänderDataService._macro_full_cache
+                df_final = df_final[df_final["Regions"].isin(normalized_regions)].copy()
+                if df_final.empty:
+                    raise ValueError(f"No cached Macro data for regions: {normalized_regions}")
+                # Custom date filter only
+                if start_date:
+                    df_final = df_final[df_final["DatePoint"] >= pd.Timestamp(start_date)]
+                if end_date:
+                    df_final = df_final[df_final["DatePoint"] <= pd.Timestamp(end_date)]
+                # De-normalize region names back to what the frontend sent
+                reverse_region_map = {n: o for o, n in zip(regions, normalized_regions)}
+                records = df_final.to_dict("records")
+                for record in records:
+                    if "Regions" in record and record["Regions"] in reverse_region_map:
+                        record["Regions"] = reverse_region_map[record["Regions"]]
+                    if "DatePoint" in record and hasattr(record["DatePoint"], "isoformat"):
+                        record["DatePoint"] = record["DatePoint"].isoformat()
+                    for key, value in record.items():
+                        if isinstance(value, float) and math.isnan(value):
+                            record[key] = None
+                metric_cols = sorted([c for c in df_final.columns if c not in ("DatePoint", "Regions")])
+                logger.info(f"✅ Macro SUCCESS (cache): {len(records)} records, {len(metric_cols)} metrics")
+                logger.info("=" * 80)
+                return {
+                    "status": "ok",
+                    "data": records,
+                    "metadata": {
+                        "regions": regions,
+                        "lookback": lookback,
+                        "record_count": len(records),
+                        "source": "cache",
+                        "columns": metric_cols,
+                    },
+                }
+            # ── End fast path ─────────────────────────────────────────────────
+
             lookback_days = {"1Y": 365, "3Y": 1095, "5Y": 1825, "All": 3650}.get(
                 lookback, 1460
             )
 
-            # Always query extra 2 years of data so that annual-frequency metrics
-            # (Trade Balance, Exports, Imports, New Orders) have enough data points
-            # for the YoY pct_change computation regardless of the selected lookback.
-            # The result is trimmed back to the actual lookback window after processing.
-            query_days_back = lookback_days + 730 if lookback != "All" else 3650
+            # Always fetch full 10Y history so all local period overrides work.
+            # Add an extra 2Y buffer so annual-frequency YoY pct_change has
+            # enough history regardless of the selected lookback.
+            macro_fetch_days = 3650
+            query_days_back = macro_fetch_days + 730
 
             # Normalize region names
             normalized_regions = [
@@ -1856,14 +2283,15 @@ class LänderDataService:
             if df_final.empty:
                 raise ValueError("No Macro data after processing/pivoting")
 
-            # Trim back to the actually requested lookback window after YoY computation.
-            # The extra buffer data was needed only so pct_change could produce valid values.
+            # Trim back to 10Y after YoY computation (the extra 730-day buffer was
+            # needed only so pct_change could produce valid values).
             if lookback != "All":
-                lookback_cutoff = pd.Timestamp.now(tz=None).normalize() - pd.Timedelta(days=lookback_days)
+                trim_days = macro_fetch_days  # 3650 = 10Y
+                lookback_cutoff = pd.Timestamp.now(tz=None).normalize() - pd.Timedelta(days=trim_days)
                 df_final = df_final[df_final["DatePoint"] >= lookback_cutoff].copy()
-                logger.info(f"  Trimmed to lookback window: {len(df_final)} rows remain after {lookback} cutoff")
+                logger.info(f"  Trimmed to {trim_days}d window: {len(df_final)} rows remain")
 
-            # Optional date range filter
+            # Optional date range filter (custom mode only; lookback mode skips this)
             if start_date:
                 df_final = df_final[df_final["DatePoint"] >= pd.Timestamp(start_date)]
             if end_date:

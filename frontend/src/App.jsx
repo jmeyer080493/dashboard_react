@@ -10,6 +10,7 @@ import Anleihen from './pages/Anleihen'
 import DuoPlus from './pages/DuoPlus'
 import Alternative from './pages/Alternative'
 import User from './pages/User'
+import Admin from './pages/Admin'
 import Login from './pages/Login'
 import { ALL_REGIONS } from './config/countries'
 import { ExportProvider } from './context/ExportContext'
@@ -49,12 +50,12 @@ function AppShell() {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
 
   const DEFAULT_GRAPH_SETTINGS = {
-    equity:     { chartsPerRow: 2, chartHeight: 300 },
-    fi:         { chartsPerRow: 2, chartHeight: 300 },
-    macro:      { chartsPerRow: 2, chartHeight: 300 },
-    faktoren:   { chartsPerRow: 3, chartHeight: 450 },
-    sektoren:   { chartsPerRow: 2, chartHeight: 450 },
-    alternativ: { chartsPerRow: 2, chartHeight: 450 },
+    equity:     { chartsPerRow: 2, chartHeight: 300, lineWidth: 2 },
+    fi:         { chartsPerRow: 2, chartHeight: 300, lineWidth: 2 },
+    macro:      { chartsPerRow: 2, chartHeight: 300, lineWidth: 2 },
+    faktoren:   { chartsPerRow: 3, chartHeight: 450, lineWidth: 2 },
+    sektoren:   { chartsPerRow: 2, chartHeight: 450, lineWidth: 2 },
+    alternativ: { chartsPerRow: 2, chartHeight: 450, lineWidth: 2 },
   }
 
   // User tab alert state – set by NordrheinTab when it loads its data
@@ -90,6 +91,7 @@ function AppShell() {
     'DuoPlus':     'duoplus',
     'Alternative': 'extras',
     'User':        'user',
+    'Admin':       'admin',
   }
 
   const canAccess = (page) => {
@@ -98,7 +100,7 @@ function AppShell() {
   }
 
   // Resolve the active page: use currentPage if permitted, else first permitted page
-  const ALL_PAGES = ['Länder','Faktoren','Sektoren','Portfolios','Data','Anleihen','DuoPlus','Alternative','User']
+  const ALL_PAGES = ['Länder','Faktoren','Sektoren','Portfolios','Data','Anleihen','DuoPlus','Alternative','User','Admin']
   const firstPermitted = ALL_PAGES.find(canAccess) ?? 'Länder'
   const activePage = (currentPage && canAccess(currentPage)) ? currentPage : firstPermitted
   
@@ -211,6 +213,8 @@ function AppShell() {
         return <Alternative graphSettings={graphSettings} />
       case 'User':
         return <User onAlertsChange={setUserHasAlerts} />
+      case 'Admin':
+        return <Admin />
       default:
         return (
           <Länder 

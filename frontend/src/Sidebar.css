@@ -205,23 +205,24 @@
 .footer-item {
   padding: 0.75rem 0.75rem;
   border: none;
-  background: var(--sidebar-active-bg);
-  color: var(--sidebar-active-text);
+  background: none;
+  color: var(--sidebar-text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   font-size: 0.9rem;
-  transition: opacity 0.2s, background 0.2s;
+  transition: background 0.15s ease, color 0.15s ease, border-left-color 0.15s ease;
   justify-content: flex-start;
   margin-left: 0;
   border-left: 5px solid transparent;
+  border-radius: 0;
 }
 
 .footer-item:hover {
-  color: #fff;
-  border-left: 12px solid transparent;
-
+  background: var(--sidebar-hover-bg);
+  color: var(--sidebar-text);
+  border-left-color: var(--sidebar-active-bg);
 }
 
 .footer-icon {

@@ -73,10 +73,11 @@ function loadSavedFilters() {
       startDate:  saved.startDate  || defaults.start,
       endDate:    saved.endDate    || defaults.end,
       customMode: saved.customMode || false,
+      chartType:  saved.chartType  || 'Line',
     }
   } catch {
     const defaults = computeDateRange('1Y')
-    return { view: 'U.S.', currency: 'USD', lookback: '1Y', customMode: false, ...defaults }
+    return { view: 'U.S.', currency: 'USD', lookback: '1Y', customMode: false, chartType: 'Line', ...defaults }
   }
 }
 
@@ -90,12 +91,17 @@ function normalizeDate(dateStr) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
+// ── Module-level data cache (survives component unmount / tab switch) ──────────
+const _graphsCache    = {}   // cacheKey → graphs  (filtered window)
+const _allGraphsCache = {}   // cacheKey → graphs  (full history)
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Faktoren({ graphSettings }) {
   const gs = graphSettings ?? {}
   const chartsPerRow = gs.faktoren?.chartsPerRow ?? 3
   const chartHeight  = gs.faktoren?.chartHeight  ?? 450
+  const lineWidth    = gs.faktoren?.lineWidth    ?? 2
 
   // ── Filter state (seeded from localStorage once at mount) ──────────────────
   // useRef ensures loadSavedFilters() is called only once, not on every render
@@ -109,16 +115,24 @@ export default function Faktoren({ graphSettings }) {
   const [startDate,  setStartDate]  = useState(_init.startDate)
   const [endDate,    setEndDate]    = useState(_init.endDate)
   const [customMode, setCustomMode] = useState(_init.customMode)
+  const [chartType,  setChartType]  = useState(_init.chartType)
 
   // ── Data state ───────────────────────────────────────────────────────────
   const [loading,    setLoading]    = useState(false)
   const [error,      setError]      = useState(null)
-  const [graphsData, setGraphsData] = useState(null) // { g1: {...}, ... }
+  const [graphsData, setGraphsData] = useState(() => {
+    const k = `${_init.view}|${_init.currency}|${_init.lookback}|${_init.startDate}|${_init.endDate}`
+    return _graphsCache[k] ?? null
+  })
+  const [allGraphsData, setAllGraphsData] = useState(() => {
+    const k = `all|${_init.view}|${_init.currency}`
+    return _allGraphsCache[k] ?? null
+  })
 
   // ── Persist filters to localStorage whenever they change ─────────────────
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ view, currency, lookback, startDate, endDate, customMode }))
-  }, [view, currency, lookback, startDate, endDate, customMode])
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ view, currency, lookback, startDate, endDate, customMode, chartType }))
+  }, [view, currency, lookback, startDate, endDate, customMode, chartType])
 
   // ── Date-range button handler ─────────────────────────────────────────────
   const handleLookbackBtn = (btn) => {
@@ -146,6 +160,12 @@ export default function Faktoren({ graphSettings }) {
     // Only fetch when both dates are valid YYYY-MM-DD
     if (!isValidDate(startDate) || !isValidDate(endDate)) return
 
+    const cacheKey = `${view}|${currency}|${lookback}|${startDate}|${endDate}`
+    if (_graphsCache[cacheKey]) {
+      setGraphsData(_graphsCache[cacheKey])
+      return
+    }
+
     setLoading(true)
     setError(null)
     try {
@@ -162,6 +182,7 @@ export default function Faktoren({ graphSettings }) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       if (json.status === 'error') throw new Error(json.error)
+      _graphsCache[cacheKey] = json.graphs
       setGraphsData(json.graphs)
     } catch (err) {
       setError(err.message)
@@ -173,6 +194,31 @@ export default function Faktoren({ graphSettings }) {
 
   // Re-fetch whenever relevant filters change
   useEffect(() => { fetchData() }, [fetchData])
+
+  // ── Secondary "All" fetch – full history for local per-chart period overrides ──
+  // Only re-runs when view or currency changes, not when dates change.
+  const fetchAllData = useCallback(async () => {
+    const allCacheKey = `all|${view}|${currency}`
+    if (_allGraphsCache[allCacheKey]) {
+      setAllGraphsData(_allGraphsCache[allCacheKey])
+      return
+    }
+
+    try {
+      const { start, end } = computeDateRange('All')
+      const params = new URLSearchParams({ view, currency, start_date: start, end_date: end, lookback: 'All' })
+      const token = localStorage.getItem('auth_token')
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await fetch(`/api/faktoren/data?${params}`, { headers })
+      if (!res.ok) return
+      const json = await res.json()
+      if (json.status !== 'error') {
+        _allGraphsCache[allCacheKey] = json.graphs
+        setAllGraphsData(json.graphs)
+      }
+    } catch {}
+  }, [view, currency])
+  useEffect(() => { fetchAllData() }, [fetchAllData])
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -252,6 +298,22 @@ export default function Faktoren({ graphSettings }) {
           </div>
         </div>
 
+        {/* Chart type selector */}
+        <div className="faktoren-control-section">
+          <label>Charttyp</label>
+          <div className="faktoren-btn-group">
+            {[{ id: 'Line', label: 'Standard' }, { id: 'Bar', label: 'Balken' }].map(ct => (
+              <button
+                key={ct.id}
+                className={`quick-btn${chartType === ct.id ? ' active' : ''}`}
+                onClick={() => setChartType(ct.id)}
+              >
+                {ct.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
       </div>
 
       {/* ── Status bar ────────────────────────────────────────────────────── */}
@@ -282,6 +344,10 @@ export default function Faktoren({ graphSettings }) {
                 tab="Faktoren"
                 currency={currency}
                 yAxisLabel="%"
+                globalPeriod={lookback}
+                chartType={chartType}
+                allData={allGraphsData?.[gn]?.data ?? null}
+                lineWidth={lineWidth}
               />
             )
           })}

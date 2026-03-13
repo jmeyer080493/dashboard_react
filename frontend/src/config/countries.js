@@ -12,7 +12,15 @@ export const EUROPEAN_COUNTRIES = [
   'France',
   'Italy',
   'Spain',
-  'UK'
+  'UK',
+  'Belgium',
+  'Netherlands',
+  'Norway',
+  'Sweden',
+  'Portugal',
+  'Poland',
+  'Latvia',
+  'Lithuania',
 ]
 
 // World regions - primary global markets (used for "Welt" button)
@@ -104,6 +112,33 @@ export const REGION_PRESETS = {
     // Select US and Europe
     return ['U.S.', 'Europe']
   }
+}
+
+// Two-letter ISO abbreviations for each region/country
+export const REGION_ABBREVIATIONS = {
+  'U.S.':        'US',
+  'Europe':      'EU',
+  'Germany':     'DE',
+  'France':      'FR',
+  'Italy':       'IT',
+  'UK':          'GB',
+  'Japan':       'JP',
+  'Spain':       'ES',
+  'China':       'CN',
+  'India':       'IN',
+  'EM':          'EM',
+  // FI-only countries
+  'Australia':   'AU',
+  'Belgium':     'BE',
+  'Latvia':      'LV',
+  'Lithuania':   'LT',
+  'Mexico':      'MX',
+  'Netherlands': 'NL',
+  'New Zealand': 'NZ',
+  'Norway':      'NO',
+  'Poland':      'PL',
+  'Portugal':    'PT',
+  'Sweden':      'SE',
 }
 
 // Mapping of alternative names to standard names (for normalization)

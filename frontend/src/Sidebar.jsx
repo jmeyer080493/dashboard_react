@@ -18,6 +18,7 @@ const PAGE_PERMISSIONS = {
   'DuoPlus':     'duoplus',
   'Alternative': 'extras',
   'User':        'user',
+  'Admin':       'admin',
 }
 
 function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback, userHasAlerts, dataHasAlerts }) {
@@ -39,6 +40,7 @@ function Sidebar({ onPageChange, onLogout, onOpenEinstellungen, onOpenFeedback, 
     { name: 'DuoPlus',     icon: '⚡' },
     { name: 'Alternative', icon: '🔄' },
     { name: 'User',        icon: '👤' },
+    { name: 'Admin',       icon: '🛡️' },
   ]
 
   // Only show items the user has permission for (or items with no permission requirement)

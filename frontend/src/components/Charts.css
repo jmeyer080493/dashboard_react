@@ -12,6 +12,83 @@
   font-size: 1.1rem;
 }
 
+/* ── Per-chart Zeitraum header ───────────────────────────────────────────── */
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  gap: 0.5rem;
+}
+
+.chart-header h3 {
+  margin: 0;
+  color: var(--text-heading);
+  font-size: 1.1rem;
+  flex: 1;
+}
+
+.chart-period-buttons {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+/* Per-chart chart-type toggle (Standard / Balken) */
+.chart-type-buttons {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+  padding-right: 6px;
+  margin-right: 4px;
+  border-right: 1px solid var(--border, #d1d5db);
+}
+
+[data-theme='dark'] .chart-type-buttons {
+  border-right-color: var(--border, rgba(255,255,255,0.15));
+}
+
+.chart-period-btn {
+  padding: 2px 8px;
+  font-size: 0.71rem;
+  font-weight: 500;
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary, #6b7280);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+
+.chart-period-btn:hover {
+  background: var(--bg-surface, #f3f4f6);
+  color: var(--text-primary, #111827);
+  border-color: var(--text-secondary, #6b7280);
+}
+
+.chart-period-btn.active {
+  background: var(--accent, #6366f1);
+  color: #fff;
+  border-color: var(--accent, #6366f1);
+}
+
+[data-theme='dark'] .chart-period-btn {
+  border-color: var(--border, rgba(255,255,255,0.15));
+  color: var(--text-secondary, #9ca3af);
+}
+
+[data-theme='dark'] .chart-period-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary, #f9fafb);
+}
+
+[data-theme='dark'] .chart-period-btn.active {
+  background: var(--accent, #6366f1);
+  color: #fff;
+  border-color: var(--accent, #6366f1);
+}
+
 .chart-empty {
   background: var(--chart-bg);
   border: 1px solid var(--chart-border);
@@ -53,7 +130,8 @@
 }
 
 [data-theme="dark"] .recharts-legend-item-text {
-  color: var(--text-secondary) !important;
+  color: var(--text-primary) !important;
+  fill: var(--text-primary) !important;
 }
 
 [data-theme="dark"] .recharts-cartesian-grid-horizontal line,

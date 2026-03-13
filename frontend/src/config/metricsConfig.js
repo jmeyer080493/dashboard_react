@@ -16,6 +16,7 @@ export const EQUITY_METRICS_CATEGORIES = [
     fields: [
       { key: 'Performance', label: 'Wertentwicklung',   tableEnabled: false, graphEnabled: true, higherBetter: true, unit: '%', yAxisLabel: '%', currencyAffected: true  },
       { key: 'EPS_Growth',  label: 'Gewinnentwicklung', tableEnabled: false, graphEnabled: true, higherBetter: true, unit: '%', yAxisLabel: '%', currencyAffected: true  },
+      { key: 'Rainbow',     label: 'Rainbow (PE-Bänder)', tableEnabled: false, graphEnabled: true, higherBetter: false, unit: '', yAxisLabel: 'Kurs', currencyAffected: false, virtual: true },
     ],
   },
   {
@@ -40,6 +41,7 @@ export const EQUITY_METRICS_CATEGORIES = [
       { key: 'PX_TO_BOOK_RATIO',   label: 'KBV',                 tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '',  yAxisLabel: 'Wert',  currencyAffected: false },
       { key: 'PE_RATIO',           label: 'KGV',                 tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '',  yAxisLabel: 'Wert',  currencyAffected: false },
       { key: 'BEST_PE_RATIO',      label: 'KGV (Fwd.)',          tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '', yAxisLabel: 'Wert',  currencyAffected: false },
+      { key: 'PE_Diff',           label: 'KGV - KGV (Fwd.)',    tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '', yAxisLabel: 'Wert',  currencyAffected: false, computed: true },
     ],
   },
   {
@@ -65,6 +67,12 @@ export const ALL_GRAPH_METRICS = EQUITY_METRICS_CATEGORIES.flatMap(cat =>
   cat.fields.filter(f => f.graphEnabled).map(f => f.key)
 )
 
+/**
+ * Virtual graph metrics: frontend-only computed charts (not backend data columns).
+ * Always available in the filter modal regardless of backend column list.
+ */
+export const VIRTUAL_GRAPH_METRICS = ['Rainbow']
+
 /** Standard (factory) defaults – pre-checked when user hits "Load Standard"
  *  Mirrors the original dashboard column set (image 2):
  *  Trend: MOM_3, MOM_12, MOM_TS, Grwth_Rate
@@ -89,7 +97,7 @@ export const STANDARD_DEFAULTS = {
     'RSI', 
     'MACD',
   ],
-  graph: ['Performance', 'Weighted Valuation', 'Rolling Volatility', 'MA_50_Diff'],
+  graph: ['Performance', 'Weighted Valuation', 'Rolling Volatility', 'MA_50_Diff', 'Rainbow'],
 }
 
 /** Look up a field config by key (across all categories) */
@@ -132,6 +140,18 @@ export function getEquityMetricUnit(key) {
 
 export const FI_METRICS_CATEGORIES = [
   {
+    key: 'Kreditqualität',
+    label: 'KREDITQUALITÄT',
+    fields: [
+      { key: 'SP',     label: 'S&P Rating', tableEnabled: true,  graphEnabled: false, higherBetter: null, colorMode: 'sp_rating', unit: '',   yAxisLabel: ''  },
+      { key: 'Government Debt', label: 'Verschuldung', tableEnabled: true, graphEnabled: true, higherBetter: false, unit: '%', yAxisLabel: '%' },
+      { key: '3 CDS',  label: '3J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, colorMode: 'timeseries', unit: 'bp', yAxisLabel: 'Basispunkte' },
+      { key: '5 CDS',  label: '5J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, colorMode: 'timeseries', unit: 'bp', yAxisLabel: 'Basispunkte' },
+      { key: '7 CDS',  label: '7J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, colorMode: 'timeseries', unit: 'bp', yAxisLabel: 'Basispunkte' },
+      { key: '10 CDS', label: '10J CDS', tableEnabled: true,  graphEnabled: true, higherBetter: null, colorMode: 'timeseries', unit: 'bp', yAxisLabel: 'Basispunkte' },
+    ],
+  },
+  {
     key: 'Spezial',
     label: 'SPEZIAL',
     graphOnly: true,
@@ -143,38 +163,28 @@ export const FI_METRICS_CATEGORIES = [
     key: 'Zinsen',
     label: 'ZINSEN',
     fields: [
-      { key: '2Y Yields',         label: '2J Rendite',          tableEnabled: true,  graphEnabled: true,  higherBetter: null, unit: '%',  yAxisLabel: '%'    },
-      { key: '5Y Yields',         label: '5J Rendite',          tableEnabled: true,  graphEnabled: true,  higherBetter: null, unit: '%',  yAxisLabel: '%'    },
-      { key: '10Y Yields',        label: '10J Rendite',         tableEnabled: true,  graphEnabled: true,  higherBetter: null, unit: '%',  yAxisLabel: '%'    },
-      { key: '20Y Yields',        label: '20J Rendite',         tableEnabled: true,  graphEnabled: true,  higherBetter: null, unit: '%',  yAxisLabel: '%'    },
-      { key: '30Y Yields',        label: '30J Rendite',         tableEnabled: true,  graphEnabled: true,  higherBetter: null, unit: '%',  yAxisLabel: '%'    },
-      { key: 'Steepness',         label: 'Steilheit (10J-2J)',  tableEnabled: true,  graphEnabled: true,  higherBetter: null, unit: '%',  yAxisLabel: '%'    },
-      { key: 'Curvature',         label: 'Krümmung',            tableEnabled: true,  graphEnabled: true,  higherBetter: null, unit: '%',  yAxisLabel: '%'    },
-      { key: 'Spreads to Bunds',  label: 'Aufschläge zu Bunds', tableEnabled: true,  graphEnabled: true,  higherBetter: null, unit: '%',  yAxisLabel: '%'    },
+      { key: '2Y Yields',         label: '2J Rendite',          tableEnabled: true,  graphEnabled: true,  higherBetter: null, colorMode: 'timeseries', unit: '%',  yAxisLabel: '%'    },
+      { key: '5Y Yields',         label: '5J Rendite',          tableEnabled: true,  graphEnabled: true,  higherBetter: null, colorMode: 'timeseries', unit: '%',  yAxisLabel: '%'    },
+      { key: '10Y Yields',        label: '10J Rendite',         tableEnabled: true,  graphEnabled: true,  higherBetter: null, colorMode: 'timeseries', unit: '%',  yAxisLabel: '%'    },
+      { key: '20Y Yields',        label: '20J Rendite',         tableEnabled: true,  graphEnabled: true,  higherBetter: null, colorMode: 'timeseries', unit: '%',  yAxisLabel: '%'    },
+      { key: '30Y Yields',        label: '30J Rendite',         tableEnabled: true,  graphEnabled: true,  higherBetter: null, colorMode: 'timeseries', unit: '%',  yAxisLabel: '%'    },
+      { key: 'Steepness',         label: 'Steilheit (10J-2J)',  tableEnabled: true,  graphEnabled: true,  higherBetter: null, colorMode: 'timeseries', unit: '%',  yAxisLabel: '%'    },
+      { key: 'Curvature',         label: 'Krümmung',            tableEnabled: true,  graphEnabled: true,  higherBetter: null, colorMode: 'timeseries', unit: '%',  yAxisLabel: '%'    },
+      { key: 'Spreads to Bunds',  label: 'Aufschläge zu Bunds', tableEnabled: true,  graphEnabled: true,  higherBetter: null, colorMode: 'timeseries', unit: '%',  yAxisLabel: '%'    },
     ],
   },
-  {
-    key: 'Kreditqualität',
-    label: 'KREDITQUALITÄT',
-    fields: [
-      { key: 'SP',     label: 'S&P Rating', tableEnabled: true,  graphEnabled: false, higherBetter: null, unit: '',   yAxisLabel: ''  },
-      { key: '3 CDS',  label: '3J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Basispunkte' },
-      { key: '5 CDS',  label: '5J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Basispunkte' },
-      { key: '7 CDS',  label: '7J CDS',  tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Basispunkte' },
-      { key: '10 CDS', label: '10J CDS', tableEnabled: true,  graphEnabled: true, higherBetter: null, unit: 'bp', yAxisLabel: 'Basispunkte' },
-    ],
-  },
+  
   {
     key: 'Inflationserwartungen',
     label: 'INFLATIONSERWARTUNGEN',
     fields: [
-      { key: '1Y Inflation Expectations',  label: '1J Infl. Erw.',  tableEnabled: true, graphEnabled: true, higherBetter: null, unit: '%', yAxisLabel: '%' },
-      { key: '2Y Inflation Expectations',  label: '2J Infl. Erw.',  tableEnabled: true, graphEnabled: true, higherBetter: null, unit: '%', yAxisLabel: '%' },
-      { key: '5Y Inflation Expectations',  label: '5J Infl. Erw.',  tableEnabled: true, graphEnabled: true, higherBetter: null, unit: '%', yAxisLabel: '%' },
-      { key: '10Y Inflation Expectations', label: '10J Infl. Erw.', tableEnabled: true, graphEnabled: true, higherBetter: null, unit: '%', yAxisLabel: '%' },
-      { key: '10Y Breakevens',             label: '10J Breakevens', tableEnabled: true, graphEnabled: true, higherBetter: null, unit: '%', yAxisLabel: '%' },
+      { key: '1Y Inflation Expectations',  label: '1J Infl. Erw.',  tableEnabled: true, graphEnabled: true, higherBetter: null, colorMode: 'timeseries', unit: '%', yAxisLabel: '%' },
+      { key: '2Y Inflation Expectations',  label: '2J Infl. Erw.',  tableEnabled: true, graphEnabled: true, higherBetter: null, colorMode: 'timeseries', unit: '%', yAxisLabel: '%' },
+      { key: '5Y Inflation Expectations',  label: '5J Infl. Erw.',  tableEnabled: true, graphEnabled: true, higherBetter: null, colorMode: 'timeseries', unit: '%', yAxisLabel: '%' },
+      { key: '10Y Inflation Expectations', label: '10J Infl. Erw.', tableEnabled: true, graphEnabled: true, higherBetter: null, colorMode: 'timeseries', unit: '%', yAxisLabel: '%' },
+      { key: '10Y Breakevens',             label: '10J Breakevens', tableEnabled: true, graphEnabled: true, higherBetter: null, colorMode: 'timeseries', unit: '%', yAxisLabel: '%' },
     ],
-  },
+  }
 ]
 
 /** All FI table-eligible metric keys */
@@ -189,8 +199,8 @@ export const ALL_FI_GRAPH_METRICS = FI_METRICS_CATEGORIES.flatMap(cat =>
 
 /** Standard (factory) defaults for FI tab */
 export const FI_STANDARD_DEFAULTS = {
-  table: ['SP', '2Y Yields', '10Y Yields', 'Steepness', 'Spreads to Bunds', '5 CDS', '10Y Breakevens'],
-  graph: ['Kurve', '10Y Yields', 'Steepness', 'Spreads to Bunds', '5 CDS'],
+  table: ['SP', 'Government Debt', '2Y Yields', '10Y Yields', 'Steepness', 'Spreads to Bunds'],
+  graph: ['Kurve', '2Y Yields', '10Y Yields', 'Steepness', 'Spreads to Bunds', '10Y Breakevens'],
 }
 
 /** Get FI field config by key */
@@ -292,7 +302,7 @@ export const ALL_MACRO_GRAPH_METRICS = MACRO_METRICS_CATEGORIES.flatMap(cat =>
 /** Standard (factory) defaults for Macro tab */
 export const MACRO_STANDARD_DEFAULTS = {
   table: ['GDP', 'Economic Surprise', 'Industrial Production', 'Retail Sales', 'Inflation', 'Unemployment', 'Composite PMI', 'Services PMI', 'Consumer Confidence', 'Government Debt'],
-  graph: ['GDP', 'Economic Surprise', 'Misery', 'Composite PMI'],
+  graph: ['Economic Surprise', 'Misery', 'Composite PMI', 'Interest Rate'],
 }
 
 /** Get Macro field config by key */
