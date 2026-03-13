@@ -266,7 +266,7 @@ function GlobalControls({
       </div>
 
       {/* ── Land / Region ────────────────────────────────────────── */}
-      <div className="control-section" ref={countryDropdownRef}>
+      <div className="control-section">
         <span className="ctrl-label">🌍 Land / Region</span>
         <div className="control-group">
           {/* Preset buttons – hide "Welt" on the Fixed Income tab, and hide "Alle" */}
@@ -315,7 +315,7 @@ function GlobalControls({
             })
           })()}
 
-          <div className="country-multiselect">
+          <div className="country-multiselect" ref={countryDropdownRef}>
             <button
               className={`country-multiselect-trigger ${showCountryDropdown ? 'open' : ''}`}
               onClick={() => setShowCountryDropdown(v => !v)}

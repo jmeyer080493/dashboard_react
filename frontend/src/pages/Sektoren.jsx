@@ -384,9 +384,9 @@ export default function Sektoren({ graphSettings }) {
         </div>
 
         {/* Sektoren */}
-        <div className="sektoren-control-section sektoren-sector-section" ref={sectorDropdownRef}>
+        <div className="sektoren-control-section sektoren-sector-section">
           <label>Sektoren</label>
-          <div className="sektoren-sector-multiselect">
+          <div className="sektoren-sector-multiselect" ref={sectorDropdownRef}>
             <button
               className={`sektoren-sector-trigger ${showSectorDropdown ? 'open' : ''}`}
               onClick={() => setShowSectorDropdown(v => !v)}

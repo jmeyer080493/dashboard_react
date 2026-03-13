@@ -432,23 +432,56 @@ const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   })), [metricsToDisplay, metricMeta])
 
   // ── Latest real data date per metric (Aktualität) ────────────────────────
-  // For each metric column: find the most recent DatePoint across ALL regions
-  // where the metric carried a non-null value. Used as a tooltip on the header.
+  // Mirrors findLastRealDatePerRegion used in chart tabs:
+  // For each metric × region, walk backwards to find the last date the value
+  // actually changed (strips backend forward-fill tail). Then take the
+  // earliest such date across all regions — same conservative logic the graphs use.
   const metricAktualitaet = useMemo(() => {
     if (!data || data.length === 0) return {}
+
+    // Pre-sort all rows by DatePoint ascending once
+    const sorted = [...data].sort((a, b) => (a.DatePoint > b.DatePoint ? 1 : -1))
+
+    // Pre-group rows by region for fast access
+    const byRegion = {}
+    for (const row of sorted) {
+      const r = row.Regions
+      if (!byRegion[r]) byRegion[r] = []
+      byRegion[r].push(row)
+    }
+
     const result = {}
     for (const metric of metricsToDisplay) {
-      let latest = null
-      for (const record of data) {
-        const v = record[metric]
-        if (v !== null && v !== undefined && record.DatePoint) {
-          if (!latest || record.DatePoint > latest) latest = record.DatePoint
+      let minDate = null // earliest last-real-date across regions (most conservative)
+      for (const region of regions) {
+        const rows = byRegion[region]
+        if (!rows || rows.length === 0) continue
+
+        // Walk backwards: find last row where value differs from previous row
+        let lastRealDate = null
+        for (let i = rows.length - 1; i > 0; i--) {
+          const curr = rows[i][metric]
+          const prev = rows[i - 1][metric]
+          if (curr != null && prev != null && Math.abs(curr - prev) > 1e-10) {
+            lastRealDate = rows[i].DatePoint; break
+          }
+          if (curr != null && prev == null) {
+            lastRealDate = rows[i].DatePoint; break
+          }
         }
+        // Fallback: first row that has a value at all
+        if (lastRealDate === null) {
+          for (const row of rows) {
+            if (row[metric] != null) { lastRealDate = row.DatePoint; break }
+          }
+        }
+
+        if (lastRealDate && (!minDate || lastRealDate < minDate)) minDate = lastRealDate
       }
-      if (latest) result[metric] = latest.split('T')[0]
+      if (minDate) result[metric] = minDate.split('T')[0]
     }
     return result
-  }, [data, metricsToDisplay])
+  }, [data, metricsToDisplay, regions])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Guard clauses AFTER all hooks
